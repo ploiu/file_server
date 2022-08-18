@@ -1,0 +1,12 @@
+[default.tls]
+# You will need to generate this yourself. Take a look at openssl for free ones
+key = "./private-key.pem"
+certs = "./cert.pem"
+
+[default.limits]
+file = "100 Mib"
+data-form = "100 Mib"
+application-zip = "10Mib"
+
+[global]
+address = "0.0.0.0"
