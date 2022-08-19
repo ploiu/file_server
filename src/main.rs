@@ -8,6 +8,7 @@ use crate::db::initialize_db;
 use handler::{api::api_version, file::upload_file};
 
 mod db;
+mod facade;
 mod handler;
 mod model;
 

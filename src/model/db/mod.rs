@@ -1,8 +1,8 @@
 #[derive(Debug)]
 pub struct FileRecord<'fr> {
-    id: u64,
-    name: &'fr str,
-    path: &'fr str,
+    pub id: u64,
+    pub name: &'fr str,
+    pub path: &'fr str,
     // md5, just to check for uniqueness
-    hash: &'fr str,
+    pub hash: &'fr str,
 }

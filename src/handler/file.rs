@@ -1,9 +1,11 @@
+use std::fs::File;
 use std::path::Path;
 
 use rocket::form::Form;
 use rocket::http::Status;
 use rocket::tokio::fs::create_dir;
 
+use crate::facade::db::save_file_record;
 use crate::model::request::FileUpload;
 
 static FILE_DIR: &str = "./files";
@@ -31,7 +33,16 @@ pub async fn upload_file(mut file_input: Form<FileUpload<'_>>) -> Status {
     let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
     let path = Path::new(file_name.as_str());
     match file_input.file.persist_to(path).await {
-        Ok(_) => {}
+        Ok(_) => {
+            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
+            let mut saved_file = File::open(path).unwrap();
+            match save_file_record(&file_name, &path, &mut saved_file) {
+                Err(e) => {
+                    eprintln!("Failed to create file record in database: {:?}", e)
+                }
+                _ => {}
+            }
+        }
         Err(e) => {
             eprintln!("{:?}", e);
             return Status::InternalServerError;
