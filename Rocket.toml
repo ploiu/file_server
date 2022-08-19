@@ -1,2 +1,7 @@
+[default.tls]
+# You will need to generate this yourself. Take a look at openssl for free ones
+key = "./private-key.pem"
+certs = "./cert.pem"
+
 [default.limits]
-json = "100 Mib"
+file = "10 Mib"

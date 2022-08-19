@@ -9,6 +9,7 @@ use handler::{api::api_version, file::upload_file};
 
 mod db;
 mod facade;
+mod guard;
 mod handler;
 mod model;
 

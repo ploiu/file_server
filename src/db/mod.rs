@@ -1,6 +1,7 @@
 use rusqlite::{Connection, OpenFlags, Result};
 use std::path::Path;
 pub mod file;
+pub mod metadata;
 
 static DB_LOCATION: &str = "./db.sqlite";
 
@@ -10,16 +11,6 @@ pub fn open_connection() -> Connection {
         Ok(con) => con,
         Err(error) => panic!("Failed to get a connection to the database!: {}", error),
     };
-}
-
-/// returns the current version of the database as a String
-fn get_version(con: &mut Connection) -> Result<String> {
-    let result = con.query_row(
-        "select value from metadata where name = \"version\"",
-        [],
-        |row| row.get(0),
-    );
-    return result;
 }
 
 /// runs init.sql on the database
@@ -32,7 +23,7 @@ fn create_db(con: &mut Connection) {
 /// If not, it either creates or upgrades the database accordingly
 pub fn initialize_db() -> Result<()> {
     let mut con = open_connection();
-    let _table_version = match get_version(&mut con) {
+    let _table_version = match metadata::get_version(&mut con) {
         Ok(value) => value.parse::<u64>().unwrap(),
         Err(_) => {
             // tables haven't been created yet
