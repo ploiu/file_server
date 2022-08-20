@@ -5,8 +5,8 @@ extern crate rocket;
 use rocket::{Build, Rocket};
 
 use handler::{
-    api::{api_version, set_password},
-    file::upload_file,
+    api_handler::{api_version, set_password},
+    file_handler::upload_file,
 };
 
 use crate::db::initialize_db;

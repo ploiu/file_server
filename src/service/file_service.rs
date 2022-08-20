@@ -4,11 +4,18 @@ use std::path::Path;
 use rocket::http::Status;
 use rocket::tokio::fs::create_dir;
 
-use crate::facade::db::save_file_record;
+use crate::facade::file_facade::save_file_record;
 use crate::model::request::FileUpload;
 use crate::model::response::BasicResponse;
 
 static FILE_DIR: &str = "./files";
+
+#[derive(PartialEq)]
+pub enum FileError {
+    MissingInfo(String),
+    FailWriteDisk,
+    FailWriteDb,
+}
 
 /// ensures that the passed directory exists on the file system
 async fn check_image_dir(dir: &str) {
@@ -21,11 +28,12 @@ async fn check_image_dir(dir: &str) {
     }
 }
 
-pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> (Status, BasicResponse<'a>) {
+/// saves a file to the disk and database
+pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> Result<(), FileError> {
     check_image_dir(FILE_DIR).await;
     let file_name = match file_input.file.name() {
         Some(name) => name,
-        None => return BasicResponse::text(Status::BadRequest, "file name is required"),
+        None => return Err(FileError::MissingInfo("file name is required".to_string())),
     };
     // create the file name from the parts
     let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
@@ -37,18 +45,17 @@ pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> (Status, BasicRes
             match save_file_record(&file_name, &path, &mut saved_file) {
                 Err(e) => {
                     eprintln!("Failed to create file record in database: {:?}", e);
-                    return BasicResponse::text(
-                        Status::InternalServerError,
-                        "failed to save record to database",
-                    );
+                    return Err(FileError::FailWriteDb);
                 }
                 _ => {}
             }
         }
         Err(e) => {
             eprintln!("{:?}", e);
-            return BasicResponse::text(Status::InternalServerError, "failed to save file to disk");
+            return Err(FileError::FailWriteDisk);
         }
     }
-    return BasicResponse::text(Status::NoContent, "");
+    return Ok(());
 }
+
+pub async fn get_file<'a>(id: u64) -> (Status, BasicResponse<'a>) {}
