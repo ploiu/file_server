@@ -20,11 +20,11 @@
 								{
 									"key": "file",
 									"type": "file",
-									"src": "/home/ploiu/Pictures/rust.png"
+									"src": "/home/ploiu/Pictures/hentai/marine_nanoless.jpg"
 								},
 								{
 									"key": "extension",
-									"value": "png",
+									"value": "jpg",
 									"type": "text"
 								}
 							]
@@ -75,8 +75,8 @@
 									]
 								}
 							},
-							"status": "No Content",
-							"code": 204,
+							"status": "Created",
+							"code": 201,
 							"_postman_previewlanguage": "plain",
 							"header": [
 								{
@@ -110,6 +110,191 @@
 							],
 							"cookie": [],
 							"body": null
+						},
+						{
+							"name": "Database Error",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": "/home/ploiu/Pictures/rust.png"
+										},
+										{
+											"key": "extension",
+											"value": "png",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "https://localhost:8000/file",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"file"
+									]
+								}
+							},
+							"status": "Internal Server Error",
+							"code": 500,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "content-length",
+									"value": "52"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 20 Aug 2022 21:17:31 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Failed to save file info to database!\"\n}"
+						}
+					]
+				},
+				{
+					"name": "Get File",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://localhost:8000/file/:id",
+							"protocol": "https",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"file",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "2"
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Get File",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://localhost:8000/file/:id",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"file",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "2"
+										}
+									]
+								}
+							},
+							"code": 200,
+							"_postman_previewlanguage": null,
+							"header": null,
+							"cookie": [],
+							"body": "<image data here>"
+						},
+						{
+							"name": "File Not Found",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "https://localhost:8000/file/:id",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"file",
+										":id"
+									],
+									"variable": [
+										{
+											"key": "id",
+											"value": "3"
+										}
+									]
+								}
+							},
+							"status": "Not Found",
+							"code": 404,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "content-length",
+									"value": "62"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 20 Aug 2022 21:19:56 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"The file with the passed id could not be found.\"\n}"
 						}
 					]
 				}
@@ -201,8 +386,8 @@
 									]
 								}
 							},
-							"status": "No Content",
-							"code": 204,
+							"status": "Created",
+							"code": 201,
 							"_postman_previewlanguage": "plain",
 							"header": [
 								{

@@ -10,6 +10,13 @@ use sha2::{Digest, Sha256};
 use crate::db::metadata::CheckAuthResult;
 use crate::facade::db::check_auth;
 
+/// used to represent the result of calling `Auth::validate`
+pub enum ValidateResult {
+    Ok,
+    NoPasswordSet,
+    Invalid,
+}
+
 #[derive(Debug)]
 pub struct Auth {
     pub username: String,
@@ -42,16 +49,11 @@ impl Auth {
     /// compares our value with that in the database and returns a `Some` if the password doesn't match for any reason.
     ///
     /// _this is a convenience method to be used only in handlers_
-    /// ## Example
-    /// ```
-    /// if !auth.validate() {
-    ///     return Status::Unauthorized;
-    /// }
-    /// ```
-    pub fn validate<'a>(self) -> bool {
+    pub fn validate(self) -> ValidateResult {
         match check_auth(self) {
-            CheckAuthResult::Valid => true,
-            _ => false,
+            CheckAuthResult::Valid => ValidateResult::Ok,
+            CheckAuthResult::Missing => ValidateResult::NoPasswordSet,
+            CheckAuthResult::Invalid => ValidateResult::Invalid,
         }
     }
 
