@@ -1,9 +1,8 @@
-use rocket::http::Status;
 use rocket::serde::{json::Json, Serialize};
 
 use crate::model::request::NewAuth;
-use crate::model::response::BasicResponse;
-use crate::service::api;
+use crate::model::response::api_responses::SetPassWordResponse;
+use crate::service::api_service;
 
 static API_VERSION_NUMBER: f64 = 0.1;
 
@@ -27,10 +26,10 @@ pub fn api_version() -> Json<ApiVersion> {
 }
 
 #[post("/password", data = "<auth>")]
-pub fn set_password<'a>(auth: Json<NewAuth>) -> (Status, BasicResponse<'a>) {
-    let result = api::create_password(auth.into_inner());
+pub fn set_password<'a>(auth: Json<NewAuth>) -> SetPassWordResponse {
+    let result = api_service::create_password(auth.into_inner());
     return match result {
-        Ok(_) => BasicResponse::text(Status::NoContent, ""),
-        Err(reason) => BasicResponse::json(Status::InternalServerError, reason),
+        Ok(_) => SetPassWordResponse::Created(()),
+        Err(reason) => SetPassWordResponse::Failure(reason.to_string()),
     };
 }

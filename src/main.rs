@@ -5,8 +5,8 @@ extern crate rocket;
 use rocket::{Build, Rocket};
 
 use handler::{
-    api::{api_version, set_password},
-    file::upload_file,
+    api_handler::{api_version, set_password},
+    file_handler::{get_file, upload_file},
 };
 
 use crate::db::initialize_db;
@@ -23,5 +23,5 @@ fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     rocket::build()
         .mount("/api", routes![api_version, set_password])
-        .mount("/file", routes![upload_file])
+        .mount("/file", routes![upload_file, get_file])
 }

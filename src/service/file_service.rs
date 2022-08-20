@@ -1,14 +1,25 @@
 use std::fs::File;
 use std::path::Path;
 
-use rocket::http::Status;
 use rocket::tokio::fs::create_dir;
 
-use crate::facade::db::save_file_record;
+use crate::facade::file_facade::{get_file_info_by_id, save_file_record};
 use crate::model::request::FileUpload;
-use crate::model::response::BasicResponse;
 
 static FILE_DIR: &str = "./files";
+
+#[derive(PartialEq)]
+pub enum SaveFileError {
+    MissingInfo(String),
+    FailWriteDisk,
+    FailWriteDb,
+}
+
+#[derive(PartialEq)]
+pub enum GetFileError {
+    NotFound,
+    DbFailure,
+}
 
 /// ensures that the passed directory exists on the file system
 async fn check_image_dir(dir: &str) {
@@ -21,11 +32,16 @@ async fn check_image_dir(dir: &str) {
     }
 }
 
-pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> (Status, BasicResponse<'a>) {
+/// saves a file to the disk and database
+pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> Result<(), SaveFileError> {
     check_image_dir(FILE_DIR).await;
     let file_name = match file_input.file.name() {
         Some(name) => name,
-        None => return BasicResponse::text(Status::BadRequest, "file name is required"),
+        None => {
+            return Err(SaveFileError::MissingInfo(
+                "file name is required".to_string(),
+            ))
+        }
     };
     // create the file name from the parts
     let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
@@ -37,18 +53,25 @@ pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> (Status, BasicRes
             match save_file_record(&file_name, &path, &mut saved_file) {
                 Err(e) => {
                     eprintln!("Failed to create file record in database: {:?}", e);
-                    return BasicResponse::text(
-                        Status::InternalServerError,
-                        "failed to save record to database",
-                    );
+                    return Err(SaveFileError::FailWriteDb);
                 }
                 _ => {}
             }
         }
         Err(e) => {
             eprintln!("{:?}", e);
-            return BasicResponse::text(Status::InternalServerError, "failed to save file to disk");
+            return Err(SaveFileError::FailWriteDisk);
         }
     }
-    return BasicResponse::text(Status::NoContent, "");
+    return Ok(());
+}
+
+pub fn get_file<'a>(id: u64) -> Result<File, GetFileError> {
+    match get_file_info_by_id(id) {
+        Ok(file_info) => {
+            // TODO the file may not exist on the disk
+            return Ok(File::open(Path::new(file_info.path.as_str())).unwrap());
+        }
+        Err(e) => Err(e),
+    }
 }
