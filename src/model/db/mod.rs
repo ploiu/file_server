@@ -1,14 +1,14 @@
 #[derive(Debug)]
-pub struct FileRecord<'fr> {
+pub struct FileRecord {
     pub id: Option<u64>,
-    pub name: &'fr str,
-    pub path: &'fr str,
+    pub name: String,
+    pub path: String,
     // md5, just to check for uniqueness
-    pub hash: &'fr str,
+    pub hash: String,
 }
 
-impl FileRecord<'_> {
-    pub fn from<'a>(name: &'a str, path: &'a str, hash: &'a str) -> FileRecord<'a> {
+impl FileRecord {
+    pub fn from(name: String, path: String, hash: String) -> FileRecord {
         FileRecord {
             id: None,
             name,

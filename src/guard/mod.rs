@@ -9,7 +9,6 @@ use sha2::{Digest, Sha256};
 
 use crate::db::metadata::CheckAuthResult;
 use crate::facade::db::check_auth;
-use crate::model::response::BasicResponse;
 
 #[derive(Debug)]
 pub struct Auth {
@@ -45,24 +44,14 @@ impl Auth {
     /// _this is a convenience method to be used only in handlers_
     /// ## Example
     /// ```
-    /// match auth.validate() {
-    ///     // error validating
-    ///     Some(v) => return v,
-    ///     // validation matched, continue with handler code outside of match block
-    ///     _ => {}
+    /// if !auth.validate() {
+    ///     return Status::Unauthorized;
     /// }
     /// ```
-    pub fn validate<'a>(self) -> Option<(Status, BasicResponse<'a>)> {
+    pub fn validate<'a>(self) -> bool {
         match check_auth(self) {
-            CheckAuthResult::Valid => None,
-            CheckAuthResult::Invalid => {
-                Some(BasicResponse::text(Status::Unauthorized, "Bad credentials"))
-            }
-            //language=json
-            CheckAuthResult::Missing => Some(BasicResponse::json(
-                Status::BadRequest,
-                "{\"message\": \"No password set. Please set one via `/password`\"}",
-            )),
+            CheckAuthResult::Valid => true,
+            _ => false,
         }
     }
 
