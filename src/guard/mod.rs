@@ -1,11 +1,15 @@
+use std::io::Write;
+
+use base64::decode;
+use rocket::async_trait;
+use rocket::http::Status;
+use rocket::request::{FromRequest, Outcome};
+use rocket::Request;
+use sha2::{Digest, Sha256};
+
 use crate::db::metadata::CheckAuthResult;
 use crate::facade::db::check_auth;
 use crate::model::response::BasicResponse;
-use base64::decode;
-use rocket::async_trait;
-use rocket::http::{ContentType, MediaType, Status};
-use rocket::request::{FromRequest, Outcome};
-use rocket::Request;
 
 #[derive(Debug)]
 pub struct Auth {
@@ -35,6 +39,19 @@ impl Auth {
             Err(_) => Err("Invalid basic auth format"),
         }
     }
+
+    /// compares our value with that in the database and returns a `Some` if the password doesn't match for any reason.
+    ///
+    /// _this is a convenience method to be used only in handlers_
+    /// ## Example
+    /// ```
+    /// match auth.validate() {
+    ///     // error validating
+    ///     Some(v) => return v,
+    ///     // validation matched, continue with handler code outside of match block
+    ///     _ => {}
+    /// }
+    /// ```
     pub fn validate<'a>(self) -> Option<(Status, BasicResponse<'a>)> {
         match check_auth(self) {
             CheckAuthResult::Valid => None,
@@ -47,6 +64,14 @@ impl Auth {
                 "{\"message\": \"No password set. Please set one via `/password`\"}",
             )),
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut hasher = Sha256::new();
+        // hash username and password combined
+        let combined = format!("{}:{}", self.username.trim(), self.password.trim());
+        hasher.write(combined.as_bytes()).unwrap();
+        format!("{:x}", hasher.finalize())
     }
 }
 

@@ -1,5 +1,7 @@
-use rusqlite::{Connection, OpenFlags, Result};
 use std::path::Path;
+
+use rusqlite::{Connection, OpenFlags, Result};
+
 pub mod file;
 pub mod metadata;
 

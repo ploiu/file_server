@@ -1,22 +1,27 @@
+extern crate core;
 #[macro_use]
 extern crate rocket;
-extern crate core;
 
 use rocket::{Build, Rocket};
 
+use handler::{
+    api::{api_version, set_password},
+    file::upload_file,
+};
+
 use crate::db::initialize_db;
-use handler::{api::api_version, file::upload_file};
 
 mod db;
 mod facade;
 mod guard;
 mod handler;
 mod model;
+mod service;
 
 #[launch]
 fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     rocket::build()
-        .mount("/api", routes![api_version])
+        .mount("/api", routes![api_version, set_password])
         .mount("/file", routes![upload_file])
 }

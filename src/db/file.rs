@@ -1,5 +1,6 @@
-use crate::model::db::FileRecord;
 use rusqlite::Connection;
+
+use crate::model::db::FileRecord;
 
 pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<(), String> {
     //language=sqlite

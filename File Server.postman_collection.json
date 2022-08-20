@@ -1,0 +1,343 @@
+{
+	"info": {
+		"_postman_id": "795c78a4-1bfc-41ea-bd54-3a41eedfeb13",
+		"name": "File Server",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "22903116"
+	},
+	"item": [
+		{
+			"name": "file",
+			"item": [
+				{
+					"name": "upload",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "/home/ploiu/Pictures/rust.png"
+								},
+								{
+									"key": "extension",
+									"value": "png",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "https://localhost:8000/file",
+							"protocol": "https",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"file"
+							]
+						},
+						"description": "# Upload File\n\nuploads a single file to the file server"
+					},
+					"response": [
+						{
+							"name": "Upload Successful",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "formdata",
+									"formdata": [
+										{
+											"key": "file",
+											"type": "file",
+											"src": "/home/ploiu/Pictures/rust.png"
+										},
+										{
+											"key": "extension",
+											"value": "png",
+											"type": "text"
+										}
+									]
+								},
+								"url": {
+									"raw": "https://localhost:8000/file",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"file"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "text/plain; charset=utf-8"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "content-length",
+									"value": "0"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 20 Aug 2022 00:52:14 GMT"
+								}
+							],
+							"cookie": [],
+							"body": null
+						}
+					]
+				}
+			]
+		},
+		{
+			"name": "api",
+			"item": [
+				{
+					"name": "version",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "https://localhost:8000/api/version",
+							"protocol": "https",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"version"
+							]
+						},
+						"description": "# Api Version\n\nretrieves the version of the api running on the server. Useful for clients to know if they're compatible.\n\nGeneral schema:\nMajor.Minor.Patch\n\nMajor version changes introduce a breaking change in the api contract.\n\nMinor version changes introduce a potentially-breaking change, but to an area other than the api contract.\n\nPatch version changes exist to fix an urgent bug or security vulnerability."
+					},
+					"response": []
+				},
+				{
+					"name": "Set Password",
+					"request": {
+						"auth": {
+							"type": "noauth"
+						},
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"username\": \"test\",\n    \"password\": \"test\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "https://localhost:8000/api/password",
+							"protocol": "https",
+							"host": [
+								"localhost"
+							],
+							"port": "8000",
+							"path": [
+								"api",
+								"password"
+							]
+						},
+						"description": "# Create Password\n\nsets a username and password in the database to prevent those without the combination from accessing your files."
+					},
+					"response": [
+						{
+							"name": "Creation Successful",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"username\": \"test\",\n    \"password\": \"test\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://localhost:8000/api/password",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"password"
+									]
+								}
+							},
+							"status": "No Content",
+							"code": 204,
+							"_postman_previewlanguage": "plain",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "text/plain; charset=utf-8"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "content-length",
+									"value": "0"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 20 Aug 2022 00:34:43 GMT"
+								}
+							],
+							"cookie": [],
+							"body": null
+						},
+						{
+							"name": "Password Already Exists",
+							"originalRequest": {
+								"method": "POST",
+								"header": [],
+								"body": {
+									"mode": "raw",
+									"raw": "{\n    \"username\": \"test\",\n    \"password\": \"test\"\n}",
+									"options": {
+										"raw": {
+											"language": "json"
+										}
+									}
+								},
+								"url": {
+									"raw": "https://localhost:8000/api/password",
+									"protocol": "https",
+									"host": [
+										"localhost"
+									],
+									"port": "8000",
+									"path": [
+										"api",
+										"password"
+									]
+								}
+							},
+							"status": "Internal Server Error",
+							"code": 500,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "content-length",
+									"value": "50"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 20 Aug 2022 00:48:26 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "password cannot be set, as it already has been set"
+						}
+					]
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "password",
+				"value": "test",
+				"type": "string"
+			},
+			{
+				"key": "username",
+				"value": "test",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}
