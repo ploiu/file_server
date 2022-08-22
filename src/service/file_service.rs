@@ -3,7 +3,7 @@ use std::path::Path;
 
 use rocket::tokio::fs::create_dir;
 
-use crate::facade::file_facade::{get_file_info_by_id, save_file_record};
+use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
 use crate::model::request::FileUpload;
 
 static FILE_DIR: &str = "./files";
@@ -19,6 +19,16 @@ pub enum SaveFileError {
 pub enum GetFileError {
     NotFound,
     DbFailure,
+}
+
+#[derive(PartialEq)]
+pub enum DeleteFileError {
+    // file reference not found in db
+    NotFound,
+    // couldn't remove the file reference from the db
+    DbError,
+    // couldn't remove the file from the disk
+    FileSystemError,
 }
 
 /// ensures that the passed directory exists on the file system
@@ -71,6 +81,22 @@ pub fn get_file<'a>(id: u64) -> Result<File, GetFileError> {
         Ok(file_info) => {
             // TODO the file may not exist on the disk
             return Ok(File::open(Path::new(file_info.path.as_str())).unwrap());
+        }
+        Err(e) => Err(e),
+    }
+}
+
+pub fn delete_file(id: u64) -> Result<(), DeleteFileError> {
+    match delete_file_by_id(id) {
+        Ok(file_record) => {
+            let file_path = Path::new(file_record.path.as_str());
+            match std::fs::remove_file(file_path) {
+                Ok(()) => Ok(()),
+                Err(e) => {
+                    eprintln!("Failed to delete file from disk at location {:?}!\n Nested exception is {:?}", file_path, e);
+                    Err(DeleteFileError::FileSystemError)
+                }
+            }
         }
         Err(e) => Err(e),
     }
