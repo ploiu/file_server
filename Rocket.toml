@@ -5,3 +5,6 @@ certs = "./cert.pem"
 
 [default.limits]
 file = "10 Mib"
+
+[global]
+address = "0.0.0.0"
