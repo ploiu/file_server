@@ -4,7 +4,8 @@ key = "./private-key.pem"
 certs = "./cert.pem"
 
 [default.limits]
-file = "10 Mib"
+file = "100 Mib"
+data-form = "100 Mib"
 
 [global]
 address = "0.0.0.0"
