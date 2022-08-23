@@ -26,7 +26,7 @@ pub fn api_version() -> Json<ApiVersion> {
 }
 
 #[post("/password", data = "<auth>")]
-pub fn set_password<'a>(auth: Json<NewAuth>) -> SetPassWordResponse {
+pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
     let result = api_service::create_password(auth.into_inner());
     return match result {
         Ok(_) => SetPassWordResponse::Created(()),

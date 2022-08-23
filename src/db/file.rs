@@ -32,3 +32,23 @@ pub fn get_by_id(id: u64, con: &Connection) -> Result<FileRecord, rusqlite::Erro
         })
     })?)
 }
+
+pub fn delete_by_id(id: u64, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
+    //language=sqlite
+    let mut pst = con
+        .prepare("delete from FileRecords where id = ?1")
+        .unwrap();
+
+    // we need to be able to delete the file off the disk, so we have to return the FileRecord too
+    let record = match get_by_id(id, &con) {
+        Ok(f) => f,
+        Err(e) => return Err(e),
+    };
+
+    match pst.execute([id]) {
+        Err(e) => return Err(e),
+        // we don't do anything here because we don't care - no rows deleted means we throw an error via get_by_id
+        _ => {}
+    };
+    return Ok(record);
+}
