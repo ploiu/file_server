@@ -11,6 +11,7 @@ use crate::service::file_service::{DeleteFileError, GetFileError};
 
 /// saves a record of the passed file info to the database
 /// TODO check if file already exists
+#[inline]
 pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<(), String> {
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let con = open_connection();
@@ -30,8 +31,9 @@ pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<
 }
 
 /// Retrieves a file by the passed id from the database
+#[inline]
 pub fn get_file_info_by_id(id: u64) -> Result<FileRecord, GetFileError> {
-    let mut con = open_connection();
+    let con = open_connection();
     let result = match get_by_id(id, &con) {
         Ok(record) => Ok(record),
         Err(error) if error == rusqlite::Error::QueryReturnedNoRows => Err(GetFileError::NotFound),
@@ -47,8 +49,9 @@ pub fn get_file_info_by_id(id: u64) -> Result<FileRecord, GetFileError> {
     result
 }
 
+#[inline]
 pub fn delete_file_by_id(id: u64) -> Result<FileRecord, DeleteFileError> {
-    let mut con = open_connection();
+    let con = open_connection();
     let result = match delete_by_id(id, &con) {
         Ok(record) => Ok(record),
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),

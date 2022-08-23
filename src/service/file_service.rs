@@ -43,7 +43,7 @@ async fn check_image_dir(dir: &str) {
 }
 
 /// saves a file to the disk and database
-pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> Result<(), SaveFileError> {
+pub async fn save_file(file_input: &mut FileUpload<'_>) -> Result<(), SaveFileError> {
     check_image_dir(FILE_DIR).await;
     let file_name = match file_input.file.name() {
         Some(name) => name,
@@ -76,7 +76,7 @@ pub async fn save_file<'a>(file_input: &mut FileUpload<'_>) -> Result<(), SaveFi
     return Ok(());
 }
 
-pub fn get_file<'a>(id: u64) -> Result<File, GetFileError> {
+pub fn get_file(id: u64) -> Result<File, GetFileError> {
     match get_file_info_by_id(id) {
         Ok(file_info) => {
             // TODO the file may not exist on the disk
