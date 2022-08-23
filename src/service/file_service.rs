@@ -4,7 +4,7 @@ use std::path::Path;
 use rocket::tokio::fs::create_dir;
 
 use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
-use crate::model::request::FileUpload;
+use crate::model::request::file::CreateFileRequest;
 
 static FILE_DIR: &str = "./files";
 
@@ -43,7 +43,7 @@ async fn check_image_dir(dir: &str) {
 }
 
 /// saves a file to the disk and database
-pub async fn save_file(file_input: &mut FileUpload<'_>) -> Result<(), SaveFileError> {
+pub async fn save_file(file_input: &mut CreateFileRequest<'_>) -> Result<(), SaveFileError> {
     check_image_dir(FILE_DIR).await;
     let file_name = match file_input.file.name() {
         Some(name) => name,
@@ -80,7 +80,8 @@ pub fn get_file(id: u64) -> Result<File, GetFileError> {
     match get_file_info_by_id(id) {
         Ok(file_info) => {
             // TODO the file may not exist on the disk
-            return Ok(File::open(Path::new(file_info.path.as_str())).unwrap());
+            let built_path = format!("./files/{}/{}", file_info.path.unwrap(), file_info.name);
+            return Ok(File::open(Path::new(built_path.as_str())).unwrap());
         }
         Err(e) => Err(e),
     }
@@ -89,7 +90,7 @@ pub fn get_file(id: u64) -> Result<File, GetFileError> {
 pub fn delete_file(id: u64) -> Result<(), DeleteFileError> {
     match delete_file_by_id(id) {
         Ok(file_record) => {
-            let file_path = Path::new(file_record.path.as_str());
+            let file_path = Path::new("FIXME");
             match std::fs::remove_file(file_path) {
                 Ok(()) => Ok(()),
                 Err(e) => {

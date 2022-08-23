@@ -1,13 +1,6 @@
-use rocket::fs::TempFile;
+pub mod file;
+
 use rocket::serde::Deserialize;
-use rocket::FromForm;
-
-#[derive(FromForm)]
-pub struct FileUpload<'a> {
-    pub file: TempFile<'a>,
-    pub extension: &'a str,
-}
-
 /// Because `Auth` is used as a request guard, we can't use it for creating login credentials.
 /// This allows us to accept one in a post body.
 #[derive(Deserialize)]

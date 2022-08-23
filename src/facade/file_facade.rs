@@ -11,6 +11,7 @@ use crate::service::file_service::{DeleteFileError, GetFileError};
 
 /// saves a record of the passed file info to the database
 /// TODO check if file already exists
+/// TODO containing folder
 #[inline]
 pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<(), String> {
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
@@ -22,7 +23,6 @@ pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<
     let hash = format!("{:x}", hash);
     let file_record = FileRecord::from(
         formatted_name.to_mut().to_string(),
-        path.to_str().unwrap().to_string(),
         hash.as_str().to_string(),
     );
     let res = file::save_file_record(&file_record, &con);

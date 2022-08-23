@@ -1,13 +1,14 @@
 use rusqlite::Connection;
+use std::any::{Any, TypeId};
 
 use crate::model::db::FileRecord;
 
 pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<(), String> {
     //language=sqlite
     let mut pst = con
-        .prepare("insert into FileRecords(name, path, hash) values (?1, ?2, ?3); commit;")
+        .prepare("insert into FileRecords(name, hash) values (?1, ?3); commit;")
         .unwrap();
-    let res = match pst.execute((file.name.as_str(), file.path.as_str(), file.hash.as_str())) {
+    let res = match pst.execute((file.name.as_str(), file.hash.as_str())) {
         Ok(_) => Ok(()),
         Err(e) => Err(format!(
             "Failed to save file record. Nested exception is {:?}",
@@ -20,15 +21,29 @@ pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<(), Strin
 pub fn get_by_id(id: u64, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
     //language=sqlite
     let mut pst = con
-        .prepare("select id, name, path, hash from FileRecords where id = ?1")
+        .prepare(
+            "with query as (select fl.id, fl.name, fl.parentId
+               from folders fl
+               where parentId is null
+               union all
+               select f.id, query.name || '/' || f.name, f.parentId
+               from folders f
+                        join query
+                             on f.parentId = query.id)
+select FR.id, FR.name, FR.hash, query.name as \"path\"
+from query
+         join Folder_Files ff on ff.folderId = query.id
+         join FileRecords FR on ff.fileId = FR.id
+where fr.id = ?1",
+        )
         .unwrap();
 
     Ok(pst.query_row([id], |row| {
         Ok(FileRecord {
-            id: Some(row.get(0)?),
+            id: row.get(0)?,
             name: row.get(1)?,
-            path: row.get(2)?,
-            hash: row.get(3)?,
+            hash: row.get(2)?,
+            path: row.get(3)?,
         })
     })?)
 }

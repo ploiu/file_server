@@ -1,7 +1,7 @@
 use rocket::form::Form;
 
 use crate::guard::{Auth, ValidateResult};
-use crate::model::request::FileUpload;
+use crate::model::request::file::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, GetFileResponse,
 };
@@ -11,7 +11,10 @@ use crate::service::file_service::{save_file, DeleteFileError, GetFileError, Sav
 
 /// accepts a file via request body and stores it off
 #[post("/", data = "<file_input>")]
-pub async fn upload_file(file_input: Form<FileUpload<'_>>, auth: Auth) -> CreateFileResponse {
+pub async fn upload_file(
+    file_input: Form<CreateFileRequest<'_>>,
+    auth: Auth,
+) -> CreateFileResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return CreateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
