@@ -1,15 +1,22 @@
 use rusqlite::Connection;
 use std::any::{Any, TypeId};
 
-use crate::model::db::FileRecord;
+use crate::model::db::{FileRecord, FolderFiles};
 
-pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<(), String> {
+pub fn save_file_record(
+    file: &FileRecord,
+    // folder_file: &FolderFiles,
+    con: &Connection,
+) -> Result<(), String> {
     //language=sqlite
     let mut pst = con
-        .prepare("insert into FileRecords(name, hash) values (?1, ?3); commit;")
+        .prepare("insert into FileRecords(name, hash) values (?1, ?2); commit;")
         .unwrap();
     let res = match pst.execute((file.name.as_str(), file.hash.as_str())) {
-        Ok(_) => Ok(()),
+        Ok(_) => {
+            let last_insert_id = con.last_insert_rowid();
+            return Ok(());
+        }
         Err(e) => Err(format!(
             "Failed to save file record. Nested exception is {:?}",
             e

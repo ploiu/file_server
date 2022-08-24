@@ -1,7 +1,15 @@
 use crate::model::response::BasicMessage;
+use rocket::serde::{json::Json, Serialize};
 use std::fs::File;
 
 type NoContent = ();
+
+#[derive(Serialize)]
+#[serde(crate = "rocket::serde")]
+pub struct FileMetadataResponse {
+    id: u32,
+    name: String,
+}
 
 #[derive(Responder)]
 pub enum GetFileResponse {

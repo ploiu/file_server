@@ -2,7 +2,8 @@ use std::path::Path;
 
 use rusqlite::{Connection, OpenFlags, Result};
 
-pub mod file;
+pub mod file_repository;
+pub mod folder_repository;
 pub mod metadata;
 
 static DB_LOCATION: &str = "./db.sqlite";

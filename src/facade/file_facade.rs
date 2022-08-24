@@ -4,8 +4,8 @@ use std::path::Path;
 use regex::Regex;
 use sha2::{Digest, Sha256};
 
-use crate::db::file::{delete_by_id, get_by_id};
-use crate::db::{file, open_connection};
+use crate::db::file_repository::{delete_by_id, get_by_id};
+use crate::db::{file_repository, open_connection};
 use crate::model::db::FileRecord;
 use crate::service::file_service::{DeleteFileError, GetFileError};
 
@@ -25,7 +25,7 @@ pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<
         formatted_name.to_mut().to_string(),
         hash.as_str().to_string(),
     );
-    let res = file::save_file_record(&file_record, &con);
+    let res = file_repository::save_file_record(&file_record, &con);
     con.close().unwrap();
     res
 }
