@@ -39,11 +39,27 @@ impl FolderResponse {
 #[derive(Responder)]
 pub enum GetFolderResponse {
     #[response(status = 404, content_type = "json")]
-    FileNotFound(BasicMessage),
+    FolderNotFound(BasicMessage),
     #[response(status = 500, content_type = "json")]
-    FileDbError(BasicMessage),
+    FolderDbError(BasicMessage),
     #[response(status = 200)]
     Success(Json<FolderResponse>),
     #[response(status = 401)]
     Unauthorized(String),
+}
+
+#[derive(Responder)]
+pub enum CreateFolderResponse {
+    #[response(status = 400, content_type = "json")]
+    FolderAlreadyExists(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FolderDbError(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FileSystemError(BasicMessage),
+    #[response(status = 200)]
+    Success(Json<FolderResponse>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 404, content_type = "json")]
+    ParentNotFound(BasicMessage),
 }

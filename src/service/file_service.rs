@@ -4,9 +4,9 @@ use std::path::Path;
 use rocket::tokio::fs::create_dir;
 
 use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
-use crate::model::request::file::CreateFileRequest;
+use crate::model::request::file_requests::CreateFileRequest;
 
-static FILE_DIR: &str = "./files";
+pub static FILE_DIR: &str = "./files";
 
 #[derive(PartialEq)]
 pub enum SaveFileError {

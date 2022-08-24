@@ -1,7 +1,7 @@
 use rocket::form::Form;
 
 use crate::guard::{Auth, ValidateResult};
-use crate::model::request::file::CreateFileRequest;
+use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, GetFileResponse,
 };

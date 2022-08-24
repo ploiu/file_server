@@ -1,7 +1,7 @@
 use crate::model::db;
 use rusqlite::Connection;
 
-pub fn get_by_id(id: u64, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
+pub fn get_by_id(id: u32, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
     //language=sqlite
     let mut pst = con
         .prepare(
@@ -31,7 +31,7 @@ from query where id = ?1",
     })?)
 }
 
-pub fn get_child_folders(id: u64, con: &Connection) -> Result<Vec<db::Folder>, rusqlite::Error> {
+pub fn get_child_folders(id: u32, con: &Connection) -> Result<Vec<db::Folder>, rusqlite::Error> {
     //language=sqlite
     let mut pst = con
         .prepare(
@@ -59,4 +59,25 @@ where query.parentId = ?1",
         })
     }
     Ok(folders)
+}
+
+pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
+    // different parameters if we have a parent id
+    let mut pst = con
+        .prepare("insert into Folders(name, parentId) values(?1, ?2)")
+        .unwrap();
+    match folder.parent_id {
+        Some(id) => {
+            pst.execute(rusqlite::params![folder.name, id])?;
+        }
+        None => {
+            pst.execute(rusqlite::params![folder.name, rusqlite::types::Null])?;
+        }
+    };
+    let folder_id = con.last_insert_rowid() as u32;
+    Ok(db::Folder {
+        id: Some(folder_id),
+        name: String::from(&folder.name),
+        parent_id: folder.parent_id,
+    })
 }
