@@ -8,5 +8,5 @@ pub struct CreateFileRequest<'a> {
     /// because I don't feel like mapping from content-type header
     pub extension: &'a str,
     /// leave blank for top level folder
-    pub folderId: Option<u32>,
+    pub folder_id: Option<u32>,
 }

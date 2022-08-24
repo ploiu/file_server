@@ -1,5 +1,5 @@
 use crate::model::response::BasicMessage;
-use rocket::serde::{json::Json, Serialize};
+use rocket::serde::Serialize;
 use std::fs::File;
 
 type NoContent = ();

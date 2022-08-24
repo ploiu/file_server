@@ -1,7 +1,6 @@
 use rusqlite::Connection;
-use std::any::{Any, TypeId};
 
-use crate::model::db::{FileRecord, FolderFiles};
+use crate::model::db::FileRecord;
 
 pub fn save_file_record(
     file: &FileRecord,
@@ -14,6 +13,7 @@ pub fn save_file_record(
         .unwrap();
     let res = match pst.execute((file.name.as_str(), file.hash.as_str())) {
         Ok(_) => {
+            // TODO
             let last_insert_id = con.last_insert_rowid();
             return Ok(());
         }

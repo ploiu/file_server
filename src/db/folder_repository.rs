@@ -21,7 +21,7 @@ from query where id = ?1",
     Ok(pst.query_row([id], |row| {
         let parent_id: Option<u32> = match row.get(2) {
             Ok(val) => Some(val),
-            Err(e) => None,
+            Err(_) => None,
         };
         Ok(db::Folder {
             id: Some(row.get(0)?),

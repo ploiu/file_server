@@ -1,24 +1,26 @@
 use crate::model::db::Folder;
-use crate::model::response::file_responses::{FileMetadataResponse, GetFileResponse};
+use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::BasicMessage;
 use rocket::serde::{json::Json, Serialize};
-use std::iter;
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct FolderResponse {
     pub id: u32,
+    #[serde(rename = "parentId")]
+    pub parent_id: Option<u32>,
     pub path: String,
     pub folders: Vec<FolderResponse>,
     pub files: Vec<FileMetadataResponse>,
 }
 
 impl FolderResponse {
-    pub fn from(base: Folder) -> FolderResponse {
+    pub fn from(base: &Folder) -> FolderResponse {
         FolderResponse {
             // should always have an id when coming from the database
             id: base.id.unwrap(),
-            path: base.name,
+            parent_id: base.parent_id,
+            path: String::from(&base.name),
             // TODO all nested folders
             folders: Vec::new(),
             // TODO all nested files
@@ -29,15 +31,8 @@ impl FolderResponse {
     pub fn folders(&mut self, folders: Vec<Folder>) {
         folders
             .iter()
-            .map(|f| FolderResponse {
-                id: f.id.unwrap(),
-                folders: Vec::new(),
-                path: String::from(&f.name),
-                files: Vec::new(),
-            })
-            .for_each(|f| {
-                self.folders.push(f);
-            });
+            .map(FolderResponse::from)
+            .for_each(|f| self.folders.push(f));
     }
 }
 

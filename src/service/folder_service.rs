@@ -13,6 +13,7 @@ pub fn get_folder(id: u64) -> Result<FolderResponse, GetFolderError> {
             let mut folder = FolderResponse {
                 // should always have an id when coming from the database
                 id: folder.id.unwrap(),
+                parent_id: folder.parent_id,
                 path: folder.name,
                 // TODO all nested folders
                 folders: Vec::new(),
