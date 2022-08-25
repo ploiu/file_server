@@ -1,9 +1,11 @@
 use crate::guard::{Auth, ValidateResult};
-use crate::model::request::folder_requests::CreateFolderRequest;
-use crate::model::response::folder_responses::{CreateFolderResponse, GetFolderResponse};
+use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
+use crate::model::response::folder_responses::{
+    CreateFolderResponse, GetFolderResponse, UpdateFolderResponse,
+};
 use crate::model::response::BasicMessage;
 use crate::service::folder_service;
-use crate::service::folder_service::{CreateFolderError, GetFolderError};
+use crate::service::folder_service::{CreateFolderError, GetFolderError, UpdateFolderError};
 use rocket::serde::json::Json;
 
 #[get("/<id>")]
@@ -60,4 +62,23 @@ pub fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> CreateFol
             ))
         }
     };
+}
+
+#[put("/", data = "<folder>")]
+pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFolderResponse {
+    match auth.validate() {
+        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::NoPasswordSet => return UpdateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return UpdateFolderResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    let result = match folder_service::update_folder(&folder) {
+        Ok(updated_folder) => UpdateFolderResponse::Success(Json::from(updated_folder)),
+        Err(e) if e == UpdateFolderError::NotFound => UpdateFolderResponse::FolderNotFound(BasicMessage::new("The folder with the passed id could not be found.")),
+        Err(e) if e == UpdateFolderError::ParentNotFound => UpdateFolderResponse::ParentNotFound(BasicMessage::new("The parent folder with the passed id could not be found.")),
+        Err(e) if e == UpdateFolderError::AlreadyExists => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot update folder, because another one with the new path already exists.")),
+        Err(e) if e == UpdateFolderError::DbFailure => UpdateFolderResponse::FolderDbError(BasicMessage::new("Could not update the folder in the database. Please check the server logs for more details.")),
+        Err(e) if e == UpdateFolderError::FileSystemFailure => UpdateFolderResponse::FileSystemError(BasicMessage::new("Could not move the folder! Please see server logs for details.")),
+        Err(e) => panic!("Update Folder: non-listed error {:?}", e)
+    };
+    return result;
 }

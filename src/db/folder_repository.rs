@@ -1,5 +1,5 @@
 use crate::model::db;
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 pub fn get_by_id(id: u32, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
     //language=sqlite
@@ -61,8 +61,11 @@ where query.parentId = ?1",
     Ok(folders)
 }
 
+/// creates a folder record in the database.
+/// This does not do any checks on folder parent id or any other data,
+/// and that must be done before this function is called
 pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
-    // different parameters if we have a parent id
+    //language=sqlite
     let mut pst = con
         .prepare("insert into Folders(name, parentId) values(?1, ?2)")
         .unwrap();
@@ -80,4 +83,24 @@ pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder
         name: String::from(&folder.name),
         parent_id: folder.parent_id,
     })
+}
+
+/// updates a folder record in the database.
+/// This does not perform any checks on folder info, and that must be done
+/// before this function is called
+pub fn update_folder(folder: &db::Folder, con: &Connection) -> Result<(), rusqlite::Error> {
+    //language=sqlite
+    let mut pst = con
+        .prepare(
+            "update Folders
+                    set name = ?1, parentId = ?2
+                    where id = ?3",
+        )
+        .unwrap();
+    match folder.parent_id {
+        Some(parent_id) => pst.execute(params![&folder.name, parent_id, &folder.id])?,
+        // moving to top level
+        None => pst.execute(params![&folder.name, rusqlite::types::Null, &folder.id])?,
+    };
+    Ok(())
 }

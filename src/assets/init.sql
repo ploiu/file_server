@@ -3,8 +3,8 @@ begin;
 create table Metadata
 (
     id    integer primary key autoincrement,
-    name  varchar(128) not null unique,
-    value varchar(64)  not null
+    name  varchar not null unique,
+    value varchar not null
 );
 
 insert into Metadata(name, value)
@@ -14,7 +14,7 @@ values ('version', '1');
 create table Folders
 (
     id       integer primary key autoincrement,
-    name     varchar(100),
+    name     varchar,
     parentId integer,
     foreign key (parentId) references Folders (id)
 );
@@ -23,16 +23,17 @@ create table Folders
 create table FileRecords
 (
     id   integer primary key autoincrement,
-    name varchar(256) not null,
-    hash char(32)     not null unique
+    name varchar not null,
+    hash char    not null unique
 );
 
-create table Folder_Files (
-    id integer primary key autoincrement,
+create table Folder_Files
+(
+    id       integer primary key autoincrement,
     folderId integer not null,
-    fileId integer not null unique,
-    foreign key(folderId) references Folders(id),
-    foreign key(fileId) references FileRecords(id)
+    fileId   integer not null unique,
+    foreign key (folderId) references Folders (id),
+    foreign key (fileId) references FileRecords (id)
 );
 
 commit;

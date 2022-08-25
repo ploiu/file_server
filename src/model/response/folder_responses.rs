@@ -63,3 +63,21 @@ pub enum CreateFolderResponse {
     #[response(status = 404, content_type = "json")]
     ParentNotFound(BasicMessage),
 }
+
+#[derive(Responder)]
+pub enum UpdateFolderResponse {
+    #[response(status = 400, content_type = "json")]
+    FolderAlreadyExists(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FolderDbError(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FileSystemError(BasicMessage),
+    #[response(status = 200)]
+    Success(Json<FolderResponse>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 404, content_type = "json")]
+    ParentNotFound(BasicMessage),
+    #[response(status = 404, content_type = "json")]
+    FolderNotFound(BasicMessage),
+}

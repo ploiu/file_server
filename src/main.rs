@@ -7,7 +7,7 @@ use rocket::{Build, Rocket};
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, get_file, upload_file},
-    folder_handler::{create_folder, get_folder},
+    folder_handler::{create_folder, get_folder, update_folder},
 };
 
 use crate::db::initialize_db;
@@ -25,5 +25,8 @@ fn rocket() -> Rocket<Build> {
     rocket::build()
         .mount("/api", routes![api_version, set_password])
         .mount("/files", routes![upload_file, get_file, delete_file])
-        .mount("/folders", routes![get_folder, create_folder])
+        .mount(
+            "/folders",
+            routes![get_folder, create_folder, update_folder],
+        )
 }

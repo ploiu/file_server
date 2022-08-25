@@ -1,9 +1,9 @@
 use crate::facade::folder_facade;
-use crate::facade::folder_facade::{get_child_folders_for, get_folder_by_id};
 use crate::model::db;
-use crate::model::request::folder_requests::CreateFolderRequest;
+use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::service::file_service::FILE_DIR;
+use regex::Regex;
 use std::fs;
 use std::path::Path;
 
@@ -25,8 +25,22 @@ pub enum CreateFolderError {
     ParentNotFound,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum UpdateFolderError {
+    /// a folder with the name in the selected path already exists
+    AlreadyExists,
+    /// the database failed to update the folder
+    DbFailure,
+    /// the file system failed to move the folder
+    FileSystemFailure,
+    /// the requested parent folder does not exist
+    ParentNotFound,
+    /// The folder could not be found
+    NotFound,
+}
+
 pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
-    match get_folder_by_id(id) {
+    match folder_facade::get_folder_by_id(id) {
         Ok(folder) => {
             let mut folder = FolderResponse {
                 // should always have an id when coming from the database
@@ -38,7 +52,7 @@ pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
                 // TODO all nested files
                 files: Vec::new(),
             };
-            folder.folders(get_child_folders_for(id).unwrap());
+            folder.folders(folder_facade::get_child_folders_for(id).unwrap());
             Ok(folder)
         }
         Err(e) => Err(e),
@@ -68,4 +82,42 @@ pub fn create_folder(folder: &CreateFolderRequest) -> Result<FolderResponse, Cre
         }
         Err(e) => Err(e),
     }
+}
+
+pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, UpdateFolderError> {
+    let original_folder = match folder_facade::get_folder_by_id(folder.id) {
+        Ok(f) => f,
+        Err(e) if e == GetFolderError::NotFound => return Err(UpdateFolderError::NotFound),
+        _ => return Err(UpdateFolderError::DbFailure),
+    };
+    let db_folder = db::Folder {
+        id: Some(folder.id),
+        parent_id: folder.parent_id,
+        name: String::from(&folder.name),
+    };
+    let updated_folder = match folder_facade::update_folder(&db_folder) {
+        Ok(updated) => updated,
+        Err(e) => return Err(e),
+    };
+    match fs::rename(
+        format!("{}/{}", FILE_DIR, original_folder.name),
+        &updated_folder.name,
+    ) {
+        Ok(_) => { /*no op - move was ok */ }
+        Err(e) => {
+            eprintln!("Failed to move folder! Nested exception is: \n {:?}", e);
+            return Err(UpdateFolderError::FileSystemFailure);
+        }
+    };
+
+    Ok(FolderResponse {
+        id: updated_folder.id.unwrap(),
+        folders: Vec::new(),
+        files: Vec::new(),
+        parent_id: updated_folder.parent_id,
+        path: Regex::new(format!("^{}", FILE_DIR).as_str())
+            .unwrap()
+            .replace(&updated_folder.name, "")
+            .to_string(),
+    })
 }

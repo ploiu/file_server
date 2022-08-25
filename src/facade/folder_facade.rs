@@ -1,7 +1,8 @@
 use crate::db::folder_repository::{get_by_id, get_child_folders};
 use crate::db::{folder_repository, open_connection};
 use crate::model::db::Folder;
-use crate::service::folder_service::{CreateFolderError, GetFolderError};
+use crate::service::file_service::FILE_DIR;
+use crate::service::folder_service::{CreateFolderError, GetFolderError, UpdateFolderError};
 
 pub fn get_folder_by_id(id: u32) -> Result<Folder, GetFolderError> {
     let con = open_connection();
@@ -75,4 +76,48 @@ pub fn create_folder(folder: &Folder) -> Result<Folder, CreateFolderError> {
     };
     con.close().unwrap();
     created
+}
+
+/// updates the folder record in the database, returning a new folder with the updated path
+pub fn update_folder(folder: &Folder) -> Result<Folder, UpdateFolderError> {
+    let con = open_connection();
+    let mut new_path: String = String::from(&folder.name);
+    // make sure the folder already exists in the db
+    match get_by_id(folder.id.unwrap(), &con) {
+        Ok(_) => { /* no op - just confirm it exists */ }
+        Err(_) => {
+            con.close().unwrap();
+            return Err(UpdateFolderError::NotFound);
+        }
+    }
+    // first we need to check if the parent folder exists
+    match folder.parent_id {
+        Some(parent_id) => match get_by_id(parent_id, &con) {
+            Ok(parent) => {
+                new_path = format!("{}/{}/{}", FILE_DIR, parent.name, new_path);
+            }
+            Err(_) => {
+                con.close().unwrap();
+                return Err(UpdateFolderError::ParentNotFound);
+            }
+        },
+        None => {
+            new_path = format!("{}/{}", FILE_DIR, new_path);
+        }
+    };
+    let update = folder_repository::update_folder(&folder, &con);
+    if update.is_err() {
+        con.close().unwrap();
+        eprintln!(
+            "Failed to update folder in database. Nested exception is: \n {:?}",
+            update.unwrap_err()
+        );
+        return Err(UpdateFolderError::DbFailure);
+    }
+    con.close().unwrap();
+    Ok(Folder {
+        id: folder.id,
+        parent_id: folder.parent_id,
+        name: new_path,
+    })
 }
