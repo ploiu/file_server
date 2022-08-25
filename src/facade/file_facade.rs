@@ -2,6 +2,7 @@ use std::fs::File;
 use std::path::Path;
 
 use regex::Regex;
+use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 use crate::db::file_repository::{delete_by_id, get_by_id};
@@ -32,7 +33,7 @@ pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<
 
 /// Retrieves a file by the passed id from the database
 #[inline]
-pub fn get_file_info_by_id(id: u64) -> Result<FileRecord, GetFileError> {
+pub fn get_file_info_by_id(id: u32) -> Result<FileRecord, GetFileError> {
     let con = open_connection();
     let result = match get_by_id(id, &con) {
         Ok(record) => Ok(record),
@@ -50,7 +51,7 @@ pub fn get_file_info_by_id(id: u64) -> Result<FileRecord, GetFileError> {
 }
 
 #[inline]
-pub fn delete_file_by_id(id: u64) -> Result<FileRecord, DeleteFileError> {
+pub fn delete_file_by_id(id: u32) -> Result<FileRecord, DeleteFileError> {
     let con = open_connection();
     let result = match delete_by_id(id, &con) {
         Ok(record) => Ok(record),
@@ -64,5 +65,24 @@ pub fn delete_file_by_id(id: u64) -> Result<FileRecord, DeleteFileError> {
         }
     };
     con.close().unwrap();
+    return result;
+}
+
+/// for use in folder_facade, so that way we don't create a new connection every time
+pub fn delete_file_by_id_with_connection(
+    id: u32,
+    con: &Connection,
+) -> Result<FileRecord, DeleteFileError> {
+    let result = match delete_by_id(id, &con) {
+        Ok(record) => Ok(record),
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+        Err(e) => {
+            eprintln!(
+                "Failed to delete file record from database! Nested exception is: \n {:?}",
+                e
+            );
+            Err(DeleteFileError::DbError)
+        }
+    };
     return result;
 }

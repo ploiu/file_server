@@ -3,6 +3,8 @@ use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::BasicMessage;
 use rocket::serde::{json::Json, Serialize};
 
+type NoContent = ();
+
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct FolderResponse {
@@ -80,4 +82,18 @@ pub enum UpdateFolderResponse {
     ParentNotFound(BasicMessage),
     #[response(status = 404, content_type = "json")]
     FolderNotFound(BasicMessage),
+}
+
+#[derive(Responder)]
+pub enum DeleteFolderResponse {
+    #[response(status = 404, content_type = "json")]
+    FolderNotFound(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FolderDbError(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FileSystemError(BasicMessage),
+    #[response(status = 204)]
+    Success(NoContent),
+    #[response(status = 401)]
+    Unauthorized(String),
 }

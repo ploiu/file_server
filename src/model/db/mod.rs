@@ -5,6 +5,7 @@ pub struct FileRecord {
     /// the name of the file to save in the db and disk
     pub name: String,
     /// available on retrieve from db
+    #[deprecated(note = "this is being removed in favor of new db structure")]
     pub path: Option<String>,
     /// sha256, just to check for uniqueness
     pub hash: String,

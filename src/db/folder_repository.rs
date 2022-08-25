@@ -104,3 +104,46 @@ pub fn update_folder(folder: &db::Folder, con: &Connection) -> Result<(), rusqli
     };
     Ok(())
 }
+
+/// retrieves all the
+pub fn get_files_for_folder(
+    id: u32,
+    con: &Connection,
+) -> Result<Vec<db::FileRecord>, rusqlite::Error> {
+    //language=sqlite
+    let mut pst = con
+        .prepare(
+            "select f.id, f.name, f.hash from Folder_Files ff
+            join FileRecords f on ff.fileId = f.id
+            where ff.folderId = ?1",
+        )
+        .unwrap();
+    let mapped = pst.query_map([id], |row| {
+        Ok(db::FileRecord {
+            id: Some(row.get(0)?),
+            name: row.get(1)?,
+            hash: row.get(2)?,
+            path: None,
+        })
+    })?;
+
+    let mut files: Vec<db::FileRecord> = Vec::new();
+    for file in mapped.into_iter() {
+        files.push(file?);
+    }
+    Ok(files)
+}
+
+/// deletes a folder and unlinks every file inside of it.
+/// This _does not_ check if the folder exists first.
+pub fn delete_folder(id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
+    //language=sqlite
+    let mut delete_folder_files = con
+        .prepare("delete from Folder_Files where folderId = ?1")
+        .unwrap();
+    //language=sqlite
+    let mut delete_folder = con.prepare("delete from Folders where id = ?1").unwrap();
+    delete_folder_files.execute([id])?;
+    delete_folder.execute([id])?;
+    Ok(())
+}

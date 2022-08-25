@@ -76,7 +76,7 @@ pub async fn save_file(file_input: &mut CreateFileRequest<'_>) -> Result<(), Sav
     return Ok(());
 }
 
-pub fn get_file(id: u64) -> Result<File, GetFileError> {
+pub fn get_file(id: u32) -> Result<File, GetFileError> {
     match get_file_info_by_id(id) {
         Ok(file_info) => {
             // TODO the file may not exist on the disk
@@ -87,7 +87,7 @@ pub fn get_file(id: u64) -> Result<File, GetFileError> {
     }
 }
 
-pub fn delete_file(id: u64) -> Result<(), DeleteFileError> {
+pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     match delete_file_by_id(id) {
         Ok(file_record) => {
             let file_path = Path::new("FIXME");

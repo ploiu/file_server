@@ -33,7 +33,7 @@ create table Folder_Files
     folderId integer not null,
     fileId   integer not null unique,
     foreign key (folderId) references Folders (id),
-    foreign key (fileId) references FileRecords (id)
+    foreign key (fileId) references FileRecords (id) on delete cascade
 );
 
 commit;

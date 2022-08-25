@@ -25,7 +25,7 @@ pub fn save_file_record(
     res
 }
 
-pub fn get_by_id(id: u64, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
+pub fn get_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
     //language=sqlite
     let mut pst = con
         .prepare(
@@ -55,7 +55,7 @@ where fr.id = ?1",
     })?)
 }
 
-pub fn delete_by_id(id: u64, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
+pub fn delete_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
     //language=sqlite
     let mut pst = con
         .prepare("delete from FileRecords where id = ?1")

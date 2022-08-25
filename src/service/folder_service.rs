@@ -1,7 +1,7 @@
 use crate::facade::folder_facade;
 use crate::model::db;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::folder_responses::FolderResponse;
+use crate::model::response::folder_responses::{DeleteFolderResponse, FolderResponse};
 use crate::service::file_service::FILE_DIR;
 use regex::Regex;
 use std::fs;
@@ -37,6 +37,24 @@ pub enum UpdateFolderError {
     ParentNotFound,
     /// The folder could not be found
     NotFound,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum GetChildFilesError {
+    /// database could not execute the query
+    DbFailure,
+    /// the folder id could not be found
+    FolderNotFound,
+}
+
+#[derive(PartialEq, Debug)]
+pub enum DeleteFolderError {
+    /// database could not execute the query
+    DbFailure,
+    /// folder not in the db
+    FolderNotFound,
+    /// could not remove the folder from the database
+    FileSystemError,
 }
 
 pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
@@ -120,4 +138,22 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .replace(&updated_folder.name, "")
             .to_string(),
     })
+}
+
+pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
+    match folder_facade::delete_folder(id) {
+        Ok(f) => {
+            // delete went well, now time to actually remove the folder
+            let path = format!("{}/{}", FILE_DIR, f.name);
+            match fs::remove_dir_all(path) {
+                Err(e) => {
+                    eprintln!("Failed to recursively delete folder from disk! Nested exception is: \n {:?}", e);
+                    return Err(DeleteFolderError::FileSystemError);
+                }
+                _ => { /*no op - folder deleted successfully */ }
+            };
+        }
+        Err(e) => return Err(e),
+    };
+    Ok(())
 }

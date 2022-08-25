@@ -37,7 +37,7 @@ pub async fn upload_file(
 }
 
 #[get("/<id>")]
-pub async fn get_file(id: u64, auth: Auth) -> GetFileResponse {
+pub async fn get_file(id: u32, auth: Auth) -> GetFileResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -56,7 +56,7 @@ pub async fn get_file(id: u64, auth: Auth) -> GetFileResponse {
 }
 
 #[delete("/<id>")]
-pub fn delete_file(id: u64, auth: Auth) -> DeleteFileResponse {
+pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return DeleteFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),

@@ -1,8 +1,14 @@
 use crate::db::folder_repository::{get_by_id, get_child_folders};
 use crate::db::{folder_repository, open_connection};
-use crate::model::db::Folder;
-use crate::service::file_service::FILE_DIR;
-use crate::service::folder_service::{CreateFolderError, GetFolderError, UpdateFolderError};
+use crate::facade::file_facade;
+use crate::model::db;
+use crate::model::db::{FileRecord, Folder};
+use crate::service::file_service::{DeleteFileError, FILE_DIR};
+use crate::service::folder_service::{
+    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
+};
+use rusqlite::Connection;
+use rusqlite::Error;
 
 pub fn get_folder_by_id(id: u32) -> Result<Folder, GetFolderError> {
     let con = open_connection();
@@ -120,4 +126,92 @@ pub fn update_folder(folder: &Folder) -> Result<Folder, UpdateFolderError> {
         parent_id: folder.parent_id,
         name: new_path,
     })
+}
+
+/// retrieves all the top-level files for the passed folder and returns them
+pub fn get_files_for_folder(id: u32) -> Result<Vec<db::FileRecord>, GetChildFilesError> {
+    let con = open_connection();
+    // first we need to check the folder exists
+    match folder_repository::get_by_id(id, &con) {
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => {
+            con.close().unwrap();
+            return Err(GetChildFilesError::FolderNotFound);
+        }
+        Err(e) => {
+            con.close().unwrap();
+            eprintln!(
+                "Failed to query database for folders. Nested exception is: \n {:?}",
+                e
+            );
+            return Err(GetChildFilesError::DbFailure);
+        }
+        _ => { /* no op - we confirm the folder exists */ }
+    }
+    // now we can retrieve all the file records in this folder
+    let result = match folder_repository::get_files_for_folder(id, &con) {
+        Ok(files) => files,
+        Err(e) => {
+            con.close().unwrap();
+            eprintln!(
+                "Failed to query database for child files. Nested exception is: \n {:?}",
+                e
+            );
+            return Err(GetChildFilesError::DbFailure);
+        }
+    };
+    Ok(result)
+}
+
+/// recursively deletes all files and folders under the folder with the passed id
+pub fn delete_folder(id: u32) -> Result<db::Folder, DeleteFolderError> {
+    let con = open_connection();
+    let result = delete_folder_recursively(id, &con);
+    con.close().unwrap();
+    result
+}
+
+/// the main body of `delete_folder`. Takes a connection so that we're not creating a connection on every stack frame
+fn delete_folder_recursively(id: u32, con: &Connection) -> Result<db::Folder, DeleteFolderError> {
+    let folder = match get_by_id(id, &con) {
+        Ok(f) => f,
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => {
+            return Err(DeleteFolderError::FolderNotFound)
+        }
+        Err(e) => {
+            eprintln!(
+                "failed to recursively delete folder! Nested exception is: \n {:?}",
+                e
+            );
+            return Err(DeleteFolderError::DbFailure);
+        }
+    };
+    // now that we have the folder, we can delete all the files for that folder
+    let files = match folder_repository::get_files_for_folder(id, &con) {
+        Ok(f) => f,
+        Err(e) => return Err(DeleteFolderError::DbFailure),
+    };
+    for file in files.iter() {
+        match file_facade::delete_file_by_id_with_connection(file.id.unwrap(), &con) {
+            Err(e) if e == DeleteFileError::NotFound => {}
+            Err(_) => return Err(DeleteFolderError::DbFailure),
+            Ok(_) => { /*no op - file was removed properly*/ }
+        };
+    }
+    // now that we've deleted all files, we can try with all folders
+    let sub_folders = match folder_repository::get_child_folders(id, &con) {
+        Ok(f) => f,
+        Err(e) => return Err(DeleteFolderError::DbFailure),
+    };
+    for sub_folder in sub_folders.iter() {
+        delete_folder_recursively(sub_folder.id.unwrap(), &con)?;
+    }
+    // now that we've deleted everything beneath it, delete the requested folder from the db
+    match folder_repository::delete_folder(id, &con) {
+        Ok(()) => { /*no op - folder deleted*/ }
+        Err(e) => {
+            eprintln!("Failed to delete root folder in recursive folder delete. Nested exception is: \n {:?}", e);
+            return Err(DeleteFolderError::DbFailure);
+        }
+    };
+    Ok(folder)
 }

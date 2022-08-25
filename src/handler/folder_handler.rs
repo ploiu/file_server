@@ -1,11 +1,13 @@
 use crate::guard::{Auth, ValidateResult};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::{
-    CreateFolderResponse, GetFolderResponse, UpdateFolderResponse,
+    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, UpdateFolderResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::folder_service;
-use crate::service::folder_service::{CreateFolderError, GetFolderError, UpdateFolderError};
+use crate::service::folder_service::{
+    CreateFolderError, DeleteFolderError, GetFolderError, UpdateFolderError,
+};
 use rocket::serde::json::Json;
 
 #[get("/<id>")]
@@ -81,4 +83,20 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         Err(e) => panic!("Update Folder: non-listed error {:?}", e)
     };
     return result;
+}
+
+#[delete("/<id>")]
+pub fn delete_folder(id: u32, auth: Auth) -> DeleteFolderResponse {
+    match auth.validate() {
+        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::NoPasswordSet => return DeleteFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return DeleteFolderResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    match folder_service::delete_folder(id) {
+        Ok(()) => DeleteFolderResponse::Success(()),
+        Err(e) if e == DeleteFolderError::FolderNotFound => DeleteFolderResponse::FolderNotFound(BasicMessage::new("The folder with the request id does not exist.")),
+        Err(e) if e == DeleteFolderError::DbFailure => DeleteFolderResponse::FolderDbError(BasicMessage::new("Failed to remove folder reference from the database. Check server logs for details.")),
+        Err(e) if e == DeleteFolderError::FileSystemError => DeleteFolderResponse::FileSystemError(BasicMessage::new("Failed to remove folder from the file system. Check server logs for details.")),
+        _ => panic!("delete_folder: unreachable error arm")
+    }
 }
