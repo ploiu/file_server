@@ -31,7 +31,7 @@ create table Folder_Files
 (
     id       integer primary key autoincrement,
     folderId integer not null,
-    fileId   integer not null unique,
+    fileId   integer not null,
     foreign key (folderId) references Folders (id),
     foreign key (fileId) references FileRecords (id) on delete cascade
 );

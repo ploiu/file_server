@@ -2,7 +2,7 @@ use crate::facade::folder_facade;
 use crate::model::db;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::{DeleteFolderResponse, FolderResponse};
-use crate::service::file_service::FILE_DIR;
+use crate::service::file_service::{check_root_dir, FILE_DIR};
 use regex::Regex;
 use std::fs;
 use std::path::Path;
@@ -57,6 +57,11 @@ pub enum DeleteFolderError {
     FileSystemError,
 }
 
+#[derive(PartialEq, Debug)]
+pub enum LinkFolderError {
+    DbError,
+}
+
 pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
     match folder_facade::get_folder_by_id(id) {
         Ok(folder) => {
@@ -71,13 +76,17 @@ pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
                 files: Vec::new(),
             };
             folder.folders(folder_facade::get_child_folders_for(id).unwrap());
+            folder.files(folder_facade::get_files_for_folder(id).unwrap());
             Ok(folder)
         }
         Err(e) => Err(e),
     }
 }
 
-pub fn create_folder(folder: &CreateFolderRequest) -> Result<FolderResponse, CreateFolderError> {
+pub async fn create_folder(
+    folder: &CreateFolderRequest,
+) -> Result<FolderResponse, CreateFolderError> {
+    check_root_dir(FILE_DIR).await;
     let db_folder = db::Folder {
         id: None,
         name: String::from(&folder.name),

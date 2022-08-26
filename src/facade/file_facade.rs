@@ -14,7 +14,7 @@ use crate::service::file_service::{DeleteFileError, GetFileError};
 /// TODO check if file already exists
 /// TODO containing folder
 #[inline]
-pub fn save_file_record(name: &str, path: &Path, mut file: &mut File) -> Result<(), String> {
+pub fn save_file_record(name: &str, mut file: &mut File) -> Result<u32, String> {
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let con = open_connection();
     let mut hasher = Sha256::new();

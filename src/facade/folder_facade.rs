@@ -1,11 +1,12 @@
 use crate::db::folder_repository::{get_by_id, get_child_folders};
 use crate::db::{folder_repository, open_connection};
-use crate::facade::file_facade;
+use crate::facade::{file_facade, folder_facade};
 use crate::model::db;
 use crate::model::db::{FileRecord, Folder};
 use crate::service::file_service::{DeleteFileError, FILE_DIR};
 use crate::service::folder_service::{
-    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
+    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, LinkFolderError,
+    UpdateFolderError,
 };
 use rusqlite::Connection;
 use rusqlite::Error;
@@ -214,4 +215,14 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<db::Folder, De
         }
     };
     Ok(folder)
+}
+
+pub fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderError> {
+    let con = open_connection();
+    let result = match folder_repository::link_folder_to_file(file_id, folder_id, &con) {
+        Ok(()) => Ok(()),
+        Err(_) => Err(LinkFolderError::DbError),
+    };
+    con.close().unwrap();
+    return result;
 }

@@ -1,4 +1,5 @@
 use rocket::form::Form;
+use rocket::serde::json::Json;
 
 use crate::guard::{Auth, ValidateResult};
 use crate::model::request::file_requests::CreateFileRequest;
@@ -21,7 +22,7 @@ pub async fn upload_file(
         ValidateResult::Invalid => return CreateFileResponse::Unauthorized("Bad Credentials".to_string())
     }
     return match save_file(&mut file_input.into_inner()).await {
-        Ok(_) => CreateFileResponse::Created(()),
+        Ok(f) => CreateFileResponse::Success(Json::from(f)),
         Err(e) => match e {
             SaveFileError::MissingInfo(message) => {
                 CreateFileResponse::BadRequest(BasicMessage::new(message.as_str()))
@@ -31,6 +32,9 @@ pub async fn upload_file(
             }
             SaveFileError::FailWriteDb => CreateFileResponse::Failure(BasicMessage::new(
                 "Failed to save file info to database!",
+            )),
+            SaveFileError::ParentFolderNotFound => CreateFileResponse::NotFound(BasicMessage::new(
+                "No parent folder with the passed id was found",
             )),
         },
     };

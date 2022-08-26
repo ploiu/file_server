@@ -1,4 +1,5 @@
 use crate::model::db;
+use crate::service::folder_service::LinkFolderError;
 use rusqlite::{params, Connection};
 
 pub fn get_by_id(id: u32, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
@@ -69,20 +70,25 @@ pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder
     let mut pst = con
         .prepare("insert into Folders(name, parentId) values(?1, ?2)")
         .unwrap();
-    match folder.parent_id {
+    return match folder.parent_id {
         Some(id) => {
-            pst.execute(rusqlite::params![folder.name, id])?;
+            let folder_id = pst.insert(rusqlite::params![folder.name, id])? as u32;
+            Ok(db::Folder {
+                id: Some(folder_id),
+                name: String::from(&folder.name),
+                parent_id: folder.parent_id,
+            })
         }
         None => {
-            pst.execute(rusqlite::params![folder.name, rusqlite::types::Null])?;
+            let folder_id =
+                pst.insert(rusqlite::params![folder.name, rusqlite::types::Null])? as u32;
+            Ok(db::Folder {
+                id: Some(folder_id),
+                name: String::from(&folder.name),
+                parent_id: folder.parent_id,
+            })
         }
     };
-    let folder_id = con.last_insert_rowid() as u32;
-    Ok(db::Folder {
-        id: Some(folder_id),
-        name: String::from(&folder.name),
-        parent_id: folder.parent_id,
-    })
 }
 
 /// updates a folder record in the database.
@@ -146,4 +152,25 @@ pub fn delete_folder(id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
     delete_folder_files.execute([id])?;
     delete_folder.execute([id])?;
     Ok(())
+}
+
+pub fn link_folder_to_file(
+    file_id: u32,
+    folder_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    //language=sqlite
+    let mut pst = con
+        .prepare("insert into Folder_Files(fileId, folderId) values (?1, ?2)")
+        .unwrap();
+    return match pst.insert([file_id, folder_id]) {
+        Ok(_) => Ok(()),
+        Err(e) => {
+            eprintln!(
+                "Failed to link file to folder. Nested exception is: \n {:?}",
+                e
+            );
+            return Err(e);
+        }
+    };
 }

@@ -6,21 +6,19 @@ pub fn save_file_record(
     file: &FileRecord,
     // folder_file: &FolderFiles,
     con: &Connection,
-) -> Result<(), String> {
+) -> Result<u32, String> {
     //language=sqlite
     let mut pst = con
         .prepare("insert into FileRecords(name, hash) values (?1, ?2); commit;")
         .unwrap();
-    let res = match pst.execute((file.name.as_str(), file.hash.as_str())) {
-        Ok(_) => {
-            // TODO
-            let last_insert_id = con.last_insert_rowid();
-            return Ok(());
+    let res = match pst.insert((file.name.as_str(), file.hash.as_str())) {
+        Ok(id) => Ok(id as u32),
+        Err(e) => {
+            return Err(format!(
+                "Failed to save file record. Nested exception is {:?}",
+                e
+            ))
         }
-        Err(e) => Err(format!(
-            "Failed to save file record. Nested exception is {:?}",
-            e
-        )),
     };
     res
 }

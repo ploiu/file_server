@@ -1,10 +1,16 @@
+use regex::Regex;
 use std::fs::File;
 use std::path::Path;
 
+use crate::db::folder_repository;
 use rocket::tokio::fs::create_dir;
 
 use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
+use crate::facade::{file_facade, folder_facade};
+use crate::model::db::Folder;
 use crate::model::request::file_requests::CreateFileRequest;
+use crate::model::response::file_responses::FileMetadataResponse;
+use crate::service::folder_service::GetFolderError;
 
 pub static FILE_DIR: &str = "./files";
 
@@ -13,6 +19,7 @@ pub enum SaveFileError {
     MissingInfo(String),
     FailWriteDisk,
     FailWriteDb,
+    ParentFolderNotFound,
 }
 
 #[derive(PartialEq)]
@@ -32,7 +39,7 @@ pub enum DeleteFileError {
 }
 
 /// ensures that the passed directory exists on the file system
-async fn check_image_dir(dir: &str) {
+pub async fn check_root_dir(dir: &str) {
     let path = Path::new(dir);
     if !path.exists() {
         match create_dir(path).await {
@@ -43,37 +50,105 @@ async fn check_image_dir(dir: &str) {
 }
 
 /// saves a file to the disk and database
-pub async fn save_file(file_input: &mut CreateFileRequest<'_>) -> Result<(), SaveFileError> {
-    check_image_dir(FILE_DIR).await;
-    let file_name = match file_input.file.name() {
-        Some(name) => name,
-        None => {
-            return Err(SaveFileError::MissingInfo(
-                "file name is required".to_string(),
-            ))
-        }
+pub async fn save_file(
+    file_input: &mut CreateFileRequest<'_>,
+) -> Result<FileMetadataResponse, SaveFileError> {
+    let file_name = String::from(file_input.file.name().unwrap());
+    check_root_dir(FILE_DIR).await;
+    // we shouldn't leak implementation details to the client, so this strips the root dir from the response
+    let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
+    return if let Some(parent_id) = file_input.folder_id {
+        // we requested a folder to put the file in, so make sure it exists
+        let folder = match folder_facade::get_folder_by_id(parent_id) {
+            Ok(f) => f,
+            Err(e) if e == GetFolderError::NotFound => {
+                return Err(SaveFileError::ParentFolderNotFound)
+            }
+            Err(e) => {
+                eprintln!(
+                    "Save file - failed to retrieve parent folder. Nested exception is: \n {:?}",
+                    e
+                );
+                return Err(SaveFileError::FailWriteDb);
+            }
+        };
+        // folder exists, now try to create the file
+        let file_id =
+            persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
+        Ok(FileMetadataResponse {
+            id: file_id,
+            name: String::from(root_regex.replace(&file_name, "")),
+        })
+    } else {
+        let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
+        let file_id = persist_save_file(file_input).await?;
+        Ok(FileMetadataResponse {
+            id: file_id,
+            name: String::from(root_regex.replace(&file_name, "")),
+        })
     };
-    // create the file name from the parts
-    let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
-    let path = Path::new(file_name.as_str());
-    match file_input.file.persist_to(path).await {
+}
+
+/// persists the file to the disk and the database
+async fn persist_save_file_to_folder(
+    file_input: &mut CreateFileRequest<'_>,
+    folder: &Folder,
+    file_name: String,
+) -> Result<u32, SaveFileError> {
+    let file_name = format!(
+        "{}/{}/{}.{}",
+        FILE_DIR, folder.name, file_name, file_input.extension
+    );
+    return match file_input.file.persist_to(&file_name).await {
         Ok(_) => {
             // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
-            let mut saved_file = File::open(path).unwrap();
-            match save_file_record(&file_name, &path, &mut saved_file) {
+            let mut saved_file = File::open(&file_name).unwrap();
+            match file_facade::save_file_record(&file_name, &mut saved_file) {
+                Ok(id) => {
+                    // file and folder are both in db, now link them
+                    if let Err(e) = folder_facade::link_folder_to_file(id, folder.id.unwrap()) {
+                        return Err(SaveFileError::FailWriteDb);
+                    }
+                    Ok(id)
+                }
                 Err(e) => {
                     eprintln!("Failed to create file record in database: {:?}", e);
-                    return Err(SaveFileError::FailWriteDb);
+                    Err(SaveFileError::FailWriteDb)
                 }
-                _ => {}
             }
         }
         Err(e) => {
             eprintln!("{:?}", e);
-            return Err(SaveFileError::FailWriteDisk);
+            Err(SaveFileError::FailWriteDisk)
         }
-    }
-    return Ok(());
+    };
+}
+
+/// persists the passed file to the disk and the database
+async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, SaveFileError> {
+    let file_name = format!(
+        "{}/{}.{}",
+        &FILE_DIR,
+        file_input.file.name().unwrap(),
+        file_input.extension
+    );
+    return match file_input.file.persist_to(&file_name).await {
+        Ok(()) => {
+            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
+            let mut saved_file = File::open(&file_name).unwrap();
+            match save_file_record(&file_name, &mut saved_file) {
+                Err(e) => {
+                    eprintln!("Failed to create file record in database: {:?}", e);
+                    Err(SaveFileError::FailWriteDb)
+                }
+                Ok(id) => Ok(id),
+            }
+        }
+        Err(e) => {
+            eprintln!("{:?}", e);
+            Err(SaveFileError::FailWriteDisk)
+        }
+    };
 }
 
 pub fn get_file(id: u32) -> Result<File, GetFileError> {

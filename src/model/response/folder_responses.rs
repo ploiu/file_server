@@ -1,4 +1,4 @@
-use crate::model::db::Folder;
+use crate::model::db::{FileRecord, Folder};
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::BasicMessage;
 use rocket::serde::{json::Json, Serialize};
@@ -35,6 +35,13 @@ impl FolderResponse {
             .iter()
             .map(FolderResponse::from)
             .for_each(|f| self.folders.push(f));
+    }
+
+    pub fn files(&mut self, files: Vec<FileRecord>) {
+        files
+            .iter()
+            .map(FileMetadataResponse::from)
+            .for_each(|f| self.files.push(f));
     }
 }
 

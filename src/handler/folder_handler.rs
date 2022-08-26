@@ -30,13 +30,13 @@ pub fn get_folder(id: u32, auth: Auth) -> GetFolderResponse {
 }
 
 #[post("/", data = "<folder>")]
-pub fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> CreateFolderResponse {
+pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> CreateFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return CreateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return CreateFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match folder_service::create_folder(&folder.into_inner()) {
+    return match folder_service::create_folder(&folder.into_inner()).await {
         Ok(f) => CreateFolderResponse::Success(Json::from(f)),
         Err(message) if message == CreateFolderError::ParentNotFound => {
             CreateFolderResponse::ParentNotFound(BasicMessage::new(
