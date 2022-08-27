@@ -2,12 +2,11 @@ use regex::Regex;
 use std::fs::File;
 use std::path::Path;
 
-use crate::db::folder_repository;
 use rocket::tokio::fs::create_dir;
 
 use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
 use crate::facade::{file_facade, folder_facade};
-use crate::model::db::Folder;
+use crate::model::db::{FileRecord, Folder};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::service::folder_service::GetFolderError;
@@ -16,6 +15,7 @@ pub static FILE_DIR: &str = "./files";
 
 #[derive(PartialEq)]
 pub enum SaveFileError {
+    #[allow(dead_code)] // this is actually used. Thanks rust linter!
     MissingInfo(String),
     FailWriteDisk,
     FailWriteDb,
@@ -106,7 +106,7 @@ async fn persist_save_file_to_folder(
             match file_facade::save_file_record(&file_name, &mut saved_file) {
                 Ok(id) => {
                     // file and folder are both in db, now link them
-                    if let Err(e) = folder_facade::link_folder_to_file(id, folder.id.unwrap()) {
+                    if let Err(_) = folder_facade::link_folder_to_file(id, folder.id.unwrap()) {
                         return Err(SaveFileError::FailWriteDb);
                     }
                     Ok(id)
@@ -151,22 +151,32 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     };
 }
 
-pub fn get_file(id: u32) -> Result<File, GetFileError> {
-    match get_file_info_by_id(id) {
-        Ok(file_info) => {
-            // TODO the file may not exist on the disk
-            let built_path = format!("./files/{}/{}", file_info.path.unwrap(), file_info.name);
-            return Ok(File::open(Path::new(built_path.as_str())).unwrap());
+pub fn get_file(id: u32) -> Result<FileRecord, GetFileError> {
+    get_file_info_by_id(id)
+}
+
+pub fn download_file(id: u32) -> Result<File, GetFileError> {
+    let res = file_facade::get_file_path(id);
+    return if let Ok(path) = res {
+        let path = format!("{}/{}", FILE_DIR, path);
+        match File::open(path) {
+            Ok(f) => Ok(f),
+            Err(_) => Err(GetFileError::NotFound),
         }
-        Err(e) => Err(e),
-    }
+    } else {
+        Err(res.unwrap_err())
+    };
 }
 
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
+    let file_path = match file_facade::get_file_path(id) {
+        Ok(path) => format!("{}/{}", FILE_DIR, path),
+        Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
+        Err(_) => return Err(DeleteFileError::DbError),
+    };
     match delete_file_by_id(id) {
-        Ok(file_record) => {
-            let file_path = Path::new("FIXME");
-            match std::fs::remove_file(file_path) {
+        Ok(_) => {
+            match std::fs::remove_file(&file_path) {
                 Ok(()) => Ok(()),
                 Err(e) => {
                     eprintln!("Failed to delete file from disk at location {:?}!\n Nested exception is {:?}", file_path, e);

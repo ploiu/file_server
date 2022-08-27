@@ -1,7 +1,7 @@
 use crate::facade::folder_facade;
 use crate::model::db;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::folder_responses::{DeleteFolderResponse, FolderResponse};
+use crate::model::response::folder_responses::FolderResponse;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
 use regex::Regex;
 use std::fs;
@@ -37,6 +37,8 @@ pub enum UpdateFolderError {
     ParentNotFound,
     /// The folder could not be found
     NotFound,
+    /// The user attempted to do an illegal action, such as moving a parent folder into its own child
+    NotAllowed,
 }
 
 #[derive(PartialEq, Debug)]

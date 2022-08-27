@@ -4,7 +4,7 @@ use rocket::serde::json::Json;
 use crate::guard::{Auth, ValidateResult};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
-    CreateFileResponse, DeleteFileResponse, GetFileResponse,
+    CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::file_service;
@@ -40,15 +40,15 @@ pub async fn upload_file(
     };
 }
 
-#[get("/<id>")]
-pub async fn get_file(id: u32, auth: Auth) -> GetFileResponse {
+#[get("/metadata/<id>")]
+pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFileResponse::Unauthorized("Bad Credentials".to_string())
     }
     return match file_service::get_file(id) {
-        Ok(file) => GetFileResponse::Success(file),
+        Ok(file) => GetFileResponse::Success(Json::from(file)),
         Err(message) if message == GetFileError::NotFound => GetFileResponse::FileNotFound(
             BasicMessage::new("The file with the passed id could not be found."),
         ),
@@ -56,6 +56,21 @@ pub async fn get_file(id: u32, auth: Auth) -> GetFileResponse {
         Err(_) => GetFileResponse::FileDbError(BasicMessage::new(
             "Failed to pull file info from database. Check server logs for details",
         )),
+    };
+}
+
+#[get("/<id>")]
+pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
+    match auth.validate() {
+        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::NoPasswordSet => return DownloadFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return DownloadFileResponse::Unauthorized("Bad Credentials".to_string())
+    }
+    return match file_service::download_file(id) {
+        Ok(f) => DownloadFileResponse::Success(f),
+        Err(e) if e == GetFileError::NotFound => DownloadFileResponse::FileNotFound(BasicMessage::new("The file with the passed id could not be found.")),
+        Err(e) if e == GetFileError::DbFailure => DownloadFileResponse::FileDbError(BasicMessage::new("Failed to retrieve the file info from the database. Check the server logs for details")),
+        Err(_) => panic!("Download file: We should never get here")
     };
 }
 

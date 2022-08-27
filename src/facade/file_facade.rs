@@ -1,5 +1,4 @@
 use std::fs::File;
-use std::path::Path;
 
 use regex::Regex;
 use rusqlite::Connection;
@@ -50,20 +49,24 @@ pub fn get_file_info_by_id(id: u32) -> Result<FileRecord, GetFileError> {
     result
 }
 
+pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
+    let con = open_connection();
+    let result = match file_repository::get_file_path(id, &con) {
+        Ok(path) => Ok(path),
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(GetFileError::NotFound),
+        Err(e) => {
+            eprintln!("Failed to get file path! Nested exception is: \n {:?}", e);
+            Err(GetFileError::DbFailure)
+        }
+    };
+    con.close().unwrap();
+    result
+}
+
 #[inline]
 pub fn delete_file_by_id(id: u32) -> Result<FileRecord, DeleteFileError> {
     let con = open_connection();
-    let result = match delete_by_id(id, &con) {
-        Ok(record) => Ok(record),
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
-        Err(e) => {
-            eprintln!(
-                "Failed to delete file record from database! Nested exception is: \n {:?}",
-                e
-            );
-            Err(DeleteFileError::DbError)
-        }
-    };
+    let result = delete_file_by_id_with_connection(id, &con);
     con.close().unwrap();
     return result;
 }

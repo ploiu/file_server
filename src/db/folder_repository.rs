@@ -1,5 +1,4 @@
 use crate::model::db;
-use crate::service::folder_service::LinkFolderError;
 use rusqlite::{params, Connection};
 
 pub fn get_by_id(id: u32, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
@@ -129,7 +128,6 @@ pub fn get_files_for_folder(
             id: Some(row.get(0)?),
             name: row.get(1)?,
             hash: row.get(2)?,
-            path: None,
         })
     })?;
 
@@ -173,4 +171,34 @@ pub fn link_folder_to_file(
             return Err(e);
         }
     };
+}
+
+/// returns all the ids of all child folders
+pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+    //language=sqlite
+    let mut pst = con
+        .prepare(
+            // recursively retrieve all IDs of a given folder
+            "with query as (select f1.id
+               from folders f1
+               where f1.parentId = ?1
+               union all
+               select f2.id
+               from folders f2
+
+                        join query on f2.parentId = query.id)
+select id
+from query;
+",
+        )
+        .unwrap();
+    let mut ids = Vec::<u32>::new();
+    let res = pst.query_map([id], |row| {
+        let i: u32 = row.get(0)?;
+        Ok(i)
+    })?;
+    for i in res.into_iter() {
+        ids.push(i.unwrap());
+    }
+    Ok(ids)
 }

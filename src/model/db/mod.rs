@@ -1,12 +1,12 @@
-#[derive(Debug)]
+use rocket::serde::Serialize;
+
+#[derive(Debug, Serialize)]
+#[serde(crate = "rocket::serde")]
 pub struct FileRecord {
     /// the id, will only be populated when pulled from the database
     pub id: Option<u32>,
     /// the name of the file to save in the db and disk
     pub name: String,
-    /// available on retrieve from db
-    #[deprecated(note = "this is being removed in favor of new db structure")]
-    pub path: Option<String>,
     /// sha256, just to check for uniqueness
     pub hash: String,
 }
@@ -36,7 +36,6 @@ impl FileRecord {
         FileRecord {
             id: None,
             name,
-            path: None,
             hash,
         }
     }

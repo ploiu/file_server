@@ -28,6 +28,18 @@ pub enum GetFileResponse {
     FileNotFound(BasicMessage),
     #[response(status = 500, content_type = "json")]
     FileDbError(BasicMessage),
+    #[response(status = 200, content_type = "json")]
+    Success(Json<FileRecord>),
+    #[response(status = 401)]
+    Unauthorized(String),
+}
+
+#[derive(Responder)]
+pub enum DownloadFileResponse {
+    #[response(status = 404, content_type = "json")]
+    FileNotFound(BasicMessage),
+    #[response(status = 500, content_type = "json")]
+    FileDbError(BasicMessage),
     #[response(status = 200)]
     Success(File),
     #[response(status = 401)]
