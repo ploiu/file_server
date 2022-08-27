@@ -59,7 +59,7 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     return if let Some(parent_id) = file_input.folder_id {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = match folder_facade::get_folder_by_id(parent_id) {
+        let folder = match folder_facade::get_folder_by_id(Some(parent_id)) {
             Ok(f) => f,
             Err(e) if e == GetFolderError::NotFound => {
                 return Err(SaveFileError::ParentFolderNotFound)

@@ -11,7 +11,7 @@ use crate::service::folder_service::{
 use rocket::serde::json::Json;
 
 #[get("/<id>")]
-pub fn get_folder(id: u32, auth: Auth) -> GetFolderResponse {
+pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),

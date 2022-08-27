@@ -11,7 +11,7 @@ use crate::service::folder_service::{
 use rusqlite::Connection;
 use std::path::Path;
 
-pub fn get_folder_by_id(id: u32) -> Result<Folder, GetFolderError> {
+pub fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
     let con = open_connection();
     let result = match get_by_id(id, &con) {
         Ok(folder) => Ok(folder),
@@ -30,7 +30,7 @@ pub fn get_folder_by_id(id: u32) -> Result<Folder, GetFolderError> {
     result
 }
 
-pub fn get_child_folders_for(id: u32) -> Result<Vec<Folder>, GetFolderError> {
+pub fn get_child_folders_for(id: Option<u32>) -> Result<Vec<Folder>, GetFolderError> {
     let con = open_connection();
     let result = match get_child_folders(id, &con) {
         Ok(folder) => Ok(folder),
@@ -52,12 +52,12 @@ pub fn create_folder(folder: &Folder) -> Result<Folder, CreateFolderError> {
     let mut folder_path: String = String::from(&folder.name);
     // if the folder has a parent id, we need to check if it exists and doesn't have this folder in it
     if let Some(parent_id) = folder.parent_id {
-        match get_by_id(parent_id, &con) {
+        match get_by_id(Some(parent_id), &con) {
             Ok(parent) => {
                 let new_folder_path = format!("{}/{}", parent.name, folder.name);
                 folder_path = String::from(&new_folder_path);
                 // parent folder exists, now we need to check if there are any child folders with our folder name
-                let children = get_child_folders(parent.id.unwrap(), &con).unwrap();
+                let children = get_child_folders(parent.id, &con).unwrap();
                 for child in children.iter() {
                     if &new_folder_path == &child.name {
                         con.close().unwrap();
@@ -96,7 +96,7 @@ pub fn update_folder(folder: &Folder) -> Result<Folder, UpdateFolderError> {
     let con = open_connection();
     let mut new_path: String = String::from(&folder.name);
     // make sure the folder already exists in the db
-    match get_by_id(folder.id.unwrap(), &con) {
+    match get_by_id(folder.id, &con) {
         Ok(_) => { /* no op - just confirm it exists */ }
         Err(_) => {
             con.close().unwrap();
@@ -105,7 +105,7 @@ pub fn update_folder(folder: &Folder) -> Result<Folder, UpdateFolderError> {
     }
     // first we need to check if the parent folder exists
     match folder.parent_id {
-        Some(parent_id) => match get_by_id(parent_id, &con) {
+        Some(parent_id) => match get_by_id(Some(parent_id), &con) {
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
                 match folder_repository::get_all_child_folder_ids(folder.id.unwrap(), &con) {
@@ -150,7 +150,7 @@ pub fn update_folder(folder: &Folder) -> Result<Folder, UpdateFolderError> {
 }
 
 /// retrieves all the top-level files for the passed folder and returns them
-pub fn get_files_for_folder(id: u32) -> Result<Vec<db::FileRecord>, GetChildFilesError> {
+pub fn get_files_for_folder(id: Option<u32>) -> Result<Vec<db::FileRecord>, GetChildFilesError> {
     let con = open_connection();
     // first we need to check the folder exists
     match folder_repository::get_by_id(id, &con) {
@@ -193,7 +193,7 @@ pub fn delete_folder(id: u32) -> Result<db::Folder, DeleteFolderError> {
 
 /// the main body of `delete_folder`. Takes a connection so that we're not creating a connection on every stack frame
 fn delete_folder_recursively(id: u32, con: &Connection) -> Result<db::Folder, DeleteFolderError> {
-    let folder = match get_by_id(id, &con) {
+    let folder = match get_by_id(Some(id), &con) {
         Ok(f) => f,
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => {
             return Err(DeleteFolderError::FolderNotFound)
@@ -207,7 +207,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<db::Folder, De
         }
     };
     // now that we have the folder, we can delete all the files for that folder
-    let files = match folder_repository::get_files_for_folder(id, &con) {
+    let files = match folder_repository::get_files_for_folder(Some(id), &con) {
         Ok(f) => f,
         Err(_) => return Err(DeleteFolderError::DbFailure),
     };
@@ -219,7 +219,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<db::Folder, De
         };
     }
     // now that we've deleted all files, we can try with all folders
-    let sub_folders = match folder_repository::get_child_folders(id, &con) {
+    let sub_folders = match folder_repository::get_child_folders(Some(id), &con) {
         Ok(f) => f,
         Err(_) => return Err(DeleteFolderError::DbFailure),
     };

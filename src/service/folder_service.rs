@@ -64,7 +64,7 @@ pub enum LinkFolderError {
     DbError,
 }
 
-pub fn get_folder(id: u32) -> Result<FolderResponse, GetFolderError> {
+pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     match folder_facade::get_folder_by_id(id) {
         Ok(folder) => {
             let mut folder = FolderResponse {
@@ -114,7 +114,7 @@ pub async fn create_folder(
 }
 
 pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, UpdateFolderError> {
-    let original_folder = match folder_facade::get_folder_by_id(folder.id) {
+    let original_folder = match folder_facade::get_folder_by_id(Some(folder.id)) {
         Ok(f) => f,
         Err(e) if e == GetFolderError::NotFound => return Err(UpdateFolderError::NotFound),
         _ => return Err(UpdateFolderError::DbFailure),

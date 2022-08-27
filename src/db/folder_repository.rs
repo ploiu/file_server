@@ -1,24 +1,22 @@
 use crate::model::db;
-use rusqlite::{params, Connection};
+use rusqlite::{params, Connection, Row, Rows};
 
-pub fn get_by_id(id: u32, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
-    //language=sqlite
+pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
+    // if id is none, we're talking about the root folder
+    if id.is_none() {
+        return Ok(db::Folder {
+            id: Some(0), // will never collide with an id since sqlite starts with 1
+            name: String::from("root"),
+            parent_id: None,
+        });
+    }
     let mut pst = con
-        .prepare(
-            "with query as (select fl.id, fl.name, fl.parentId
-               from folders fl
-               where parentId is null
-               union all
-               select f.id, query.name || '/' || f.name, f.parentId
-               from folders f
-                        join query
-                             on f.parentId = query.id)
-select id, query.name as \"path\", parentId
-from query where id = ?1",
-        )
+        .prepare(include_str!(
+            "../assets/queries/folder/get_folder_by_id.sql"
+        ))
         .unwrap();
 
-    Ok(pst.query_row([id], |row| {
+    let row_mapper = |row: &Row| {
         let parent_id: Option<u32> = match row.get(2) {
             Ok(val) => Some(val),
             Err(_) => None,
@@ -28,28 +26,36 @@ from query where id = ?1",
             name: row.get(1)?,
             parent_id,
         })
-    })?)
+    };
+
+    return match id {
+        Some(id) => Ok(pst.query_row([id], row_mapper)?),
+        None => Ok(pst.query_row([rusqlite::types::Null], row_mapper)?),
+    };
 }
 
-pub fn get_child_folders(id: u32, con: &Connection) -> Result<Vec<db::Folder>, rusqlite::Error> {
-    //language=sqlite
-    let mut pst = con
-        .prepare(
-            "with query as (select fl.id, fl.name, fl.parentId
-               from folders fl
-               where parentId is null
-               union all
-               select f.id, query.name || '/' || f.name, f.parentId
-               from folders f
-                        join query
-                             on f.parentId = query.id)
-select query.id, query.name as \"path\", query.parentId
-from query
-where query.parentId = ?1",
-        )
-        .unwrap();
+pub fn get_child_folders(
+    id: Option<u32>,
+    con: &Connection,
+) -> Result<Vec<db::Folder>, rusqlite::Error> {
+    let mut pst = if id.is_some() {
+        con.prepare(include_str!(
+            "../assets/queries/folder/get_child_folders_with_id.sql"
+        ))
+        .unwrap()
+    } else {
+        con.prepare(include_str!(
+            "../assets/queries/folder/get_child_folders_without_id.sql"
+        ))
+        .unwrap()
+    };
     let mut folders = Vec::<db::Folder>::new();
-    let mut rows = pst.query([id])?;
+    let mut rows: Rows;
+    if id.is_some() {
+        rows = pst.query([id.unwrap()])?;
+    } else {
+        rows = pst.query([])?;
+    }
     while let Some(row) = rows.next()? {
         // these folders are guaranteed to have a parent folder id
         folders.push(db::Folder {
@@ -112,24 +118,32 @@ pub fn update_folder(folder: &db::Folder, con: &Connection) -> Result<(), rusqli
 
 /// retrieves all the
 pub fn get_files_for_folder(
-    id: u32,
+    id: Option<u32>,
     con: &Connection,
 ) -> Result<Vec<db::FileRecord>, rusqlite::Error> {
-    //language=sqlite
-    let mut pst = con
-        .prepare(
-            "select f.id, f.name, f.hash from Folder_Files ff
-            join FileRecords f on ff.fileId = f.id
-            where ff.folderId = ?1",
-        )
-        .unwrap();
-    let mapped = pst.query_map([id], |row| {
+    let mut pst = if id.is_some() {
+        con.prepare(include_str!(
+            "../assets/queries/file/get_child_files_with_id.sql"
+        ))
+        .unwrap()
+    } else {
+        con.prepare(include_str!(
+            "../assets/queries/file/get_child_files_without_id.sql"
+        ))
+        .unwrap()
+    };
+    let row_mapper = |row: &Row| {
         Ok(db::FileRecord {
             id: Some(row.get(0)?),
             name: row.get(1)?,
             hash: row.get(2)?,
         })
-    })?;
+    };
+    let mapped = if id.is_some() {
+        pst.query_map([id.unwrap()], row_mapper)?
+    } else {
+        pst.query_map([], row_mapper)?
+    };
 
     let mut files: Vec<db::FileRecord> = Vec::new();
     for file in mapped.into_iter() {
