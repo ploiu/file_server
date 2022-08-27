@@ -2,9 +2,15 @@ use crate::facade::db::{is_password_set, set_password};
 use crate::guard::Auth;
 use crate::model::request::NewAuth;
 
-pub fn create_password(auth: NewAuth) -> Result<(), &'static str> {
+#[derive(PartialEq)]
+pub enum CreatePasswordError {
+    AlreadyExists,
+    Failure,
+}
+
+pub fn create_password(auth: NewAuth) -> Result<(), CreatePasswordError> {
     if is_password_set() {
-        return Err("password cannot be set, as it already has been set");
+        return Err(CreatePasswordError::AlreadyExists);
     }
     let auth = Auth {
         username: auth.username,
@@ -13,6 +19,6 @@ pub fn create_password(auth: NewAuth) -> Result<(), &'static str> {
     return if set_password(auth) {
         Ok(())
     } else {
-        Err("failed to set password")
+        Err(CreatePasswordError::Failure)
     };
 }

@@ -18,6 +18,7 @@ pub fn is_password_set() -> bool {
         Ok(_) => true,
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => false,
         Err(e) => {
+            con.close().unwrap();
             panic!("Failed to check auth in database: {:?}", e);
         }
     };

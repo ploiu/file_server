@@ -71,6 +71,7 @@ pub fn create_folder(folder: &Folder) -> Result<Folder, CreateFolderError> {
             }
         };
     } else if Path::new(format!("{}/{}", FILE_DIR, folder_path).as_str()).exists() {
+        con.close().unwrap();
         return Err(CreateFolderError::AlreadyExists);
     }
     let created = match folder_repository::create_folder(&folder, &con) {
@@ -180,6 +181,7 @@ pub fn get_files_for_folder(id: Option<u32>) -> Result<Vec<db::FileRecord>, GetC
             return Err(GetChildFilesError::DbFailure);
         }
     };
+    con.close().unwrap();
     Ok(result)
 }
 

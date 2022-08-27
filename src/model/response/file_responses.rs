@@ -25,9 +25,9 @@ impl FileMetadataResponse {
 #[derive(Responder)]
 pub enum GetFileResponse {
     #[response(status = 404, content_type = "json")]
-    FileNotFound(BasicMessage),
+    FileNotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FileDbError(BasicMessage),
+    FileDbError(Json<BasicMessage>),
     #[response(status = 200, content_type = "json")]
     Success(Json<FileRecord>),
     #[response(status = 401)]
@@ -37,9 +37,9 @@ pub enum GetFileResponse {
 #[derive(Responder)]
 pub enum DownloadFileResponse {
     #[response(status = 404, content_type = "json")]
-    FileNotFound(BasicMessage),
+    FileNotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FileDbError(BasicMessage),
+    FileDbError(Json<BasicMessage>),
     #[response(status = 200)]
     Success(File),
     #[response(status = 401)]
@@ -51,13 +51,13 @@ pub enum CreateFileResponse {
     #[response(status = 201)]
     Success(Json<FileMetadataResponse>),
     #[response(status = 400, content_type = "json")]
-    BadRequest(BasicMessage),
+    BadRequest(Json<BasicMessage>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 500, content_type = "json")]
-    Failure(BasicMessage),
+    Failure(Json<BasicMessage>),
     #[response(status = 404, content_type = "json")]
-    NotFound(BasicMessage),
+    NotFound(Json<BasicMessage>),
 }
 
 #[derive(Responder)]
@@ -67,7 +67,7 @@ pub enum DeleteFileResponse {
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 500, content_type = "json")]
-    Failure(BasicMessage),
+    Failure(Json<BasicMessage>),
     #[response(status = 404, content_type = "json")]
-    NotFound(BasicMessage),
+    NotFound(Json<BasicMessage>),
 }

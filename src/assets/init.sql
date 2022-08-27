@@ -24,7 +24,7 @@ create table FileRecords
 (
     id   integer primary key autoincrement,
     name varchar not null,
-    hash char    not null unique
+    hash char    not null
 );
 
 create table Folder_Files

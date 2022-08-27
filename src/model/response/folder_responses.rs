@@ -48,9 +48,9 @@ impl FolderResponse {
 #[derive(Responder)]
 pub enum GetFolderResponse {
     #[response(status = 404, content_type = "json")]
-    FolderNotFound(BasicMessage),
+    FolderNotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FolderDbError(BasicMessage),
+    FolderDbError(Json<BasicMessage>),
     #[response(status = 200)]
     Success(Json<FolderResponse>),
     #[response(status = 401)]
@@ -60,45 +60,45 @@ pub enum GetFolderResponse {
 #[derive(Responder)]
 pub enum CreateFolderResponse {
     #[response(status = 400, content_type = "json")]
-    FolderAlreadyExists(BasicMessage),
+    FolderAlreadyExists(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FolderDbError(BasicMessage),
+    FolderDbError(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FileSystemError(BasicMessage),
-    #[response(status = 200)]
+    FileSystemError(Json<BasicMessage>),
+    #[response(status = 201)]
     Success(Json<FolderResponse>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 404, content_type = "json")]
-    ParentNotFound(BasicMessage),
+    ParentNotFound(Json<BasicMessage>),
 }
 
 #[derive(Responder)]
 pub enum UpdateFolderResponse {
     #[response(status = 400, content_type = "json")]
-    FolderAlreadyExists(BasicMessage),
+    FolderAlreadyExists(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FolderDbError(BasicMessage),
+    FolderDbError(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FileSystemError(BasicMessage),
+    FileSystemError(Json<BasicMessage>),
     #[response(status = 200)]
     Success(Json<FolderResponse>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 404, content_type = "json")]
-    ParentNotFound(BasicMessage),
+    ParentNotFound(Json<BasicMessage>),
     #[response(status = 404, content_type = "json")]
-    FolderNotFound(BasicMessage),
+    FolderNotFound(Json<BasicMessage>),
 }
 
 #[derive(Responder)]
 pub enum DeleteFolderResponse {
     #[response(status = 404, content_type = "json")]
-    FolderNotFound(BasicMessage),
+    FolderNotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FolderDbError(BasicMessage),
+    FolderDbError(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
-    FileSystemError(BasicMessage),
+    FileSystemError(Json<BasicMessage>),
     #[response(status = 204)]
     Success(NoContent),
     #[response(status = 401)]

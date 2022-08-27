@@ -144,7 +144,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         folders: Vec::new(),
         files: Vec::new(),
         parent_id: updated_folder.parent_id,
-        path: Regex::new(format!("^{}", FILE_DIR).as_str())
+        path: Regex::new(format!("^{}/", FILE_DIR).as_str())
             .unwrap()
             .replace(&updated_folder.name, "")
             .to_string(),

@@ -1,0 +1,2401 @@
+{
+	"info": {
+		"_postman_id": "29ae3d51-e36c-4d8d-9af9-43a1a64d22bd",
+		"name": "Tests",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "22903116"
+	},
+	"item": [
+		{
+			"name": "authentication",
+			"item": [
+				{
+					"name": "Not Set in DB",
+					"item": [
+						{
+							"name": "folder",
+							"item": [
+								{
+									"name": "Get",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/folders/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Create",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"parentId\": null,\n    \"name\": \"top\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/folders",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Delete",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "DELETE",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/folders/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})",
+													""
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "PUT",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"id\": 1,\n    \"parentId\": null,\n    \"name\": \"test\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/folders",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders"
+											]
+										}
+									},
+									"response": []
+								}
+							],
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											""
+										]
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											""
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "file",
+							"item": [
+								{
+									"name": "Upload",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "file",
+													"type": "file",
+													"src": "test_upload.txt"
+												},
+												{
+													"key": "extension",
+													"value": "mp4",
+													"type": "text"
+												}
+											]
+										},
+										"url": {
+											"raw": "{{baseUrl}}/files",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Delete",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "DELETE",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Download",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Get Meta",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should require password to be set when run', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('No password has been set. You can set a username and password by making a POST to `/api/password`')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/metadata/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												"metadata",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								}
+							],
+							"event": [
+								{
+									"listen": "prerequest",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											""
+										]
+									}
+								},
+								{
+									"listen": "test",
+									"script": {
+										"type": "text/javascript",
+										"exec": [
+											""
+										]
+									}
+								}
+							]
+						},
+						{
+							"name": "Set Password",
+							"item": [
+								{
+									"name": "Test Set Password",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should succeed', () => {",
+													"    pm.expect(pm.response.status).to.eq('Created')",
+													"})",
+													""
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"username\": \"test\",\n    \"password\": \"test\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/api/password",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"password"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Password already set",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse to set password', () => {",
+													"    pm.expect(pm.response.json().message).to.eq('password cannot be set, as it already has been set')",
+													"})",
+													"",
+													"pm.test('should have 400 status code', () => {",
+													"    pm.expect(pm.response.status).to.eq('Bad Request')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"username\": \"test2\",\n    \"password\": \"test2\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/api/password",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"api",
+												"password"
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						}
+					],
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									""
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									""
+								]
+							}
+						}
+					]
+				},
+				{
+					"name": "Invalid Password",
+					"item": [
+						{
+							"name": "folder",
+							"item": [
+								{
+									"name": "Get",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/folders/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Create",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"name\": \"test\",\n    \"parentId\": null\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/folders",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Delete",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "DELETE",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/folders/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Update",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "PUT",
+										"header": [],
+										"body": {
+											"mode": "raw",
+											"raw": "{\n    \"id\": 1,\n    \"parentId\": null,\n    \"name\": \"test\"\n}",
+											"options": {
+												"raw": {
+													"language": "json"
+												}
+											}
+										},
+										"url": {
+											"raw": "{{baseUrl}}/folders",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"folders"
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						},
+						{
+							"name": "file",
+							"item": [
+								{
+									"name": "Download",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Upload",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "POST",
+										"header": [],
+										"body": {
+											"mode": "formdata",
+											"formdata": [
+												{
+													"key": "file",
+													"type": "file",
+													"src": "test_upload.txt"
+												},
+												{
+													"key": "extension",
+													"value": "txt",
+													"type": "text"
+												}
+											]
+										},
+										"url": {
+											"raw": "{{baseUrl}}/files",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files"
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Delete",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "DELETE",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								},
+								{
+									"name": "Metadata",
+									"event": [
+										{
+											"listen": "test",
+											"script": {
+												"exec": [
+													"pm.test('should refuse request with bad id', () => {",
+													"    pm.expect(pm.response.status).to.eq('Unauthorized')",
+													"    pm.expect(pm.response.text()).to.eq('Bad Credentials')",
+													"})"
+												],
+												"type": "text/javascript"
+											}
+										}
+									],
+									"request": {
+										"method": "GET",
+										"header": [],
+										"url": {
+											"raw": "{{baseUrl}}/files/metadata/:id",
+											"host": [
+												"{{baseUrl}}"
+											],
+											"path": [
+												"files",
+												"metadata",
+												":id"
+											],
+											"variable": [
+												{
+													"key": "id",
+													"value": "1"
+												}
+											]
+										}
+									},
+									"response": []
+								}
+							]
+						}
+					],
+					"auth": {
+						"type": "basic",
+						"basic": [
+							{
+								"key": "password",
+								"value": "asdfasdf",
+								"type": "string"
+							},
+							{
+								"key": "username",
+								"value": "test",
+								"type": "string"
+							}
+						]
+					},
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									""
+								]
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									""
+								]
+							}
+						}
+					]
+				}
+			],
+			"event": [
+				{
+					"listen": "prerequest",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				},
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							""
+						]
+					}
+				}
+			]
+		},
+		{
+			"name": "folder",
+			"item": [
+				{
+					"name": "Get for nonexistent id returns 404",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('status is 404', () => {",
+									"    pm.expect(pm.response.status).to.eq('Not Found')",
+									"})",
+									"",
+									"pm.test('message tells user', () => {",
+									"    pm.expect(pm.response.json().message).to.be.eq(\"The folder with the passed id could not be found.\")",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "3"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Upload Folder Works",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 1,",
+									"    parentId: null,",
+									"    path: 'top',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 201 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"parentId\": null,\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get for existent ID returns that folder",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 1,",
+									"    parentId: null,",
+									"    path: 'top',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 200 ok', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can create a folder under another",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 2,",
+									"    parentId: 1,",
+									"    path: 'top/middle',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 201 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"middle\",\n    \"parentId\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Root Folder",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    \"id\": 0,",
+									"    \"parentId\": null,",
+									"    \"path\": \"root\",",
+									"    \"folders\": [",
+									"        {",
+									"            \"id\": 1,",
+									"            \"parentId\": null,",
+									"            \"path\": \"top\",",
+									"            \"folders\": [],",
+									"            \"files\": []",
+									"        }",
+									"    ],",
+									"    \"files\": []",
+									"}",
+									"",
+									"pm.test('should return 200 OK', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(1)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "null"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Disallows Folders of the same name",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('status should be 400', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('message should say the folder already exists', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('That folder already exists')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"middle\",\n    \"parentId\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can create subfolders of a different name",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 3,",
+									"    parentId: 1,",
+									"    path: 'top/middle2',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 201 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"middle2\",\n    \"parentId\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Delete works",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 204 no content', () => {",
+									"    pm.expect(pm.response.status).to.eq('No Content')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Deleted Folders no longer exist",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 404', () => {",
+									"    pm.expect(pm.response.status).to.eq('Not Found')",
+									"})",
+									"",
+									"pm.test('should say that the folder could not be found', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('The folder with the passed id could not be found.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can upload folders that were once deleted",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 4,",
+									"    parentId: null,",
+									"    path: 'top',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 201 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can rename folder",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 4,",
+									"    parentId: null,",
+									"    path: 'renamed',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 200 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"renamed\",\n    \"id\": 4\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can create a folder that has the name of what a renamed folder used to have",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 5,",
+									"    parentId: null,",
+									"    path: 'top',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 201 created', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can move a folder under another",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 4,",
+									"    parentId: 5,",
+									"    path: 'top/moved',",
+									"    folders: [],",
+									"    files: []",
+									"}",
+									"",
+									"pm.test('should return 200 OK', () => {",
+									"    pm.expect(pm.response.status).to.be.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return resulting folder', () => {",
+									"    let res = pm.response.json();",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.parentId).to.eq(expected.parentId)",
+									"    pm.expect(res.path).to.eq(expected.path)",
+									"    pm.expect(res.folders.length).to.eq(0)",
+									"    pm.expect(res.files.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 4,\n    \"parentId\": 5,\n    \"name\": \"moved\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "intermediate step - Create sub child",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"parentId\": 4,\n    \"name\": \"bottom\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cannot move a parent folder into immediate child",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 400 bad request', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('should tell the user that they cannot move the folder', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('Cannot move parent folder into its own child.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 5,\n    \"parentId\": 4,\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cannot move parent folder into deeply nested child",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 400 bad request', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('should tell the user that they cannot move the folder', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('Cannot move parent folder into its own child.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 5,\n    \"parentId\": 6,\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Cannot move folder into itself",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 400 bad request', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('should tell the user that they cannot move the folder', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('Cannot move parent folder into its own child.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 5,\n    \"parentId\": 5,\n    \"name\": \"top\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "file",
+			"item": [
+				{
+					"name": "Should return 404 for a file that doesn't exist",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 404 not found', () => {",
+									"    pm.expect(pm.response.status).to.eq('Not Found')",
+									"})",
+									"",
+									"pm.test('should tell the user that the file could not be found', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('The file with the passed id could not be found.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can upload to root",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    \"id\": 1,",
+									"    \"name\": \"test_upload.txt\"",
+									"}",
+									"",
+									"pm.test('should be 201 created', () => {",
+									"    pm.expect(pm.response.status).to.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return file metadata', () => {",
+									"    let res = pm.response.json()",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.name).to.eq(res.name)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "test_upload.txt"
+								},
+								{
+									"key": "extension",
+									"value": "txt",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can upload to a folder",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    \"id\": 2,",
+									"    \"name\": \"test_upload.txt\"",
+									"}",
+									"",
+									"pm.test('should be 201 created', () => {",
+									"    pm.expect(pm.response.status).to.eq('Created')",
+									"})",
+									"",
+									"pm.test('should return file metadata', () => {",
+									"    let res = pm.response.json()",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.name).to.eq(res.name)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "test_upload.txt"
+								},
+								{
+									"key": "extension",
+									"value": "txt",
+									"type": "text"
+								},
+								{
+									"key": "folder_id",
+									"value": "5",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should show up when requesting parent folder",
+					"event": [
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 2,",
+									"    name: \"test_upload.txt\"",
+									"};",
+									"",
+									"pm.test('should return the file', () => {",
+									"    const res = pm.response.json().files",
+									"    pm.expect(res.length).to.eq(1)",
+									"    pm.expect(res[0].id).to.eq(expected.id)",
+									"    pm.expect(res[0].name).to.eq(expected.name)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "5"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Can Delete File",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 201 no content', () => {",
+									"    pm.expect(pm.response.status).to.eq('No Content')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "2"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "404 for a file that doesn't exist",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 404', () => {",
+									"    pm.expect(pm.response.status).to.eq('Not Found')",
+									"})",
+									"",
+									"pm.test('should tell the user the file cannot be found', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('No file with the passed id was found.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "2"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should download a file that exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 200 OK', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return file contents', () => {",
+									"    pm.expect(pm.response.text()).to.eq('hi\\n')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Metadata",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"const expected = {",
+									"    id: 1,",
+									"    name: 'test_upload.txt',",
+									"    hash: '98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4'",
+									"}",
+									"",
+									"pm.test('should return 200 OK', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return metadata', () => {",
+									"    const res = pm.response.json()",
+									"    pm.expect(Object.keys(res).length).to.eq(3)",
+									"    pm.expect(res.id).to.eq(expected.id)",
+									"    pm.expect(res.name).to.eq(expected.name)",
+									"    pm.expect(res.hash).to.eq(expected.hash)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/metadata/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								"metadata",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "1"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Accepts Large Files",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 201 created', () => {",
+									"    pm.expect(pm.response.status).to.eq('Created')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "rocket-large.gif"
+								},
+								{
+									"key": "extension",
+									"value": "gif",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Intermediate step - create folder to test delete",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"name\": \"test_delete_files\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Intermediate Step - add file to previous folder",
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "test_upload.txt"
+								},
+								{
+									"key": "extension",
+									"value": "txt",
+									"type": "text"
+								},
+								{
+									"key": "folder_id",
+									"value": "7",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Intermediate Step - Move Folder",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 7,\n    \"parentId\": 5,\n    \"name\": \"test_move\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/folders",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Get Moved File",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "4"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Intermediate Step - Delete previous folder",
+					"request": {
+						"method": "DELETE",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/folders/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"folders",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "7"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should not return file in a deleted folder",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 404', () => {",
+									"    pm.expect(pm.response.status).to.eq('Not Found')",
+									"})",
+									"",
+									"pm.test('should tell the user that the file could not be found', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('The file with the passed id could not be found.')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files/:id",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files",
+								":id"
+							],
+							"variable": [
+								{
+									"key": "id",
+									"value": "4"
+								}
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "Api",
+			"item": [
+				{
+					"name": "Should return correct version",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 200', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should show correct version', () => {",
+									"    pm.expect(pm.response.json().version).to.eq(0.1)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/version",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"version"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"auth": {
+		"type": "basic",
+		"basic": [
+			{
+				"key": "password",
+				"value": "test",
+				"type": "string"
+			},
+			{
+				"key": "username",
+				"value": "test",
+				"type": "string"
+			}
+		]
+	},
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"exec": [
+					""
+				]
+			}
+		}
+	]
+}

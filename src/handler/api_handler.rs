@@ -2,7 +2,9 @@ use rocket::serde::{json::Json, Serialize};
 
 use crate::model::request::NewAuth;
 use crate::model::response::api_responses::SetPassWordResponse;
+use crate::model::response::BasicMessage;
 use crate::service::api_service;
+use crate::service::api_service::CreatePasswordError;
 
 static API_VERSION_NUMBER: f64 = 0.1;
 
@@ -30,6 +32,11 @@ pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
     let result = api_service::create_password(auth.into_inner());
     return match result {
         Ok(_) => SetPassWordResponse::Created(()),
-        Err(reason) => SetPassWordResponse::Failure(reason.to_string()),
+        Err(e) if e == CreatePasswordError::AlreadyExists => SetPassWordResponse::AlreadyExists(
+            BasicMessage::new("password cannot be set, as it already has been set"),
+        ),
+        Err(_) => SetPassWordResponse::Failure(BasicMessage::new(
+            "Failed to set password due to unknown error",
+        )),
     };
 }
