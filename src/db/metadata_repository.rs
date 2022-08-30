@@ -5,7 +5,7 @@ use crate::guard::Auth;
 /// returns the current version of the database as a String
 pub fn get_version(con: &mut Connection) -> rusqlite::Result<String> {
     let result = con.query_row(
-        "select value from metadata where name = \"version\"",
+        include_str!("../assets/queries/metadata/get_api_version.sql"),
         [],
         |row| row.get(0),
     );
@@ -24,9 +24,8 @@ pub enum CheckAuthResult {
 
 /// retrieves the encrypted authentication string for requests in the database
 pub fn get_auth(con: &mut Connection) -> rusqlite::Result<String> {
-    //language=sqlite
     con.query_row(
-        "select value from Metadata where name = \"auth\"",
+        include_str!("../assets/queries/metadata/get_auth_hash.sql"),
         [],
         |row| row.get(0),
     )
@@ -52,9 +51,8 @@ pub fn check_auth(auth: Auth, con: &mut Connection) -> CheckAuthResult {
 }
 
 pub fn set_auth(auth: Auth, con: &mut Connection) -> bool {
-    //language=sql
     let mut statement = con
-        .prepare("insert into Metadata(name, value) values(\"auth\", ?1)")
+        .prepare(include_str!("../assets/queries/metadata/set_auth_hash.sql"))
         .unwrap();
     return match statement.execute([auth.to_string()]) {
         Ok(_) => true,
