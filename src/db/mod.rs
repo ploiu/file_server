@@ -4,7 +4,7 @@ use rusqlite::{Connection, OpenFlags, Result};
 
 pub mod file_repository;
 pub mod folder_repository;
-pub mod metadata;
+pub mod metadata_repository;
 
 static DB_LOCATION: &str = "./db.sqlite";
 
@@ -26,7 +26,7 @@ fn create_db(con: &mut Connection) {
 /// If not, it either creates or upgrades the database accordingly
 pub fn initialize_db() -> Result<()> {
     let mut con = open_connection();
-    let _table_version = match metadata::get_version(&mut con) {
+    let _table_version = match metadata_repository::get_version(&mut con) {
         Ok(value) => value.parse::<u64>().unwrap(),
         Err(_) => {
             // tables haven't been created yet

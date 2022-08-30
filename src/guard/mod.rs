@@ -7,7 +7,7 @@ use rocket::request::{FromRequest, Outcome};
 use rocket::Request;
 use sha2::{Digest, Sha256};
 
-use crate::db::metadata::CheckAuthResult;
+use crate::db::metadata_repository::CheckAuthResult;
 use crate::facade::db::check_auth;
 
 /// used to represent the result of calling `Auth::validate`

@@ -71,9 +71,8 @@ pub fn get_child_folders(
 /// This does not do any checks on folder parent id or any other data,
 /// and that must be done before this function is called
 pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder, rusqlite::Error> {
-    //language=sqlite
     let mut pst = con
-        .prepare("insert into Folders(name, parentId) values(?1, ?2)")
+        .prepare(include_str!("../assets/queries/folder/create_folder.sql"))
         .unwrap();
     return match folder.parent_id {
         Some(id) => {
@@ -100,13 +99,8 @@ pub fn create_folder(folder: &db::Folder, con: &Connection) -> Result<db::Folder
 /// This does not perform any checks on folder info, and that must be done
 /// before this function is called
 pub fn update_folder(folder: &db::Folder, con: &Connection) -> Result<(), rusqlite::Error> {
-    //language=sqlite
     let mut pst = con
-        .prepare(
-            "update Folders
-                    set name = ?1, parentId = ?2
-                    where id = ?3",
-        )
+        .prepare(include_str!("../assets/queries/folder/update_folder.sql"))
         .unwrap();
     match folder.parent_id {
         Some(parent_id) => pst.execute(params![&folder.name, parent_id, &folder.id])?,
@@ -123,7 +117,7 @@ pub fn get_files_for_folder(
 ) -> Result<Vec<db::FileRecord>, rusqlite::Error> {
     let mut pst = if id.is_some() {
         con.prepare(include_str!(
-            "../assets/queries/file/get_child_files_with_id.sql"
+            "../assets/queries/folder_file/get_child_files_with_id.sql"
         ))
         .unwrap()
     } else {
@@ -155,12 +149,16 @@ pub fn get_files_for_folder(
 /// deletes a folder and unlinks every file inside of it.
 /// This _does not_ check if the folder exists first.
 pub fn delete_folder(id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
-    //language=sqlite
     let mut delete_folder_files = con
-        .prepare("delete from Folder_Files where folderId = ?1")
+        .prepare(include_str!(
+            "../assets/queries/folder_file/delete_folder_file_by_folder_id.sql"
+        ))
         .unwrap();
-    //language=sqlite
-    let mut delete_folder = con.prepare("delete from Folders where id = ?1").unwrap();
+    let mut delete_folder = con
+        .prepare(include_str!(
+            "../assets/queries/folder/delete_folder_by_id.sql"
+        ))
+        .unwrap();
     delete_folder_files.execute([id])?;
     delete_folder.execute([id])?;
     Ok(())
@@ -171,9 +169,10 @@ pub fn link_folder_to_file(
     folder_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    //language=sqlite
     let mut pst = con
-        .prepare("insert into Folder_Files(fileId, folderId) values (?1, ?2)")
+        .prepare(include_str!(
+            "../assets/queries/folder_file/create_folder_file.sql"
+        ))
         .unwrap();
     return match pst.insert([file_id, folder_id]) {
         Ok(_) => Ok(()),
@@ -189,22 +188,10 @@ pub fn link_folder_to_file(
 
 /// returns all the ids of all child folders
 pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
-    //language=sqlite
     let mut pst = con
-        .prepare(
-            // recursively retrieve all IDs of a given folder
-            "with query as (select f1.id
-               from folders f1
-               where f1.parentId = ?1
-               union all
-               select f2.id
-               from folders f2
-
-                        join query on f2.parentId = query.id)
-select id
-from query;
-",
-        )
+        .prepare(include_str!(
+            "../assets/queries/folder/get_child_folder_ids_recursive.sql"
+        ))
         .unwrap();
     let mut ids = Vec::<u32>::new();
     let res = pst.query_map([id], |row| {

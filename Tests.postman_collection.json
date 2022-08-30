@@ -2233,6 +2233,32 @@
 				},
 				{
 					"name": "Get Moved File",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 200 OK', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return file contents', () => {",
+									"    pm.expect(pm.response.text()).to.eq('hi\\n')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						},
+						{
+							"listen": "prerequest",
+							"script": {
+								"exec": [
+									""
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
 					"request": {
 						"method": "GET",
 						"header": [],

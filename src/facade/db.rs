@@ -1,12 +1,12 @@
-use crate::db::metadata;
-use crate::db::metadata::{get_auth, set_auth, CheckAuthResult};
+use crate::db::metadata_repository;
+use crate::db::metadata_repository::{get_auth, set_auth, CheckAuthResult};
 use crate::db::open_connection;
 use crate::guard::Auth;
 
 /// Checks if the passed `auth` object matches the password in the database
 pub fn check_auth(auth: Auth) -> CheckAuthResult {
     let mut con = open_connection();
-    let result = metadata::check_auth(auth, &mut con);
+    let result = metadata_repository::check_auth(auth, &mut con);
     con.close().unwrap();
     result
 }
