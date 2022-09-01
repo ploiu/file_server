@@ -75,9 +75,7 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
         id: folder.id.unwrap(),
         parent_id: folder.parent_id,
         path: folder.name,
-        // TODO all nested folders
         folders: Vec::new(),
-        // TODO all nested files
         files: Vec::new(),
     };
     let con = db::open_connection();
