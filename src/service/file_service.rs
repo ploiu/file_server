@@ -2,14 +2,18 @@ use regex::Regex;
 use std::fs::File;
 use std::path::Path;
 
+use crate::db;
+use crate::db::{file_repository, folder_repository};
 use rocket::tokio::fs::create_dir;
+use rusqlite::Connection;
+use sha2::{Digest, Sha256};
 
-use crate::facade::file_facade::{delete_file_by_id, get_file_info_by_id, save_file_record};
-use crate::facade::{file_facade, folder_facade};
-use crate::model::db::{FileRecord, Folder};
+use crate::model::db::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::FileMetadataResponse;
-use crate::service::folder_service::GetFolderError;
+use crate::model::response::folder_responses::FolderResponse;
+use crate::service::folder_service;
+use crate::service::folder_service::{GetFolderError, LinkFolderError};
 
 pub static FILE_DIR: &str = "./files";
 
@@ -42,9 +46,8 @@ pub enum DeleteFileError {
 pub async fn check_root_dir(dir: &str) {
     let path = Path::new(dir);
     if !path.exists() {
-        match create_dir(path).await {
-            Ok(_) => (),
-            Err(e) => panic!("Failed to create file directory: \n {:?}", e),
+        if let Err(e) = create_dir(path).await {
+            panic!("Failed to create file directory: \n {:?}", e)
         }
     }
 }
@@ -59,7 +62,7 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     return if let Some(parent_id) = file_input.folder_id {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = match folder_facade::get_folder_by_id(Some(parent_id)) {
+        let folder = match folder_service::get_folder(Some(parent_id)) {
             Ok(f) => f,
             Err(e) if e == GetFolderError::NotFound => {
                 return Err(SaveFileError::ParentFolderNotFound)
@@ -89,24 +92,96 @@ pub async fn save_file(
     };
 }
 
+pub fn get_file(id: u32) -> Result<FileRecord, GetFileError> {
+    let con = db::open_connection();
+    let result = match file_repository::get_by_id(id, &con) {
+        Ok(record) => Ok(record),
+        Err(error) if error == rusqlite::Error::QueryReturnedNoRows => Err(GetFileError::NotFound),
+        Err(error) => {
+            eprintln!(
+                "Failed to pull file info from database! Nested exception is: \n {:?}",
+                error
+            );
+            Err(GetFileError::DbFailure)
+        }
+    };
+    con.close().unwrap();
+    result
+}
+
+pub fn download_file(id: u32) -> Result<File, GetFileError> {
+    let res = get_file_path(id);
+    return if let Ok(path) = res {
+        let path = format!("{}/{}", FILE_DIR, path);
+        match File::open(path) {
+            Ok(f) => Ok(f),
+            Err(_) => Err(GetFileError::NotFound),
+        }
+    } else {
+        Err(res.unwrap_err())
+    };
+}
+
+pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
+    let file_path = match get_file_path(id) {
+        Ok(path) => format!("{}/{}", FILE_DIR, path),
+        Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
+        Err(_) => return Err(DeleteFileError::DbError),
+    };
+    // now that we've determined the file exists, we can remove from the db
+    let con = db::open_connection();
+    let delete_result = delete_file_by_id_with_connection(id, &con);
+    con.close().unwrap();
+    // helps avoid nested matches
+    delete_result?;
+    return std::fs::remove_file(&file_path).or_else(|e| {
+        eprintln!(
+            "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
+            file_path, e
+        );
+        Err(DeleteFileError::FileSystemError)
+    });
+}
+
+/// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of db connections when deleting a folder
+pub fn delete_file_by_id_with_connection(
+    id: u32,
+    con: &Connection,
+) -> Result<FileRecord, DeleteFileError> {
+    let result = match file_repository::delete_by_id(id, &con) {
+        Ok(record) => Ok(record),
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+        Err(e) => {
+            eprintln!(
+                "Failed to delete file record from database! Nested exception is: \n {:?}",
+                e
+            );
+            Err(DeleteFileError::DbError)
+        }
+    };
+    return result;
+}
+
+// ==== private functions ==== \\
+
 /// persists the file to the disk and the database
 async fn persist_save_file_to_folder(
     file_input: &mut CreateFileRequest<'_>,
-    folder: &Folder,
+    folder: &FolderResponse,
     file_name: String,
 ) -> Result<u32, SaveFileError> {
     let file_name = format!(
         "{}/{}/{}.{}",
-        FILE_DIR, folder.name, file_name, file_input.extension
+        FILE_DIR, folder.path, file_name, file_input.extension
     );
     return match file_input.file.persist_to(&file_name).await {
         Ok(_) => {
             // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
             let mut saved_file = File::open(&file_name).unwrap();
-            match file_facade::save_file_record(&file_name, &mut saved_file) {
+            match save_file_record(&file_name, &mut saved_file) {
                 Ok(id) => {
                     // file and folder are both in db, now link them
-                    if let Err(_) = folder_facade::link_folder_to_file(id, folder.id.unwrap()) {
+                    if link_folder_to_file(id, folder.id).is_err() {
                         return Err(SaveFileError::FailWriteDb);
                     }
                     Ok(id)
@@ -151,39 +226,44 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     };
 }
 
-pub fn get_file(id: u32) -> Result<FileRecord, GetFileError> {
-    get_file_info_by_id(id)
+fn save_file_record(name: &String, mut file: &mut File) -> Result<u32, String> {
+    // hash the file TODO remove - we won't check uniqueness by file hash anymore
+    let mut hasher = Sha256::new();
+    std::io::copy(&mut file, &mut hasher).unwrap();
+    let hash = hasher.finalize();
+    // remove the './' from the file name
+    let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
+    let mut formatted_name = begin_path_regex.replace(&name, "");
+    let hash = format!("{:x}", hash);
+    let file_record = FileRecord::from(formatted_name.to_mut().to_string(), hash);
+    let con = db::open_connection();
+    let res = file_repository::save_file_record(&file_record, &con);
+    con.close().unwrap();
+    res
 }
 
-pub fn download_file(id: u32) -> Result<File, GetFileError> {
-    let res = file_facade::get_file_path(id);
-    return if let Ok(path) = res {
-        let path = format!("{}/{}", FILE_DIR, path);
-        match File::open(path) {
-            Ok(f) => Ok(f),
-            Err(_) => Err(GetFileError::NotFound),
+/// retrieves the full path to the file with the passed id
+fn get_file_path(id: u32) -> Result<String, GetFileError> {
+    let con = db::open_connection();
+    let result = match file_repository::get_file_path(id, &con) {
+        Ok(path) => Ok(path),
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(GetFileError::NotFound),
+        Err(e) => {
+            eprintln!("Failed to get file path! Nested exception is: \n {:?}", e);
+            Err(GetFileError::DbFailure)
         }
-    } else {
-        Err(res.unwrap_err())
     };
+    con.close().unwrap();
+    result
 }
 
-pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
-    let file_path = match file_facade::get_file_path(id) {
-        Ok(path) => format!("{}/{}", FILE_DIR, path),
-        Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
-        Err(_) => return Err(DeleteFileError::DbError),
-    };
-    match delete_file_by_id(id) {
-        Ok(_) => {
-            match std::fs::remove_file(&file_path) {
-                Ok(()) => Ok(()),
-                Err(e) => {
-                    eprintln!("Failed to delete file from disk at location {:?}!\n Nested exception is {:?}", file_path, e);
-                    Err(DeleteFileError::FileSystemError)
-                }
-            }
-        }
-        Err(e) => Err(e),
+/// adds a link to the folder for the passed file in the database
+fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderError> {
+    let con = db::open_connection();
+    let link_result = folder_repository::link_folder_to_file(file_id, folder_id, &con);
+    con.close().unwrap();
+    if link_result.is_err() {
+        return Err(LinkFolderError::DbError);
     }
+    return Ok(());
 }

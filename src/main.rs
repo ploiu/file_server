@@ -11,7 +11,6 @@ use handler::{
 };
 
 mod db;
-mod facade;
 mod guard;
 mod handler;
 mod model;

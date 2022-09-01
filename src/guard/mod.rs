@@ -8,7 +8,7 @@ use rocket::Request;
 use sha2::{Digest, Sha256};
 
 use crate::db::metadata_repository::CheckAuthResult;
-use crate::facade::db::check_auth;
+use crate::service::api_service;
 
 /// used to represent the result of calling `Auth::validate`
 pub enum ValidateResult {
@@ -50,7 +50,7 @@ impl Auth {
     ///
     /// _this is a convenience method to be used only in handlers_
     pub fn validate(self) -> ValidateResult {
-        match check_auth(self) {
+        match api_service::check_auth(self) {
             CheckAuthResult::Valid => ValidateResult::Ok,
             CheckAuthResult::Missing => ValidateResult::NoPasswordSet,
             CheckAuthResult::Invalid => ValidateResult::Invalid,
