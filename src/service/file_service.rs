@@ -3,16 +3,17 @@ use std::fs::File;
 use std::path::Path;
 
 use crate::db;
-use crate::db::file_repository;
+use crate::db::{file_repository, folder_repository};
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
-use crate::facade::folder_facade;
 use crate::model::db::{FileRecord, Folder};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::FileMetadataResponse;
-use crate::service::folder_service::GetFolderError;
+use crate::model::response::folder_responses::FolderResponse;
+use crate::service::folder_service;
+use crate::service::folder_service::{GetFolderError, LinkFolderError};
 
 pub static FILE_DIR: &str = "./files";
 
@@ -62,7 +63,7 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     return if let Some(parent_id) = file_input.folder_id {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = match folder_facade::get_folder_by_id(Some(parent_id)) {
+        let folder = match folder_service::get_folder(Some(parent_id)) {
             Ok(f) => f,
             Err(e) if e == GetFolderError::NotFound => {
                 return Err(SaveFileError::ParentFolderNotFound)
@@ -89,68 +90,6 @@ pub async fn save_file(
             id: file_id,
             name: String::from(root_regex.replace(&file_name, "")),
         })
-    };
-}
-
-/// persists the file to the disk and the database
-async fn persist_save_file_to_folder(
-    file_input: &mut CreateFileRequest<'_>,
-    folder: &Folder,
-    file_name: String,
-) -> Result<u32, SaveFileError> {
-    let file_name = format!(
-        "{}/{}/{}.{}",
-        FILE_DIR, folder.name, file_name, file_input.extension
-    );
-    return match file_input.file.persist_to(&file_name).await {
-        Ok(_) => {
-            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
-            let mut saved_file = File::open(&file_name).unwrap();
-            match save_file_record(&file_name, &mut saved_file) {
-                Ok(id) => {
-                    // file and folder are both in db, now link them
-                    if let Err(_) = folder_facade::link_folder_to_file(id, folder.id.unwrap()) {
-                        return Err(SaveFileError::FailWriteDb);
-                    }
-                    Ok(id)
-                }
-                Err(e) => {
-                    eprintln!("Failed to create file record in database: {:?}", e);
-                    Err(SaveFileError::FailWriteDb)
-                }
-            }
-        }
-        Err(e) => {
-            eprintln!("{:?}", e);
-            Err(SaveFileError::FailWriteDisk)
-        }
-    };
-}
-
-/// persists the passed file to the disk and the database
-async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, SaveFileError> {
-    let file_name = format!(
-        "{}/{}.{}",
-        &FILE_DIR,
-        file_input.file.name().unwrap(),
-        file_input.extension
-    );
-    return match file_input.file.persist_to(&file_name).await {
-        Ok(()) => {
-            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
-            let mut saved_file = File::open(&file_name).unwrap();
-            match save_file_record(&file_name, &mut saved_file) {
-                Err(e) => {
-                    eprintln!("Failed to create file record in database: {:?}", e);
-                    Err(SaveFileError::FailWriteDb)
-                }
-                Ok(id) => Ok(id),
-            }
-        }
-        Err(e) => {
-            eprintln!("{:?}", e);
-            Err(SaveFileError::FailWriteDisk)
-        }
     };
 }
 
@@ -208,6 +147,25 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     }
 }
 
+/// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of db connections when deleting a folder
+pub fn delete_file_by_id_with_connection(
+    id: u32,
+    con: &Connection,
+) -> Result<FileRecord, DeleteFileError> {
+    let result = match file_repository::delete_by_id(id, &con) {
+        Ok(record) => Ok(record),
+        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+        Err(e) => {
+            eprintln!(
+                "Failed to delete file record from database! Nested exception is: \n {:?}",
+                e
+            );
+            Err(DeleteFileError::DbError)
+        }
+    };
+    return result;
+}
+
 // ==== private functions ==== \\
 fn save_file_record(name: &String, mut file: &mut File) -> Result<u32, String> {
     let con = db::open_connection();
@@ -239,21 +197,74 @@ fn get_file_path(id: u32) -> Result<String, GetFileError> {
     result
 }
 
-/// for use in folder_facade, so that way we don't create a new connection every time
-fn delete_file_by_id_with_connection(
-    id: u32,
-    con: &Connection,
-) -> Result<FileRecord, DeleteFileError> {
-    let result = match file_repository::delete_by_id(id, &con) {
-        Ok(record) => Ok(record),
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+/// persists the file to the disk and the database
+async fn persist_save_file_to_folder(
+    file_input: &mut CreateFileRequest<'_>,
+    folder: &FolderResponse,
+    file_name: String,
+) -> Result<u32, SaveFileError> {
+    let file_name = format!(
+        "{}/{}/{}.{}",
+        FILE_DIR, folder.path, file_name, file_input.extension
+    );
+    return match file_input.file.persist_to(&file_name).await {
+        Ok(_) => {
+            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
+            let mut saved_file = File::open(&file_name).unwrap();
+            match save_file_record(&file_name, &mut saved_file) {
+                Ok(id) => {
+                    // file and folder are both in db, now link them
+                    if let Err(_) = link_folder_to_file(id, folder.id) {
+                        return Err(SaveFileError::FailWriteDb);
+                    }
+                    Ok(id)
+                }
+                Err(e) => {
+                    eprintln!("Failed to create file record in database: {:?}", e);
+                    Err(SaveFileError::FailWriteDb)
+                }
+            }
+        }
         Err(e) => {
-            eprintln!(
-                "Failed to delete file record from database! Nested exception is: \n {:?}",
-                e
-            );
-            Err(DeleteFileError::DbError)
+            eprintln!("{:?}", e);
+            Err(SaveFileError::FailWriteDisk)
         }
     };
+}
+
+/// persists the passed file to the disk and the database
+async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, SaveFileError> {
+    let file_name = format!(
+        "{}/{}.{}",
+        &FILE_DIR,
+        file_input.file.name().unwrap(),
+        file_input.extension
+    );
+    return match file_input.file.persist_to(&file_name).await {
+        Ok(()) => {
+            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
+            let mut saved_file = File::open(&file_name).unwrap();
+            match save_file_record(&file_name, &mut saved_file) {
+                Err(e) => {
+                    eprintln!("Failed to create file record in database: {:?}", e);
+                    Err(SaveFileError::FailWriteDb)
+                }
+                Ok(id) => Ok(id),
+            }
+        }
+        Err(e) => {
+            eprintln!("{:?}", e);
+            Err(SaveFileError::FailWriteDisk)
+        }
+    };
+}
+
+fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderError> {
+    let con = db::open_connection();
+    let result = match folder_repository::link_folder_to_file(file_id, folder_id, &con) {
+        Ok(()) => Ok(()),
+        Err(_) => Err(LinkFolderError::DbError),
+    };
+    con.close().unwrap();
     return result;
 }

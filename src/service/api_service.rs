@@ -1,4 +1,4 @@
-use crate::facade::db::{is_password_set, set_password};
+use crate::facade::metadata_facade::{is_password_set, set_password};
 use crate::guard::Auth;
 use crate::model::request::NewAuth;
 

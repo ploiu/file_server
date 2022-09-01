@@ -1,3 +1,1 @@
-pub mod db;
-pub mod file_facade;
-pub mod folder_facade;
+pub mod metadata_facade;
