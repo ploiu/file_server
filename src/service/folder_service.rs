@@ -1,72 +1,19 @@
 use crate::model::db::FileRecord;
+use crate::model::error::file_errors::DeleteFileError;
+use crate::model::error::folder_errors::{
+    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
+};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
 use crate::service::file_service;
-use crate::service::file_service::{check_root_dir, DeleteFileError, FILE_DIR};
+use crate::service::file_service::{check_root_dir, FILE_DIR};
 use crate::{model, repository};
 use model::db::Folder;
 use regex::Regex;
 use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
-
-#[derive(PartialEq, Debug)]
-pub enum GetFolderError {
-    NotFound,
-    DbFailure,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum CreateFolderError {
-    /// a folder with the name in the selected path already exists
-    AlreadyExists,
-    /// the database failed to save the folder
-    DbFailure,
-    /// the file system failed to write the folder
-    FileSystemFailure,
-    /// the requested parent folder does not exist
-    ParentNotFound,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum UpdateFolderError {
-    /// a folder with the name in the selected path already exists
-    AlreadyExists,
-    /// the database failed to update the folder
-    DbFailure,
-    /// the file system failed to move the folder
-    FileSystemFailure,
-    /// the requested parent folder does not exist
-    ParentNotFound,
-    /// The folder could not be found
-    NotFound,
-    /// The user attempted to do an illegal action, such as moving a parent folder into its own child
-    NotAllowed,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum GetChildFilesError {
-    /// database could not execute the query
-    DbFailure,
-    /// the folder id could not be found
-    FolderNotFound,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum DeleteFolderError {
-    /// database could not execute the query
-    DbFailure,
-    /// folder not in the repository
-    FolderNotFound,
-    /// could not remove the folder from the database
-    FileSystemError,
-}
-
-#[derive(PartialEq, Debug)]
-pub enum LinkFolderError {
-    DbError,
-}
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let folder = get_folder_by_id(id)?;

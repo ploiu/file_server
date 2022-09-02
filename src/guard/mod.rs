@@ -1,5 +1,6 @@
 use std::io::Write;
 
+use crate::model::error::guard_errors::AuthError;
 use base64::decode;
 use rocket::async_trait;
 use rocket::http::Status;
@@ -88,12 +89,6 @@ impl<'a> FromRequest<'a> for Auth {
             Some(_) => Outcome::Failure((Status::BadRequest, AuthError::Invalid)),
         }
     }
-}
-
-#[derive(Debug)]
-pub enum AuthError {
-    Missing,
-    Invalid,
 }
 
 #[cfg(test)]

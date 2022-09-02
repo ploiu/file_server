@@ -1,10 +1,10 @@
 use rocket::serde::{json::Json, Serialize};
 
+use crate::model::error::metadata_errors::CreatePasswordError;
 use crate::model::request::NewAuth;
 use crate::model::response::api_responses::SetPassWordResponse;
 use crate::model::response::BasicMessage;
 use crate::service::api_service;
-use crate::service::api_service::CreatePasswordError;
 
 static API_VERSION_NUMBER: f64 = 0.1;
 

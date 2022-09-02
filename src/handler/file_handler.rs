@@ -2,13 +2,14 @@ use rocket::form::Form;
 use rocket::serde::json::Json;
 
 use crate::guard::{Auth, ValidateResult};
+use crate::model::error::file_errors::{DeleteFileError, GetFileError, SaveFileError};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::file_service;
-use crate::service::file_service::{save_file, DeleteFileError, GetFileError, SaveFileError};
+use crate::service::file_service::save_file;
 
 /// accepts a file via request body and stores it off
 #[post("/", data = "<file_input>")]
