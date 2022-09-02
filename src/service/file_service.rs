@@ -9,38 +9,14 @@ use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
 use crate::model::db::FileRecord;
+use crate::model::error::file_errors::{DeleteFileError, GetFileError, SaveFileError};
+use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::service::folder_service;
-use crate::service::folder_service::{GetFolderError, LinkFolderError};
 
 pub static FILE_DIR: &str = "./files";
-
-#[derive(PartialEq)]
-pub enum SaveFileError {
-    #[allow(dead_code)] // this is actually used. Thanks rust linter!
-    MissingInfo(String),
-    FailWriteDisk,
-    FailWriteDb,
-    ParentFolderNotFound,
-}
-
-#[derive(PartialEq)]
-pub enum GetFileError {
-    NotFound,
-    DbFailure,
-}
-
-#[derive(PartialEq)]
-pub enum DeleteFileError {
-    // file reference not found in repository
-    NotFound,
-    // couldn't remove the file reference from the repository
-    DbError,
-    // couldn't remove the file from the disk
-    FileSystemError,
-}
 
 /// ensures that the passed directory exists on the file system
 pub async fn check_root_dir(dir: &str) {
