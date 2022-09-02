@@ -7,7 +7,7 @@ use rocket::request::{FromRequest, Outcome};
 use rocket::Request;
 use sha2::{Digest, Sha256};
 
-use crate::db::metadata_repository::CheckAuthResult;
+use crate::repository::metadata_repository::CheckAuthResult;
 use crate::service::api_service;
 
 /// used to represent the result of calling `Auth::validate`
@@ -54,6 +54,9 @@ impl Auth {
             CheckAuthResult::Valid => ValidateResult::Ok,
             CheckAuthResult::Missing => ValidateResult::NoPasswordSet,
             CheckAuthResult::Invalid => ValidateResult::Invalid,
+            CheckAuthResult::DbError => {
+                panic!("Unrecoverable error when attempting to check auth details in the database.")
+            }
         }
     }
 
@@ -78,7 +81,7 @@ impl<'a> FromRequest<'a> for Auth {
         match request.headers().get_one("Authorization") {
             None => Outcome::Failure((Status::Unauthorized, AuthError::Missing)),
             Some(value) if check_basic_auth(value) => match Auth::from(value) {
-                // TODO check against db
+                // TODO check against repository
                 Ok(auth) => Outcome::Success(auth),
                 Err(_) => Outcome::Failure((Status::Unauthorized, AuthError::Invalid)),
             },

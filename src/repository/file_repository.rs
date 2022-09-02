@@ -2,21 +2,15 @@ use rusqlite::Connection;
 
 use crate::model::db::FileRecord;
 
-pub fn save_file_record(
-    file: &FileRecord,
-    // folder_file: &FolderFiles,
-    con: &Connection,
-) -> Result<u32, String> {
+pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
     let res = match pst.insert((file.name.as_str(), file.hash.as_str())) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
-            return Err(format!(
-                "Failed to save file record. Nested exception is {:?}",
-                e
-            ))
+            eprintln!("Failed to save file record. Nested exception is {:?}", e);
+            return Err(e);
         }
     };
     res
@@ -54,15 +48,11 @@ pub fn delete_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::E
         .unwrap();
 
     // we need to be able to delete the file off the disk, so we have to return the FileRecord too
-    let record = match get_by_id(id, &con) {
-        Ok(f) => f,
-        Err(e) => return Err(e),
-    };
+    let record = get_by_id(id, &con)?;
 
-    match pst.execute([id]) {
-        Err(e) => return Err(e),
-        // we don't do anything here because we don't care - no rows deleted means we throw an error via get_by_id
-        _ => {}
-    };
+    if let Err(e) = pst.execute([id]) {
+        eprintln!("Failed to delete file by id. Nested exception is {:?}", e);
+        return Err(e);
+    }
     return Ok(record);
 }

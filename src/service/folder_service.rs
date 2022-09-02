@@ -1,10 +1,10 @@
-use crate::db::folder_repository;
 use crate::model::db::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
+use crate::repository::folder_repository;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, DeleteFileError, FILE_DIR};
-use crate::{db, model};
+use crate::{model, repository};
 use model::db::Folder;
 use regex::Regex;
 use rusqlite::Connection;
@@ -57,7 +57,7 @@ pub enum GetChildFilesError {
 pub enum DeleteFolderError {
     /// database could not execute the query
     DbFailure,
-    /// folder not in the db
+    /// folder not in the repository
     FolderNotFound,
     /// could not remove the folder from the database
     FileSystemError,
@@ -78,17 +78,14 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
         folders: Vec::new(),
         files: Vec::new(),
     };
-    let con = db::open_connection();
-    let child_folders = match folder_repository::get_child_folders(id, &con) {
-        Ok(folder) => Ok(folder),
-        Err(err) => {
-            eprintln!(
-                "Failed to pull child folder info from database! Nested exception is: \n {:?}",
-                err
-            );
-            Err(GetFolderError::DbFailure)
-        }
-    };
+    let con = repository::open_connection();
+    let child_folders = folder_repository::get_child_folders(id, &con).or_else(|e| {
+        eprintln!(
+            "Failed to pull child folder info from database! Nested exception is: \n {:?}",
+            e
+        );
+        Err(GetFolderError::DbFailure)
+    });
     con.close().unwrap();
     folder.folders(child_folders?);
     folder.files(get_files_for_folder(id).unwrap());
@@ -159,7 +156,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
 }
 
 pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
-    let con = db::open_connection();
+    let con = repository::open_connection();
     let deleted_folder = delete_folder_recursively(id, &con);
     con.close().unwrap();
     let deleted_folder = deleted_folder?;
@@ -177,7 +174,7 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
 
 // private functions
 fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
-    let con = db::open_connection();
+    let con = repository::open_connection();
     let result = match folder_repository::get_by_id(id, &con) {
         Ok(folder) => Ok(folder),
         Err(error) if error == rusqlite::Error::QueryReturnedNoRows => {
@@ -196,7 +193,7 @@ fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
 }
 
 fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> {
-    let con = db::open_connection();
+    let con = repository::open_connection();
     // make sure the folder doesn't exist
     let mut folder_path: String = String::from(&folder.name);
     // if the folder has a parent id, we need to check if it exists and doesn't have this folder in it
@@ -225,7 +222,7 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
     }
     let created = match folder_repository::create_folder(&folder, &con) {
         Ok(f) => {
-            // so that I don't have to make yet another db query to get parent folder path
+            // so that I don't have to make yet another repository query to get parent folder path
             Ok(Folder {
                 id: f.id,
                 parent_id: f.parent_id,
@@ -239,9 +236,9 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
 }
 
 fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> {
-    let con = db::open_connection();
+    let con = repository::open_connection();
     let mut new_path: String = String::from(&folder.name);
-    // make sure the folder already exists in the db
+    // make sure the folder already exists in the repository
     if let Err(_) = folder_repository::get_by_id(folder.id, &con) {
         con.close().unwrap();
         return Err(UpdateFolderError::NotFound);
@@ -310,22 +307,19 @@ fn is_attempt_move_to_sub_child(
 
 /// returns the top-level files for the passed folder
 fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFilesError> {
-    let con = db::open_connection();
+    let con = repository::open_connection();
     // first we need to check the folder exists
-    match folder_repository::get_by_id(id, &con) {
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => {
-            con.close().unwrap();
-            return Err(GetChildFilesError::FolderNotFound);
-        }
-        Err(e) => {
-            con.close().unwrap();
+    if let Err(e) = folder_repository::get_by_id(id, &con) {
+        con.close().unwrap();
+        return if e == rusqlite::Error::QueryReturnedNoRows {
+            Err(GetChildFilesError::FolderNotFound)
+        } else {
             eprintln!(
                 "Failed to query database for folders. Nested exception is: \n {:?}",
                 e
             );
-            return Err(GetChildFilesError::DbFailure);
-        }
-        _ => { /* no op - we confirm the folder exists */ }
+            Err(GetChildFilesError::DbFailure)
+        };
     }
     // now we can retrieve all the file records in this folder
     let result = match folder_repository::get_files_for_folder(id, &con) {
@@ -345,24 +339,20 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
 
 /// the main body of `delete_folder`. Takes a connection so that we're not creating a connection on every stack frame
 fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, DeleteFolderError> {
-    let folder = match folder_repository::get_by_id(Some(id), &con) {
-        Ok(f) => f,
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => {
-            return Err(DeleteFolderError::FolderNotFound)
-        }
-        Err(e) => {
-            eprintln!(
-                "failed to recursively delete folder! Nested exception is: \n {:?}",
-                e
-            );
-            return Err(DeleteFolderError::DbFailure);
-        }
-    };
+    let folder = folder_repository::get_by_id(Some(id), &con).or_else(|e| {
+        eprintln!(
+            "Failed to recursively delete folder. Nested exception is {:?}",
+            e
+        );
+        return if e == rusqlite::Error::QueryReturnedNoRows {
+            Err(DeleteFolderError::FolderNotFound)
+        } else {
+            Err(DeleteFolderError::DbFailure)
+        };
+    })?;
     // now that we have the folder, we can delete all the files for that folder
-    let files = match folder_repository::get_files_for_folder(Some(id), &con) {
-        Ok(f) => f,
-        Err(_) => return Err(DeleteFolderError::DbFailure),
-    };
+    let files = folder_repository::get_files_for_folder(Some(id), &con)
+        .or_else(|_| Err(DeleteFolderError::DbFailure))?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), &con) {
             Err(e) if e == DeleteFileError::NotFound => {}
@@ -371,14 +361,12 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         };
     }
     // now that we've deleted all files, we can try with all folders
-    let sub_folders = match folder_repository::get_child_folders(Some(id), &con) {
-        Ok(f) => f,
-        Err(_) => return Err(DeleteFolderError::DbFailure),
-    };
+    let sub_folders = folder_repository::get_child_folders(Some(id), &con)
+        .or_else(|_| Err(DeleteFolderError::DbFailure))?;
     for sub_folder in sub_folders.iter() {
         delete_folder_recursively(sub_folder.id.unwrap(), &con)?;
     }
-    // now that we've deleted everything beneath it, delete the requested folder from the db
+    // now that we've deleted everything beneath it, delete the requested folder from the repository
     if let Err(e) = folder_repository::delete_folder(id, &con) {
         eprintln!(
             "Failed to delete root folder in recursive folder delete. Nested exception is: \n {:?}",
