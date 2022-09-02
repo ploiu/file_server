@@ -47,7 +47,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    return match file_service::get_file(id) {
+    return match file_service::get_file_metadata(id) {
         Ok(file) => GetFileResponse::Success(Json::from(file)),
         Err(message) if message == GetFileError::NotFound => GetFileResponse::FileNotFound(
             BasicMessage::new("The file with the passed id could not be found."),
@@ -66,7 +66,7 @@ pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
         ValidateResult::NoPasswordSet => return DownloadFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return DownloadFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    return match file_service::download_file(id) {
+    return match file_service::get_file_contents(id) {
         Ok(f) => DownloadFileResponse::Success(f),
         Err(e) if e == GetFileError::NotFound => DownloadFileResponse::FileNotFound(BasicMessage::new("The file with the passed id could not be found.")),
         Err(e) if e == GetFileError::DbFailure => DownloadFileResponse::FileDbError(BasicMessage::new("Failed to retrieve the file info from the database. Check the server logs for details")),
