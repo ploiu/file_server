@@ -17,14 +17,10 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<db::Folder, rusqli
         .unwrap();
 
     let row_mapper = |row: &Row| {
-        let parent_id: Option<u32> = match row.get(2) {
-            Ok(val) => Some(val),
-            Err(_) => None,
-        };
         Ok(db::Folder {
             id: Some(row.get(0)?),
             name: row.get(1)?,
-            parent_id,
+            parent_id: row.get(2).ok().or_else(|| None),
         })
     };
 
@@ -177,10 +173,7 @@ pub fn link_folder_to_file(
     return match pst.insert([file_id, folder_id]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!(
-                "Failed to link file to folder. Nested exception is: \n {:?}",
-                e
-            );
+            eprintln!("Failed to link file to folder. Nested exception is {:?}", e);
             return Err(e);
         }
     };
@@ -194,10 +187,7 @@ pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, r
         ))
         .unwrap();
     let mut ids = Vec::<u32>::new();
-    let res = pst.query_map([id], |row| {
-        let i: u32 = row.get(0)?;
-        Ok(i)
-    })?;
+    let res = pst.query_map([id], |row| Ok(row.get(0)?))?;
     for i in res.into_iter() {
         ids.push(i.unwrap());
     }
