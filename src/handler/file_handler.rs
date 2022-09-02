@@ -1,8 +1,9 @@
 use rocket::form::Form;
 use rocket::serde::json::Json;
 
-use crate::guard::{Auth, ValidateResult};
+use crate::guard::Auth;
 use crate::model::error::file_errors::{DeleteFileError, GetFileError, SaveFileError};
+use crate::model::guard::auth::ValidateResult;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,

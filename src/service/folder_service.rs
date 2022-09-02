@@ -1,15 +1,15 @@
-use crate::model::db::FileRecord;
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
 };
+use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
 use crate::{model, repository};
-use model::db::Folder;
+use model::repository::Folder;
 use regex::Regex;
 use rusqlite::Connection;
 use std::fs;

@@ -1,9 +1,9 @@
 use crate::guard::Auth;
 use crate::model::error::metadata_errors::CreatePasswordError;
 use crate::model::request::NewAuth;
+use crate::model::service::metadata::CheckAuthResult;
 use crate::repository;
 use crate::repository::metadata_repository;
-use crate::repository::metadata_repository::CheckAuthResult;
 
 pub fn create_password(auth: NewAuth) -> Result<(), CreatePasswordError> {
     if is_password_set() {

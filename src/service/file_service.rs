@@ -8,9 +8,9 @@ use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
-use crate::model::db::FileRecord;
 use crate::model::error::file_errors::{DeleteFileError, GetFileError, SaveFileError};
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
+use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::folder_responses::FolderResponse;
