@@ -1,6 +1,6 @@
 use rusqlite::Connection;
 
-use crate::model::db::FileRecord;
+use crate::model::repository::FileRecord;
 
 pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con

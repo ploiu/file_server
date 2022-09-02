@@ -1,4 +1,4 @@
-use crate::model::db::FileRecord;
+use crate::model::repository::FileRecord;
 use crate::model::response::BasicMessage;
 use rocket::serde::json::Json;
 use rocket::serde::Serialize;

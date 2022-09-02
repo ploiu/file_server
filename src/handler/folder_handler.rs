@@ -1,7 +1,8 @@
-use crate::guard::{Auth, ValidateResult};
+use crate::guard::Auth;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetFolderError, UpdateFolderError,
 };
+use crate::model::guard::auth::ValidateResult;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::{
     CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, UpdateFolderResponse,
