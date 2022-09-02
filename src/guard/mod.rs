@@ -54,6 +54,9 @@ impl Auth {
             CheckAuthResult::Valid => ValidateResult::Ok,
             CheckAuthResult::Missing => ValidateResult::NoPasswordSet,
             CheckAuthResult::Invalid => ValidateResult::Invalid,
+            CheckAuthResult::DbError => {
+                panic!("Unrecoverable error when attempting to check auth details in the database.")
+            }
         }
     }
 

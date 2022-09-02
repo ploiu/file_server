@@ -30,7 +30,11 @@ pub fn check_auth(auth: Auth) -> CheckAuthResult {
     let mut con = repository::open_connection();
     let result = metadata_repository::check_auth(auth, &mut con);
     con.close().unwrap();
-    result
+    return if result.is_err() {
+        CheckAuthResult::DbError
+    } else {
+        result.unwrap()
+    };
 }
 
 // private functions
@@ -58,5 +62,5 @@ fn set_password(auth: Auth) -> bool {
     let mut con = repository::open_connection();
     let result = metadata_repository::set_auth(auth, &mut con);
     con.close().unwrap();
-    result
+    return !result.is_err();
 }
