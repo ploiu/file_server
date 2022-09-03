@@ -56,3 +56,34 @@ pub fn delete_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::E
     }
     return Ok(record);
 }
+
+/// renames the file with the passed id and links it to the folder with the passed id in the database.
+/// This performs no checks, so file name and paths must be checked ahead of time
+pub fn update_file(
+    file_id: &u32,
+    parent_id: &Option<u32>,
+    file_name: &String,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut update_name_pst = con
+        .prepare(include_str!("../assets/queries/file/rename_file.sql"))
+        .unwrap();
+    let mut unlink_file_pst = con
+        .prepare(include_str!(
+            "../assets/queries/folder_file/delete_folder_file_by_file_id.sql"
+        ))
+        .unwrap();
+    // now to rename the file
+    update_name_pst.execute(rusqlite::params![file_id, file_name])?;
+    unlink_file_pst.execute([file_id])?;
+    // if we specified a parent id, we need to add a link back
+    if let Some(parent_id) = parent_id {
+        let mut add_link_pst = con
+            .prepare(include_str!(
+                "../assets/queries/folder_file/create_folder_file.sql"
+            ))
+            .unwrap();
+        add_link_pst.execute([file_id, parent_id])?;
+    }
+    Ok(())
+}

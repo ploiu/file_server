@@ -22,3 +22,17 @@ pub enum DeleteFileError {
     // couldn't remove the file from the disk
     FileSystemError,
 }
+
+#[derive(PartialEq)]
+pub enum UpdateFileError {
+    /// file not found in the db
+    NotFound,
+    /// Generic database error
+    DbError,
+    /// Generic filesystem error
+    FileSystemError,
+    /// requested folder id not found
+    FolderNotFound,
+    /// file already exists in the target directory
+    FileAlreadyExists,
+}
