@@ -76,7 +76,6 @@ impl<'a> FromRequest<'a> for Auth {
         match request.headers().get_one("Authorization") {
             None => Outcome::Failure((Status::Unauthorized, AuthError::Missing)),
             Some(value) if check_basic_auth(value) => match Auth::from(value) {
-                // TODO check against repository
                 Ok(auth) => Outcome::Success(auth),
                 Err(_) => Outcome::Failure((Status::Unauthorized, AuthError::Invalid)),
             },

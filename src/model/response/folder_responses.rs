@@ -23,9 +23,7 @@ impl FolderResponse {
             id: base.id.unwrap(),
             parent_id: base.parent_id,
             path: String::from(&base.name),
-            // TODO all nested folders
             folders: Vec::new(),
-            // TODO all nested files
             files: Vec::new(),
         }
     }
