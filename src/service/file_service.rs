@@ -1,4 +1,5 @@
 use regex::Regex;
+use std::fs;
 use std::fs::File;
 use std::path::Path;
 
@@ -8,10 +9,12 @@ use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 use sha2::{Digest, Sha256};
 
-use crate::model::error::file_errors::{DeleteFileError, GetFileError, SaveFileError};
+use crate::model::error::file_errors::{
+    DeleteFileError, GetFileError, SaveFileError, UpdateFileError,
+};
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
-use crate::model::request::file_requests::CreateFileRequest;
+use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::service::folder_service;
@@ -133,6 +136,56 @@ pub fn delete_file_by_id_with_connection(
         }
     };
     return result;
+}
+
+// TODO get old file name and get old file parent folder path
+pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
+    // first check if the file exists
+    let con = repository::open_connection();
+    if file_repository::get_by_id(file.id, &con).is_err() {
+        con.close().unwrap();
+        return Err(UpdateFileError::NotFound);
+    }
+    // now check if the folder exists
+    let parent_folder = folder_service::get_folder(file.folder_id)
+        .or_else(|_| Err(UpdateFileError::FolderNotFound))?;
+    // now check if a file with the passed name is already under that folder
+    let name_regex = Regex::new(format!("{}$", file.name).as_str()).unwrap();
+    for f in parent_folder.files.iter() {
+        if name_regex.is_match(f.name.as_str()) {
+            return Err(UpdateFileError::FileAlreadyExists);
+        }
+    }
+    // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
+    if let Err(e) = file_repository::update_file(&file.id, &file.folder_id, &file.name, &con) {
+        con.close().unwrap();
+        eprintln!(
+            "Failed to update file record in database. Nested exception is {:?}",
+            e
+        );
+        return Err(UpdateFileError::DbError);
+    }
+    let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
+    // now that we've updated the file in the database, it's time to update the file system
+    let old_path = format!(
+        "{}/{}",
+        FILE_DIR,
+        file_repository::get_file_path(file.id, &con).unwrap()
+    );
+    // we're done with the database for now
+    con.close().unwrap();
+    let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
+    if let Err(e) = fs::rename(old_path, new_path.to_string()) {
+        eprintln!(
+            "Failed to move file in the file system. Nested exception is {:?}",
+            e
+        );
+        return Err(UpdateFileError::FileSystemError);
+    }
+    Ok(FileMetadataResponse {
+        id: file.id,
+        name: file.name,
+    })
 }
 
 // ==== private functions ==== \\
