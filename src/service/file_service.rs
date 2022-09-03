@@ -1,8 +1,6 @@
 use regex::Regex;
-use rocket::http::ext::IntoCollection;
 use std::fs;
 use std::fs::File;
-use std::ops::Deref;
 use std::path::Path;
 
 use crate::repository;
@@ -17,7 +15,7 @@ use crate::model::error::file_errors::{
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
-use crate::model::response::file_responses::{FileMetadataResponse, UpdateFileResponse};
+use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::service::folder_service;
 
@@ -145,14 +143,9 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
     // first check if the file exists
     let con = repository::open_connection();
     if file_repository::get_by_id(file.id, &con).is_err() {
+        con.close().unwrap();
         return Err(UpdateFileError::NotFound);
     }
-    // now that we've updated the file in the database, it's time to update the file system
-    let old_path = format!(
-        "{}/{}",
-        FILE_DIR,
-        file_repository::get_file_path(file.id, &con).unwrap()
-    );
     // now check if the folder exists
     let parent_folder = folder_service::get_folder(file.folder_id)
         .or_else(|_| Err(UpdateFileError::FolderNotFound))?;
@@ -164,27 +157,28 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
         }
     }
     // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
-    file_repository::update_file(&file.id, &file.folder_id, &file.name, &con)
-        .and_then(|_| {
-            Ok(FileMetadataResponse {
-                id: file.id,
-                name: String::from(&file.name),
-            })
-        })
-        .or_else(|e| {
-            eprintln!(
-                "Failed to update file record in database. Nested exception is {:?}",
-                e
-            );
-            return Err(UpdateFileError::DbError);
-        })?;
+    if let Err(e) = file_repository::update_file(&file.id, &file.folder_id, &file.name, &con) {
+        con.close().unwrap();
+        eprintln!(
+            "Failed to update file record in database. Nested exception is {:?}",
+            e
+        );
+        return Err(UpdateFileError::DbError);
+    }
     let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
+    // now that we've updated the file in the database, it's time to update the file system
+    let old_path = format!(
+        "{}/{}",
+        FILE_DIR,
+        file_repository::get_file_path(file.id, &con).unwrap()
+    );
+    // we're done with the database for now
+    con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
-    let rename_result = fs::rename(old_path, new_path.to_string());
-    if rename_result.is_err() {
+    if let Err(e) = fs::rename(old_path, new_path.to_string()) {
         eprintln!(
             "Failed to move file in the file system. Nested exception is {:?}",
-            rename_result.unwrap_err()
+            e
         );
         return Err(UpdateFileError::FileSystemError);
     }

@@ -20,16 +20,16 @@
 								{
 									"key": "file",
 									"type": "file",
-									"src": "/home/ploiu/postman_testing/rocket-large.gif"
+									"src": "/home/ploiu/postman_testing/rust.png"
 								},
 								{
 									"key": "extension",
-									"value": "gif",
+									"value": "png",
 									"type": "text"
 								},
 								{
 									"key": "folder_id",
-									"value": "2",
+									"value": "null",
 									"type": "text"
 								}
 							]
@@ -202,7 +202,7 @@
 							"variable": [
 								{
 									"key": "id",
-									"value": "5"
+									"value": "3"
 								}
 							]
 						}
@@ -346,7 +346,7 @@
 							"variable": [
 								{
 									"key": "id",
-									"value": "4"
+									"value": "3"
 								}
 							]
 						}
@@ -487,7 +487,7 @@
 							"variable": [
 								{
 									"key": "id",
-									"value": "7"
+									"value": "1"
 								}
 							]
 						}
@@ -579,6 +579,32 @@
 							"body": "The file with the passed id could not be found."
 						}
 					]
+				},
+				{
+					"name": "Update File",
+					"request": {
+						"method": "PUT",
+						"header": [],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n    \"id\": 1,\n    \"name\": \"test_moved.jpg\",\n    \"folderId\": 1\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		},
@@ -594,12 +620,10 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "https://localhost:8000/api/version",
-							"protocol": "https",
+							"raw": "{{baseUrl}}/api/version",
 							"host": [
-								"localhost"
+								"{{baseUrl}}"
 							],
-							"port": "8000",
 							"path": [
 								"api",
 								"version"
@@ -789,7 +813,7 @@
 							"variable": [
 								{
 									"key": "id",
-									"value": "1"
+									"value": "6"
 								}
 							]
 						}
@@ -920,7 +944,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"parentId\": 2,\n    \"name\": \"bottom-2\"\n}",
+							"raw": "{\n    \"parentId\": null,\n    \"name\": \"random_junk\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
@@ -1525,10 +1549,6 @@
 					]
 				}
 			]
-		},
-		{
-			"name": "tests",
-			"item": []
 		}
 	],
 	"auth": {
