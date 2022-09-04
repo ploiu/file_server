@@ -2054,8 +2054,7 @@
 								"exec": [
 									"const expected = {",
 									"    id: 1,",
-									"    name: 'test_upload.txt',",
-									"    hash: '98ea6e4f216f2fb4b69fff9b3a44842c38686ca685f3f55dc48c5d3fb1107be4'",
+									"    name: 'test_upload.txt'",
 									"}",
 									"",
 									"pm.test('should return 200 OK', () => {",
@@ -2064,7 +2063,7 @@
 									"",
 									"pm.test('should return metadata', () => {",
 									"    const res = pm.response.json()",
-									"    pm.expect(Object.keys(res).length).to.eq(3)",
+									"    pm.expect(Object.keys(res).length).to.eq(2)",
 									"    pm.expect(res.id).to.eq(expected.id)",
 									"    pm.expect(res.name).to.eq(expected.name)",
 									"    pm.expect(res.hash).to.eq(expected.hash)",
