@@ -1,4 +1,4 @@
-use rusqlite::Connection;
+use rusqlite::{params, Connection};
 
 use crate::model::repository::FileRecord;
 
@@ -6,7 +6,7 @@ pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<u32, rusq
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
-    let res = match pst.insert((file.name.as_str(), file.hash.as_str())) {
+    let res = match pst.insert(params![file.name]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
@@ -25,7 +25,6 @@ pub fn get_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Erro
         Ok(FileRecord {
             id: row.get(0)?,
             name: row.get(1)?,
-            hash: row.get(2)?,
         })
     })?)
 }

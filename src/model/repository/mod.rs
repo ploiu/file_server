@@ -7,8 +7,6 @@ pub struct FileRecord {
     pub id: Option<u32>,
     /// the name of the file to save in the repository and disk
     pub name: String,
-    /// sha256, just to check for uniqueness
-    pub hash: String,
 }
 
 #[derive(Debug)]
@@ -32,11 +30,7 @@ pub struct FolderFiles {
 }
 
 impl FileRecord {
-    pub fn from(name: String, hash: String) -> FileRecord {
-        FileRecord {
-            id: None,
-            name,
-            hash,
-        }
+    pub fn from(name: String) -> FileRecord {
+        FileRecord { id: None, name }
     }
 }

@@ -129,7 +129,6 @@ pub fn get_files_for_folder(
         Ok(repository::FileRecord {
             id: Some(row.get(0)?),
             name: row.get(1)?,
-            hash: row.get(2)?,
         })
     };
     let mapped = if id.is_some() {
