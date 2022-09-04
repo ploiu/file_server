@@ -1,2 +1,2 @@
-insert into FileRecords(name, hash)
-values (?1, ?2)
+insert into FileRecords(name)
+values (?1)

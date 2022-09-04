@@ -7,7 +7,6 @@ use crate::repository;
 use crate::repository::{file_repository, folder_repository};
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
-use sha2::{Digest, Sha256};
 
 use crate::model::error::file_errors::{
     DeleteFileError, GetFileError, SaveFileError, UpdateFileError,
@@ -110,7 +109,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     con.close().unwrap();
     // helps avoid nested matches
     delete_result?;
-    return std::fs::remove_file(&file_path).or_else(|e| {
+    return fs::remove_file(&file_path).or_else(|e| {
         eprintln!(
             "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
             file_path, e
@@ -156,6 +155,12 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
+    // we have to create this before we update the file
+    let old_path = format!(
+        "{}/{}",
+        FILE_DIR,
+        file_repository::get_file_path(file.id, &con).unwrap()
+    );
     // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
     if let Err(e) = file_repository::update_file(&file.id, &file.folder_id, &file.name, &con) {
         con.close().unwrap();
@@ -165,13 +170,8 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
         );
         return Err(UpdateFileError::DbError);
     }
-    let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
     // now that we've updated the file in the database, it's time to update the file system
-    let old_path = format!(
-        "{}/{}",
-        FILE_DIR,
-        file_repository::get_file_path(file.id, &con).unwrap()
-    );
+    let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
     // we're done with the database for now
     con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
@@ -202,9 +202,7 @@ async fn persist_save_file_to_folder(
     );
     return match file_input.file.persist_to(&file_name).await {
         Ok(_) => {
-            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
-            let mut saved_file = File::open(&file_name).unwrap();
-            let id = save_file_record(&file_name, &mut saved_file)?;
+            let id = save_file_record(&file_name)?;
             // file and folder are both in repository, now link them
             if link_folder_to_file(id, folder.id).is_err() {
                 return Err(SaveFileError::FailWriteDb);
@@ -227,11 +225,7 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
         file_input.extension
     );
     return match file_input.file.persist_to(&file_name).await {
-        Ok(_) => {
-            // since this is guaranteed to happen after the file is successfully saved, we can unwrap here
-            let mut saved_file = File::open(&file_name).unwrap();
-            Ok(save_file_record(&file_name, &mut saved_file)?)
-        }
+        Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {
             eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(SaveFileError::FailWriteDisk)
@@ -239,16 +233,11 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     };
 }
 
-fn save_file_record(name: &String, mut file: &mut File) -> Result<u32, SaveFileError> {
-    // hash the file TODO remove - we won't check uniqueness by file hash anymore
-    let mut hasher = Sha256::new();
-    std::io::copy(&mut file, &mut hasher).unwrap();
-    let hash = hasher.finalize();
-    let hash = format!("{:x}", hash);
+fn save_file_record(name: &String) -> Result<u32, SaveFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(&name, "");
-    let file_record = FileRecord::from(formatted_name.to_string(), hash);
+    let file_record = FileRecord::from(formatted_name.to_string());
     let con = repository::open_connection();
     let res = file_repository::save_file_record(&file_record, &con)
         .or_else(|_| Err(SaveFileError::FailWriteDb));
