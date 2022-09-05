@@ -1,10 +1,11 @@
 #[derive(PartialEq)]
-pub enum SaveFileError {
+pub enum CreateFileError {
     #[allow(dead_code)] // this is actually used. Thanks rust linter!
     MissingInfo(String),
     FailWriteDisk,
     FailWriteDb,
     ParentFolderNotFound,
+    AlreadyExists,
 }
 
 #[derive(PartialEq)]

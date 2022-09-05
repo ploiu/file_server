@@ -2,7 +2,7 @@ use rusqlite::{params, Connection};
 
 use crate::model::repository::FileRecord;
 
-pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
+pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
@@ -16,7 +16,7 @@ pub fn save_file_record(file: &FileRecord, con: &Connection) -> Result<u32, rusq
     res
 }
 
-pub fn get_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
+pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
@@ -41,13 +41,13 @@ pub fn get_file_path(id: u32, con: &Connection) -> Result<String, rusqlite::Erro
 }
 
 /// removes the file with the passed id from the database
-pub fn delete_by_id(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
+pub fn delete_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/delete_file_by_id.sql"))
         .unwrap();
 
     // we need to be able to delete the file off the disk, so we have to return the FileRecord too
-    let record = get_by_id(id, &con)?;
+    let record = get_file(id, &con)?;
 
     if let Err(e) = pst.execute([id]) {
         eprintln!("Failed to delete file by id. Nested exception is {:?}", e);
@@ -85,4 +85,65 @@ pub fn update_file(
         add_link_pst.execute([file_id, parent_id])?;
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::repository;
+    use crate::repository::DB_LOCATION;
+    use crate::service::file_service::FILE_DIR;
+    use std::fs;
+
+    fn before_each() {
+        fs::remove_dir_all(FILE_DIR);
+        fs::remove_file(DB_LOCATION);
+        repository::initialize_db().unwrap();
+    }
+
+    #[test]
+    fn test_create_get_file() {
+        before_each();
+        let con = repository::open_connection();
+        let record = FileRecord {
+            id: None,
+            name: String::from("test.txt"),
+        };
+        let id = create_file(&record, &con).unwrap();
+        let file = get_file(id, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(file.id.unwrap(), id);
+        assert_eq!(file.name, record.name);
+    }
+
+    #[test]
+    fn test_delete_get_file() {
+        before_each();
+        let con = repository::open_connection();
+        let record = FileRecord {
+            id: None,
+            name: String::from("test.txt"),
+        };
+        let id = create_file(&record, &con).unwrap();
+        delete_file(id, &con).unwrap();
+        let res = get_file(id, &con).unwrap_err();
+        con.close().unwrap();
+        assert_eq!(res, rusqlite::Error::QueryReturnedNoRows);
+    }
+
+    #[test]
+    fn test_update_get_file() {
+        before_each();
+        let con = repository::open_connection();
+        let record = FileRecord {
+            id: None,
+            name: String::from("test.txt"),
+        };
+        let id = create_file(&record, &con).unwrap();
+        update_file(&id, &None, &String::from("updated.txt"), &con).unwrap();
+        let file = get_file(id, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(file.id.unwrap(), id);
+        assert_eq!(file.name, "updated.txt")
+    }
 }

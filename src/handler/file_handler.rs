@@ -3,7 +3,7 @@ use rocket::serde::json::Json;
 
 use crate::guard::Auth;
 use crate::model::error::file_errors::{
-    DeleteFileError, GetFileError, SaveFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
@@ -29,18 +29,21 @@ pub async fn upload_file(
     return match save_file(&mut file_input.into_inner()).await {
         Ok(f) => CreateFileResponse::Success(Json::from(f)),
         Err(e) => match e {
-            SaveFileError::MissingInfo(message) => {
+            CreateFileError::MissingInfo(message) => {
                 CreateFileResponse::BadRequest(BasicMessage::new(message.as_str()))
             }
-            SaveFileError::FailWriteDisk => {
+            CreateFileError::FailWriteDisk => {
                 CreateFileResponse::Failure(BasicMessage::new("Failed to save file to disk!"))
             }
-            SaveFileError::FailWriteDb => CreateFileResponse::Failure(BasicMessage::new(
+            CreateFileError::FailWriteDb => CreateFileResponse::Failure(BasicMessage::new(
                 "Failed to save file info to database!",
             )),
-            SaveFileError::ParentFolderNotFound => CreateFileResponse::NotFound(BasicMessage::new(
-                "No parent folder with the passed id was found",
-            )),
+            CreateFileError::ParentFolderNotFound => CreateFileResponse::NotFound(
+                BasicMessage::new("No parent folder with the passed id was found"),
+            ),
+            CreateFileError::AlreadyExists => {
+                CreateFileResponse::AlreadyExists(BasicMessage::new("That file already exists"))
+            }
         },
     };
 }

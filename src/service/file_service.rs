@@ -9,7 +9,7 @@ use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
 use crate::model::error::file_errors::{
-    DeleteFileError, GetFileError, SaveFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
@@ -33,8 +33,9 @@ pub async fn check_root_dir(dir: &str) {
 /// saves a file to the disk and database
 pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
-) -> Result<FileMetadataResponse, SaveFileError> {
+) -> Result<FileMetadataResponse, CreateFileError> {
     let file_name = String::from(file_input.file.name().unwrap());
+    check_file_in_dir(file_input, &file_name)?;
     check_root_dir(FILE_DIR).await;
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
@@ -46,9 +47,9 @@ pub async fn save_file(
                 e
             );
             return if e == GetFolderError::NotFound {
-                Err(SaveFileError::ParentFolderNotFound)
+                Err(CreateFileError::ParentFolderNotFound)
             } else {
-                Err(SaveFileError::FailWriteDb)
+                Err(CreateFileError::FailWriteDb)
             };
         })?;
         // folder exists, now try to create the file
@@ -71,7 +72,7 @@ pub async fn save_file(
 /// retrieves the file from the database with the passed id
 pub fn get_file_metadata(id: u32) -> Result<FileRecord, GetFileError> {
     let con = repository::open_connection();
-    let result = file_repository::get_by_id(id, &con).or_else(|e| {
+    let result = file_repository::get_file(id, &con).or_else(|e| {
         eprintln!(
             "Failed to pull file info from database. Nested exception is {:?}",
             e
@@ -123,7 +124,7 @@ pub fn delete_file_by_id_with_connection(
     id: u32,
     con: &Connection,
 ) -> Result<FileRecord, DeleteFileError> {
-    let result = match file_repository::delete_by_id(id, &con) {
+    let result = match file_repository::delete_file(id, &con) {
         Ok(record) => Ok(record),
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
         Err(e) => {
@@ -137,11 +138,10 @@ pub fn delete_file_by_id_with_connection(
     return result;
 }
 
-// TODO get old file name and get old file parent folder path
 pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
     // first check if the file exists
     let con = repository::open_connection();
-    if file_repository::get_by_id(file.id, &con).is_err() {
+    if file_repository::get_file(file.id, &con).is_err() {
         con.close().unwrap();
         return Err(UpdateFileError::NotFound);
     }
@@ -195,7 +195,7 @@ async fn persist_save_file_to_folder(
     file_input: &mut CreateFileRequest<'_>,
     folder: &FolderResponse,
     file_name: String,
-) -> Result<u32, SaveFileError> {
+) -> Result<u32, CreateFileError> {
     let file_name = format!(
         "{}/{}/{}.{}",
         FILE_DIR, folder.path, file_name, file_input.extension
@@ -205,19 +205,19 @@ async fn persist_save_file_to_folder(
             let id = save_file_record(&file_name)?;
             // file and folder are both in repository, now link them
             if link_folder_to_file(id, folder.id).is_err() {
-                return Err(SaveFileError::FailWriteDb);
+                return Err(CreateFileError::FailWriteDb);
             }
             Ok(id)
         }
         Err(e) => {
             eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
-            Err(SaveFileError::FailWriteDisk)
+            Err(CreateFileError::FailWriteDisk)
         }
     };
 }
 
 /// persists the passed file to the disk and the database
-async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, SaveFileError> {
+async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, CreateFileError> {
     let file_name = format!(
         "{}/{}.{}",
         &FILE_DIR,
@@ -228,19 +228,19 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
         Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {
             eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
-            Err(SaveFileError::FailWriteDisk)
+            Err(CreateFileError::FailWriteDisk)
         }
     };
 }
 
-fn save_file_record(name: &String) -> Result<u32, SaveFileError> {
+fn save_file_record(name: &String) -> Result<u32, CreateFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(&name, "");
     let file_record = FileRecord::from(formatted_name.to_string());
     let con = repository::open_connection();
-    let res = file_repository::save_file_record(&file_record, &con)
-        .or_else(|_| Err(SaveFileError::FailWriteDb));
+    let res = file_repository::create_file(&file_record, &con)
+        .or_else(|_| Err(CreateFileError::FailWriteDb));
     con.close().unwrap();
     res
 }
@@ -269,4 +269,26 @@ fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderErr
         return Err(LinkFolderError::DbError);
     }
     return Ok(());
+}
+
+/// checks the db to see if we have a record of the passed file
+fn check_file_in_dir(
+    file_input: &mut CreateFileRequest,
+    file_name: &String,
+) -> Result<(), CreateFileError> {
+    let full_file_name = String::from(format!("{}.{}", &file_name, &file_input.extension));
+    // first check that the db does not have a record of the file in its directory
+    let con = repository::open_connection();
+    let child_files = folder_repository::get_files_for_folder(file_input.folder_id, &con);
+    con.close().unwrap();
+    if child_files.is_err() {
+        return Err(CreateFileError::FailWriteDb);
+    }
+    // compare the names of all the child files
+    for child in child_files.unwrap().iter() {
+        if child.name.to_lowercase() == full_file_name.to_lowercase() {
+            return Err(CreateFileError::AlreadyExists);
+        }
+    }
+    Ok(())
 }

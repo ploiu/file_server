@@ -58,6 +58,8 @@ pub enum CreateFileResponse {
     Failure(Json<BasicMessage>),
     #[response(status = 404, content_type = "json")]
     NotFound(Json<BasicMessage>),
+    #[response(status = 400, content_type = "json")]
+    AlreadyExists(Json<BasicMessage>),
 }
 
 #[derive(Responder)]
