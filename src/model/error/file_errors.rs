@@ -37,3 +37,8 @@ pub enum UpdateFileError {
     /// file already exists in the target directory
     FileAlreadyExists,
 }
+
+#[derive(PartialEq)]
+pub enum SearchFileError {
+    DbError,
+}

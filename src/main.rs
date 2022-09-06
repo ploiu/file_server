@@ -6,7 +6,7 @@ use rocket::{Build, Rocket};
 use crate::repository::initialize_db;
 use handler::{
     api_handler::{api_version, set_password},
-    file_handler::{delete_file, download_file, get_file, update_file, upload_file},
+    file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
     folder_handler::{create_folder, delete_folder, get_folder, update_folder},
 };
 
@@ -28,7 +28,8 @@ fn rocket() -> Rocket<Build> {
                 get_file,
                 delete_file,
                 download_file,
-                update_file
+                update_file,
+                search_files
             ],
         )
         .mount(
