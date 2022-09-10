@@ -2744,7 +2744,7 @@
 									"})",
 									"",
 									"pm.test('should show correct version', () => {",
-									"    pm.expect(pm.response.json().version).to.eq(0.1)",
+									"    pm.expect(pm.response.json().version).to.eq('1.0.0')",
 									"})"
 								],
 								"type": "text/javascript"

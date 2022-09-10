@@ -6,12 +6,12 @@ use crate::model::response::api_responses::SetPassWordResponse;
 use crate::model::response::BasicMessage;
 use crate::service::api_service;
 
-static API_VERSION_NUMBER: f64 = 0.1;
+static API_VERSION_NUMBER: &str = "1.0.0";
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct ApiVersion {
-    version: f64,
+    version: &'static str,
 }
 
 impl ApiVersion {
