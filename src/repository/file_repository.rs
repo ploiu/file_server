@@ -87,6 +87,29 @@ pub fn update_file(
     Ok(())
 }
 
+/// performs a fuzzy search using the passed criteria.
+/// The fuzzy search mashes all the fields together and performs a sql `LIKE` clause on the input
+pub fn search_files(
+    criteria: String,
+    con: &Connection,
+) -> Result<Vec<FileRecord>, rusqlite::Error> {
+    let criteria = format!("%{}%", criteria);
+    let mut pst = con
+        .prepare(include_str!("../assets/queries/file/search_files.sql"))
+        .unwrap();
+    let mut results: Vec<FileRecord> = Vec::new();
+    let rows = pst.query_map([&criteria], |row| {
+        Ok(FileRecord {
+            id: row.get(0)?,
+            name: row.get(1)?,
+        })
+    })?;
+    for file in rows.into_iter() {
+        results.push(file?);
+    }
+    Ok(results)
+}
+
 #[cfg(test)]
 mod test {
     use super::*;

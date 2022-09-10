@@ -87,3 +87,15 @@ pub enum UpdateFileResponse {
     #[response(status = 500, content_type = "json")]
     GenericError(Json<BasicMessage>),
 }
+
+#[derive(Responder)]
+pub enum SearchFileResponse {
+    #[response(status = 200)]
+    Success(Json<Vec<FileMetadataResponse>>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 400, content_type = "json")]
+    BadRequest(Json<BasicMessage>),
+    #[response(status = 500, content_type = "json")]
+    GenericError(Json<BasicMessage>),
+}

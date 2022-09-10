@@ -9,7 +9,7 @@ use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
@@ -186,6 +186,29 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
         id: file.id,
         name: file.name,
     })
+}
+
+pub fn search_files(criteria: String) -> Result<Vec<FileMetadataResponse>, SearchFileError> {
+    let con = repository::open_connection();
+    let files = match file_repository::search_files(criteria, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            con.close().unwrap();
+            eprintln!(
+                "Failed to retrieve file records from the database. Nested exception is {:?}",
+                e
+            );
+            return Err(SearchFileError::DbError);
+        }
+    };
+    let mut converted_files: Vec<FileMetadataResponse> = Vec::new();
+    for file in files.iter() {
+        converted_files.push(FileMetadataResponse {
+            id: file.id.unwrap(),
+            name: String::from(&file.name),
+        })
+    }
+    Ok(converted_files)
 }
 
 // ==== private functions ==== \\

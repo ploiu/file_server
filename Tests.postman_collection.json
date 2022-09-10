@@ -2551,6 +2551,181 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Should return 400 when attempting to upload a filethat already exists",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 400', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('should tell the user what went wrong', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('That file already exists')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [],
+						"body": {
+							"mode": "formdata",
+							"formdata": [
+								{
+									"key": "file",
+									"type": "file",
+									"src": "moved_file.txt"
+								},
+								{
+									"key": "extension",
+									"value": "txt",
+									"type": "text"
+								}
+							]
+						},
+						"url": {
+							"raw": "{{baseUrl}}/files",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should Return Error When Searched Without Query",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 400', () => {",
+									"    pm.expect(pm.response.status).to.eq('Bad Request')",
+									"})",
+									"",
+									"pm.test('should tell user search string is required', () => {",
+									"    pm.expect(pm.response.json().message).to.eq('Search string is required')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files?search",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": null
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should Return Empty List If Search Returns No Results",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should return 200', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return empty array', () => {",
+									"    const res = pm.response.json();",
+									"    pm.expect(Array.isArray(res)).to.be.true",
+									"    pm.expect(res.length).to.eq(0)",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files?search=does_not_exist",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "does_not_exist"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Should Return Results That Match On Name",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"exec": [
+									"pm.test('should be 200', () => {",
+									"    pm.expect(pm.response.status).to.eq('OK')",
+									"})",
+									"",
+									"pm.test('should return 1 result', () => {",
+									"    const res = pm.response.json();",
+									"    const first = res[0];",
+									"    pm.expect(res.length).to.eq(1);",
+									"    pm.expect(first.id).to.eq(1);",
+									"    pm.expect(first.name).to.eq('moved_file.txt')",
+									"})"
+								],
+								"type": "text/javascript"
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files?search=txt",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": "txt"
+								}
+							]
+						}
+					},
+					"response": []
 				}
 			]
 		},
