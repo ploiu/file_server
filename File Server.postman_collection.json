@@ -20,16 +20,16 @@
 								{
 									"key": "file",
 									"type": "file",
-									"src": "/home/ploiu/postman_testing/rust.png"
+									"src": "/home/ploiu/postman_testing/rocket.mp4"
 								},
 								{
 									"key": "extension",
-									"value": "png",
+									"value": "mp4",
 									"type": "text"
 								},
 								{
 									"key": "folder_id",
-									"value": "null",
+									"value": "2",
 									"type": "text"
 								}
 							]
@@ -605,6 +605,201 @@
 						}
 					},
 					"response": []
+				},
+				{
+					"name": "Search",
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/files?search=",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"files"
+							],
+							"query": [
+								{
+									"key": "search",
+									"value": ""
+								}
+							]
+						}
+					},
+					"response": [
+						{
+							"name": "Search",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/files?search=move",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"files"
+									],
+									"query": [
+										{
+											"key": "search",
+											"value": "move"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "content-length",
+									"value": "34"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 10 Sep 2022 13:40:57 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "[\n    {\n        \"id\": 1,\n        \"name\": \"moved_file.txt\"\n    }\n]"
+						},
+						{
+							"name": "No Results",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/files?search=whatever",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"files"
+									],
+									"query": [
+										{
+											"key": "search",
+											"value": "whatever"
+										}
+									]
+								}
+							},
+							"status": "OK",
+							"code": 200,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "content-length",
+									"value": "2"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 10 Sep 2022 13:41:10 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "[]"
+						},
+						{
+							"name": "Search",
+							"originalRequest": {
+								"method": "GET",
+								"header": [],
+								"url": {
+									"raw": "{{baseUrl}}/files?search=",
+									"host": [
+										"{{baseUrl}}"
+									],
+									"path": [
+										"files"
+									],
+									"query": [
+										{
+											"key": "search",
+											"value": ""
+										}
+									]
+								}
+							},
+							"status": "Bad Request",
+							"code": 400,
+							"_postman_previewlanguage": "json",
+							"header": [
+								{
+									"key": "content-type",
+									"value": "application/json"
+								},
+								{
+									"key": "server",
+									"value": "Rocket"
+								},
+								{
+									"key": "x-frame-options",
+									"value": "SAMEORIGIN"
+								},
+								{
+									"key": "permissions-policy",
+									"value": "interest-cohort=()"
+								},
+								{
+									"key": "x-content-type-options",
+									"value": "nosniff"
+								},
+								{
+									"key": "content-length",
+									"value": "39"
+								},
+								{
+									"key": "date",
+									"value": "Sat, 10 Sep 2022 13:41:19 GMT"
+								}
+							],
+							"cookie": [],
+							"body": "{\n    \"message\": \"Search string is required\"\n}"
+						}
+					]
 				}
 			]
 		},
@@ -944,7 +1139,7 @@
 						"header": [],
 						"body": {
 							"mode": "raw",
-							"raw": "{\n    \"parentId\": null,\n    \"name\": \"random_junk\"\n}",
+							"raw": "{\n    \"parentId\": 1,\n    \"name\": \"stuff_2\"\n}",
 							"options": {
 								"raw": {
 									"language": "json"
