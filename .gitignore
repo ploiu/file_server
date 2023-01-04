@@ -4,3 +4,4 @@
 *.iml
 *.sqlite
 *.pem
+cert_options.conf
