@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::model::error::guard_errors::AuthError;
 use crate::model::guard::auth::ValidateResult;
-use base64::decode;
+use base64::{Engine as _, engine::general_purpose};
 use rocket::async_trait;
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome};
@@ -24,7 +24,7 @@ impl Auth {
     pub fn from(header: &str) -> Result<Auth, &str> {
         // remove the "Basic " from the header, leaving only the base64 part
         let stripped_header = header.to_string().replace("Basic ", "");
-        match decode(stripped_header.as_str()) {
+        match general_purpose::STANDARD.decode(stripped_header.as_str()) {
             Ok(value) => {
                 let combined = String::from_utf8(value).unwrap();
                 let split = combined.split(":").collect::<Vec<&str>>();

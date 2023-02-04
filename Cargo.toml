@@ -7,7 +7,7 @@ edition = "2021"
 
 [dependencies]
 rocket = { version = "0.5.0-rc.2", features = ["json", "tls"]}
-base64 = "0.20.0-alpha.1"
+base64 = "0.21.0"
 rusqlite = { version = "0.28.0", features = ["bundled"] }
 sha2 = "0.10.2"
 regex = "1.6.0"

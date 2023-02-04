@@ -132,9 +132,9 @@ checksum = "904dfeac50f3cdaba28fc6f57fdcddb75f49ed61346676a78c4ffe55877802fd"
 
 [[package]]
 name = "base64"
-version = "0.20.0-alpha.1"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "149ea5dc24cb11513350770afebba32b68e3d2e356f9221351a2a1ee89112a82"
+checksum = "a4a4ddaa51a5bc52a6948f74c06d20aaaddb71924eab79b8c97a8c556e942d6a"
 
 [[package]]
 name = "binascii"
@@ -334,7 +334,7 @@ dependencies = [
 name = "file_server"
 version = "0.1.0"
 dependencies = [
- "base64 0.20.0-alpha.1",
+ "base64 0.21.0",
  "regex",
  "rocket",
  "rusqlite",
