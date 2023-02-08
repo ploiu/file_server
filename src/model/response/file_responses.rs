@@ -1,12 +1,12 @@
 use crate::model::repository::FileRecord;
 use crate::model::response::BasicMessage;
 use rocket::serde::json::Json;
-use rocket::serde::Serialize;
+use rocket::serde::{Deserialize, Serialize};
 use std::fs::File;
 
 type NoContent = ();
 
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub struct FileMetadataResponse {
     pub id: u32,

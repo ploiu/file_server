@@ -12,13 +12,13 @@ use crate::service::folder_service;
 use rocket::serde::json::Json;
 
 #[get("/<id>")]
-pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
+pub async fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => {/*no op*/}
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match folder_service::get_folder(id) {
+    return match folder_service::get_folder(id).await {
         Ok(folder) => GetFolderResponse::Success(Json::from(folder)),
         Err(message) if message == GetFolderError::NotFound => GetFolderResponse::FolderNotFound(
             BasicMessage::new("The folder with the passed id could not be found."),

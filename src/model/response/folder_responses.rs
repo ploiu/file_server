@@ -1,12 +1,12 @@
-use rocket::serde::{json::Json, Serialize};
+use rocket::serde::{json::Json, Deserialize, Serialize};
 
 use crate::model::repository::{FileRecord, Folder};
-use crate::model::response::BasicMessage;
 use crate::model::response::file_responses::FileMetadataResponse;
+use crate::model::response::BasicMessage;
 
 type NoContent = ();
 
-#[derive(Serialize)]
+#[derive(Serialize, Debug, Deserialize, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub struct FolderResponse {
     pub id: u32,

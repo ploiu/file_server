@@ -15,7 +15,8 @@ use rusqlite::Connection;
 use std::fs;
 use std::path::Path;
 
-pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+    check_root_dir(FILE_DIR).await;
     let folder = get_folder_by_id(id)?;
     let mut folder = FolderResponse {
         // should always have an id when coming from the database

@@ -41,17 +41,19 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     return if let Some(parent_id) = file_input.folder_id {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = folder_service::get_folder(Some(parent_id)).or_else(|e| {
-            eprintln!(
-                "Save file - failed to retrieve parent folder. Nested exception is {:?}",
-                e
-            );
-            return if e == GetFolderError::NotFound {
-                Err(CreateFileError::ParentFolderNotFound)
-            } else {
-                Err(CreateFileError::FailWriteDb)
-            };
-        })?;
+        let folder = folder_service::get_folder(Some(parent_id))
+            .await
+            .or_else(|e| {
+                eprintln!(
+                    "Save file - failed to retrieve parent folder. Nested exception is {:?}",
+                    e
+                );
+                return if e == GetFolderError::NotFound {
+                    Err(CreateFileError::ParentFolderNotFound)
+                } else {
+                    Err(CreateFileError::FailWriteDb)
+                };
+            })?;
         // folder exists, now try to create the file
         let file_id =
             persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
@@ -138,7 +140,7 @@ pub fn delete_file_by_id_with_connection(
     return result;
 }
 
-pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
+pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
     // first check if the file exists
     let con = repository::open_connection();
     if file_repository::get_file(file.id, &con).is_err() {
@@ -147,6 +149,7 @@ pub fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, Upda
     }
     // now check if the folder exists
     let parent_folder = folder_service::get_folder(file.folder_id)
+        .await
         .or_else(|_| Err(UpdateFileError::FolderNotFound))?;
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("{}$", file.name).as_str()).unwrap();
