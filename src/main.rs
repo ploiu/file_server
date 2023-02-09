@@ -96,7 +96,9 @@ mod api_tests {
 mod folder_tests {
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
+    use rocket::serde::json::serde_json as serde;
 
+    use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::initialize_db;
@@ -104,9 +106,13 @@ mod folder_tests {
 
     use super::rocket;
 
+    fn client() -> Client {
+        Client::tracked(rocket()).unwrap()
+    }
+
     fn set_password() {
         refresh_db();
-        let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+        let client = client();
         let uri = uri!("/api/password");
         client
             .post(uri)
@@ -118,7 +124,7 @@ mod folder_tests {
     fn get_root_folder() {
         set_password();
         remove_files();
-        let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+        let client = client();
         let uri = uri!("/folders/null");
         let res = client
             .get(uri)
@@ -141,7 +147,7 @@ mod folder_tests {
     fn get_non_existent_folder() {
         set_password();
         remove_files();
-        let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+        let client = client();
         let uri = uri!("/folders/1234");
         let res = client
             .get(uri)
@@ -159,7 +165,7 @@ mod folder_tests {
     fn get_folder_without_creds() {
         initialize_db().unwrap();
         remove_files();
-        let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+        let client = client();
         let res = client.get(uri!("/folders/1234")).dispatch();
         // without a password set
         assert_eq!(res.status(), Status::Unauthorized);
@@ -171,47 +177,261 @@ mod folder_tests {
 
     #[test]
     fn create_folder_without_creds() {
-        assert!(false);
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.post(uri!("/folders")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.post(uri!("/folders")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn create_folder_non_existent() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let req_body = CreateFolderRequest {
+            name: String::from("whatever"),
+            parent_id: None,
+        };
+        let res = client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(serde::to_string(&req_body).unwrap())
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
     }
 
     #[test]
     fn create_folder_already_exists() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let req_body = CreateFolderRequest {
+            name: String::from("whatever"),
+            parent_id: None,
+        };
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(serde::to_string(&req_body).unwrap())
+            .dispatch();
+        let res = client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(serde::to_string(&req_body).unwrap())
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from("That folder already exists.")
+            }
+        );
     }
 
     #[test]
     fn create_folder_parent_not_found() {
-        assert!(false);
+        set_password();
+        remove_files();
+        let client = client();
+        let req_body = CreateFolderRequest {
+            name: String::from("whatever"),
+            parent_id: Some(1),
+        };
+        let res = client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(serde::to_string(&req_body).unwrap())
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        let expected = BasicMessage {
+            message: String::from("No folder with the passed parentId was found."),
+        };
+        assert_eq!(body, expected);
     }
 
     #[test]
     fn update_folder_without_creds() {
-        assert!(false)
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.put(uri!("/folders")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.put(uri!("/folders")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn update_folder() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let create_request = serde::to_string(&CreateFolderRequest {
+            name: String::from("test"),
+            parent_id: None,
+        })
+        .unwrap();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(create_request)
+            .dispatch();
+        // folder should have id of 1 since it's the first one
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: None,
+            name: String::from("testRenamed"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        let body: FolderResponse = res.into_json().unwrap();
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: String::from("testRenamed"),
+            folders: Vec::new(),
+            files: Vec::new(),
+        };
+        assert_eq!(body, expected);
     }
 
     #[test]
     fn update_folder_not_found() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let create_request = serde::to_string(&CreateFolderRequest {
+            name: String::from("test"),
+            parent_id: None,
+        })
+        .unwrap();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(create_request)
+            .dispatch();
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: None,
+            name: String::from("testRenamed"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from("The folder with the passed id could not be found.")
+            }
+        );
     }
 
     #[test]
     fn update_folder_parent_not_found() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let create_request = serde::to_string(&CreateFolderRequest {
+            name: String::from("test"),
+            parent_id: None,
+        })
+        .unwrap();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(create_request)
+            .dispatch();
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(3),
+            name: String::from("testRenamed"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from("The parent folder with the passed id could not be found.")
+            }
+        );
     }
 
     #[test]
     fn update_folder_already_exists() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test"),
+                    parent_id: None,
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test2"),
+                    parent_id: None,
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        // rename to the second created folder
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: None,
+            name: String::from("test2"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        // TODO fails - probably because this is all in the top level folder
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from(
+                    "Cannot update folder, because another one with the new path already exists."
+                )
+            }
+        );
     }
 
     #[test]

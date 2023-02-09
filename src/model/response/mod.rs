@@ -8,7 +8,7 @@ use rocket::serde::{Deserialize, Serialize};
 #[derive(Responder, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub struct BasicMessage {
-    message: String,
+    pub(crate) message: String,
 }
 
 impl BasicMessage {

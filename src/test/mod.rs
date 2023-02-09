@@ -1,4 +1,4 @@
-use std::fs::{remove_dir, remove_file};
+use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
 use crate::repository::initialize_db;
@@ -17,6 +17,6 @@ pub fn refresh_db() {
 #[cfg(test)]
 pub fn remove_files() {
     if Path::new(FILE_DIR).exists() {
-        remove_dir(Path::new("files")).unwrap();
+        remove_dir_all(Path::new("files")).unwrap();
     }
 }

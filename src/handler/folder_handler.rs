@@ -41,12 +41,12 @@ pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> Cre
         Ok(f) => CreateFolderResponse::Success(Json::from(f)),
         Err(message) if message == CreateFolderError::ParentNotFound => {
             CreateFolderResponse::ParentNotFound(BasicMessage::new(
-                "No folder with the passed parentId was found",
+                "No folder with the passed parentId was found.",
             ))
         }
         Err(e) if e == CreateFolderError::AlreadyExists => {
             CreateFolderResponse::FolderAlreadyExists(BasicMessage::new(
-                "That folder already exists",
+                "That folder already exists.",
             ))
         }
         Err(e) if e == CreateFolderError::FileSystemFailure => {
