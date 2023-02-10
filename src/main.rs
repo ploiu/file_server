@@ -97,11 +97,13 @@ mod folder_tests {
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
+    use std::path::Path;
 
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::initialize_db;
+    use crate::service::file_service::FILE_DIR;
     use crate::test::{refresh_db, remove_files, AUTH};
 
     use super::rocket;
@@ -412,7 +414,8 @@ mod folder_tests {
         // rename to the second created folder
         let update_request = serde::to_string(&UpdateFolderRequest {
             parent_id: None,
-            name: String::from("test2"),
+            // windows is a case insensitive file system
+            name: String::from("Test2"),
             id: 1,
         })
         .unwrap();
@@ -434,7 +437,7 @@ mod folder_tests {
     }
 
     #[test]
-    fn update_folder_illegal_action() {
+    fn update_folder_folder_already_exists_root() {
         set_password();
         remove_files();
         let client = client();
@@ -483,17 +486,288 @@ mod folder_tests {
     }
 
     #[test]
+    fn update_folder_folder_already_exists_target_folder() {
+        set_password();
+        remove_files();
+        let client = client();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test"),
+                    parent_id: None,
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test2"),
+                    parent_id: Some(1),
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test3"),
+                    parent_id: Some(1),
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        // move the parent folder into the child
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(1),
+            name: String::from("test3"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from(
+                    "Cannot update folder, because another one with the new path already exists."
+                )
+            }
+        );
+    }
+
+    #[test]
     fn delete_folder_without_creds() {
-        assert!(false)
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.delete(uri!("/folders/1")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.delete(uri!("/folders/1")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn delete_folder() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        // create a folder first to delete
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("To Delete"),
+                    parent_id: None,
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        // now delete the folder
+        let delete_response = client
+            .delete("/folders/1")
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(delete_response.status(), Status::NoContent);
+        // make sure the folder doesn't come back
+        let get_folder_response = client
+            .get("/folders/1")
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(get_folder_response.status(), Status::NotFound);
+    }
+
+    #[test]
+    fn delete_folder_should_not_delete_root() {
+        set_password();
+        remove_files();
+        std::fs::create_dir(Path::new(FILE_DIR)).unwrap();
+        let client = client();
+        // make sure /null and /0 don't remove the files folder
+        for id in ["null", "0"] {
+            let res = client
+                .delete(String::from("/") + id)
+                .header(Header::new("Authorization", AUTH))
+                .dispatch();
+            assert_eq!(res.status(), Status::NotFound);
+            assert!(Path::new("files").exists());
+        }
     }
 
     #[test]
     fn delete_folder_not_found() {
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        let response = client
+            .delete("/folders/1")
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(response.status(), Status::NotFound);
+    }
+}
+
+#[cfg(test)]
+mod file_tests {
+    use rocket::http::{Header, Status};
+    use rocket::local::blocking::Client;
+    use rocket::serde::json::serde_json as serde;
+    use std::path::Path;
+
+    use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::BasicMessage;
+    use crate::repository::initialize_db;
+    use crate::service::file_service::FILE_DIR;
+    use crate::test::{refresh_db, remove_files, AUTH};
+
+    use super::rocket;
+
+    fn client() -> Client {
+        Client::tracked(rocket()).unwrap()
+    }
+
+    fn fail() {
+        assert!(false);
+    }
+
+    fn set_password() {
+        refresh_db();
+        let client = client();
+        let uri = uri!("/api/password");
+        client
+            .post(uri)
+            .body(r#"{"username":"username","password":"password"}"#)
+            .dispatch();
+    }
+
+    #[test]
+    fn upload_file_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn upload_file_missing_info() {
+        fail()
+    }
+
+    #[test]
+    fn upload_file_parent_folder_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn upload_file_already_exists() {
+        fail()
+    }
+
+    #[test]
+    fn upload_file() {
+        fail()
+    }
+
+    #[test]
+    fn get_file_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn get_file_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn get_file() {
+        fail()
+    }
+
+    #[test]
+    fn search_files_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn search_files_bad_search_query() {
+        fail()
+    }
+
+    #[test]
+    fn search_files() {
+        fail()
+    }
+
+    #[test]
+    fn download_file_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn download_file_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn download_file() {
+        fail()
+    }
+
+    #[test]
+    fn delete_file_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn delete_file_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn delete_file() {
+        fail()
+    }
+
+    #[test]
+    fn update_file_without_creds() {
+        fail()
+    }
+
+    #[test]
+    fn update_file_file_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn update_file_target_folder_not_found() {
+        fail()
+    }
+
+    #[test]
+    fn update_file_file_already_exists_root() {
+        fail()
+    }
+
+    #[test]
+    fn update_file_file_already_exists_target_folder() {
+        fail()
+    }
+
+    #[test]
+    fn update_file() {
+        fail()
     }
 }

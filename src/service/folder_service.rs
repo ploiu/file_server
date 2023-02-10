@@ -272,9 +272,9 @@ fn does_folder_exist(
         .map(|folder| Folder {
             id: folder.id,
             parent_id: folder.parent_id,
-            name: folder.name.to_lowercase(),
+            name: String::from(folder.name.to_lowercase().split("/").last().unwrap()),
         })
-        .find(|folder| folder.name == name.to_lowercase());
+        .find(|folder| folder.name == name.to_lowercase().split("/").last().unwrap());
     return Ok(matching_folder.is_some());
 }
 
