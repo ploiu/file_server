@@ -203,7 +203,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
                 // make sure a folder with our name doesn't exist
                 let already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
                     Ok(exists) => exists,
-                    Err(e) => {
+                    Err(_e) => {
                         con.close().unwrap();
                         return Err(UpdateFolderError::DbFailure);
                     }
@@ -233,7 +233,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             // make sure a folder with our name doesn't exist
             let already_exists = match does_folder_exist(&folder.name, None, &con) {
                 Ok(exists) => exists,
-                Err(e) => {
+                Err(_e) => {
                     con.close().unwrap();
                     return Err(UpdateFolderError::DbFailure);
                 }

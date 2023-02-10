@@ -435,8 +435,51 @@ mod folder_tests {
 
     #[test]
     fn update_folder_illegal_action() {
-        // move parent into child
-        assert!(false)
+        set_password();
+        remove_files();
+        let client = client();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test"),
+                    parent_id: None,
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test2"),
+                    parent_id: Some(1),
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        // move the parent folder into the child
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(2),
+            name: String::from("test"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body,
+            BasicMessage {
+                message: String::from("Cannot move parent folder into its own child.")
+            }
+        );
     }
 
     #[test]
