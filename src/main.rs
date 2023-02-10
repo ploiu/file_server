@@ -423,7 +423,6 @@ mod folder_tests {
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
         let body: BasicMessage = res.into_json().unwrap();
-        // TODO fails - probably because this is all in the top level folder
         assert_eq!(
             body,
             BasicMessage {
