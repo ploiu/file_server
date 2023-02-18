@@ -2,7 +2,7 @@ use std::io::Write;
 
 use crate::model::error::guard_errors::AuthError;
 use crate::model::guard::auth::ValidateResult;
-use base64::{Engine as _, engine::general_purpose};
+use base64::{engine::general_purpose, Engine as _};
 use rocket::async_trait;
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome};

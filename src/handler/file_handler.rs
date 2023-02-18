@@ -8,8 +8,8 @@ use crate::model::error::file_errors::{
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
 use crate::model::response::file_responses::{
-    CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
-    SearchFileResponse, UpdateFileResponse,
+    CreateFileResponse, DeleteFileResponse, DownloadFileResponse, FileMetadataResponse,
+    GetFileResponse, SearchFileResponse, UpdateFileResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::file_service;
@@ -56,7 +56,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
         ValidateResult::Invalid => return GetFileResponse::Unauthorized("Bad Credentials".to_string())
     }
     return match file_service::get_file_metadata(id) {
-        Ok(file) => GetFileResponse::Success(Json::from(file)),
+        Ok(file) => GetFileResponse::Success(Json::from(FileMetadataResponse::from(&file))),
         Err(message) if message == GetFileError::NotFound => GetFileResponse::FileNotFound(
             BasicMessage::new("The file with the passed id could not be found."),
         ),

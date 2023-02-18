@@ -19,7 +19,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/version"
+                  "$ref": "#/components/schemas/versionResponse"
                 }
               }
             }
@@ -31,11 +31,126 @@
   },
   "components": {
     "schemas": {
-      "version": {
+      "versionResponse": {
         "properties": {
           "version": {
             "type": "string",
             "example": "1.0.0"
+          }
+        }
+      },
+      "createFileRequest": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary"
+          },
+          "extension": {
+            "type": "string",
+            "example": ".png"
+          },
+          "folder_id": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "updateFileRequest": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "createFolderRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "updateFolderRequest": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "authorizationRequest": {
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "basicMessageResponse": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "file": {
+        "type": "string",
+        "format": "binary"
+      },
+      "fileMetadataResponse": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "folderMetadataResponse": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true
+          },
+          "path": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/folderMetadataResponse"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/fileMetadataResponse"
+            }
           }
         }
       }
