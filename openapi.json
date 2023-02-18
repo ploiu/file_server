@@ -1,0 +1,44 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "contact": {
+      "name": "Ploiu",
+      "url": "https://github.com/ploiu"
+    },
+    "title": "Ploiu File Server",
+    "description": "a self-hostable file server written in rust",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/version": {
+      "get": {
+        "description": "Returns the current server version, so the client can make sure it's compatible. <br />Numbering follows this scheme: Major.Minor.Patch. Definitions of each are: <br /><dl><dt>Major</dt><dd>Changes to existing endpoints that break compatibility, including removal of endpoints or fields in return values.</dd><dt>Minor</dt><dd>Minor changes to existing endpoints that don't immediately break compatibility, or new endpoints created. May include adding new fields to response models.</dd><dt>Patch</dt><dd>Bug fixes that do not change endpoints or response models</dd></dl>",
+        "responses": {
+          "200": {
+            "description": "Server Version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/version"
+                }
+              }
+            }
+          }
+        }
+
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "version": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        }
+      }
+    }
+  }
+}
