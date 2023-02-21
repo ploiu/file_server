@@ -260,7 +260,6 @@
               }
             }
           }
-
         }
       }
     },
@@ -330,6 +329,55 @@
             "$ref": "#/components/responses/genericErrorResponse"
           }
         }
+      }
+    },
+    "/folders/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "schema": {
+            "type": "number",
+            "nullable": true,
+            "description": "pass null for the root folder; though it cannot be updated or deleted"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": ["folders"],
+        "description": "retrieves the folder metadata with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "No folder with the passed id was found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      },
+      "put": {
+      },
+      "delete": {
       }
     }
   },
