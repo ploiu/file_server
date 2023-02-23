@@ -1,0 +1,638 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "contact": {
+      "name": "Ploiu",
+      "url": "https://github.com/ploiu"
+    },
+    "title": "Ploiu File Server",
+    "description": "a self-hostable file server written in rust",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/api/version": {
+      "get": {
+        "tags": [
+          "api"
+        ],
+        "description": "Returns the current server version, so the client can make sure it's compatible. <br />Numbering follows this scheme: Major.Minor.Patch. Definitions of each are: <br /><dl><dt>Major</dt><dd>Changes to existing endpoints that break compatibility, including removal of endpoints or fields in return values.</dd><dt>Minor</dt><dd>Minor changes to existing endpoints that don't immediately break compatibility, or new endpoints created. May include adding new fields to response models.</dd><dt>Patch</dt><dd>Bug fixes that do not change endpoints or response models</dd></dl>",
+        "responses": {
+          "200": {
+            "description": "Server Version",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/password": {
+      "post": {
+        "tags": [
+          "api"
+        ],
+        "description": "sets the password to access the api. All non /api endpoints will not work unless a password is set",
+        "responses": {
+          "201": {
+            "description": "password created"
+          },
+          "400": {
+            "description": "password has already been set",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "error occurred setting password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files": {
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "description": "upload file",
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/createFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "$ref": "#/components/responses/fileMetadataResponse"
+          },
+          "400": {
+            "description": "missing info in the request, or a file with that name already exists",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "parent folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "failed to save file to disk or db",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "files"
+        ],
+        "description": "update file metadata and location",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/updateFileRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/fileMetadataResponse"
+          },
+          "400": {
+            "description": "a file with the same name already exists in the specified folder",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "the target file, or the destination folder, is not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
+    "/files/metadata/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "description": "the id of the file to retrieve",
+          "schema": {
+            "type": "number"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "description": "retrieves the metadata of the file with the passed id",
+        "tags": [
+          "files"
+        ],
+        "responses": {
+          "200": {
+            "$ref": "#/components/responses/fileMetadataResponse"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "File not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "failed to retrieve file info. Check server logs.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files?search": {
+      "parameters": [
+        {
+          "in": "query",
+          "name": "search",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "description": "searches for and retrieves all files whose metadata match the passed search string",
+        "tags": [
+          "files"
+        ],
+        "responses": {
+          "200": {
+            "description": "successfully searched files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/fileMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing search parameter, or search parameter is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "500": {
+            "description": "failed to search database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/files/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": [
+          "files"
+        ],
+        "description": "downloads the file with the passed id",
+        "responses": {
+          "200": {
+            "description": "file found and contents returned",
+            "content": {
+              "application/octet-stream": {
+                "schema": {
+                  "$ref": "#/components/schemas/file"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "files"
+        ],
+        "description": "delete the file from the disk with the passed id",
+        "responses": {
+          "204": {
+            "description": "file successfully deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
+    "/folders/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number",
+            "nullable": true,
+            "description": "pass null for the root folder; though it cannot be updated or deleted"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": [
+          "folders"
+        ],
+        "description": "retrieves the folder metadata with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "No folder with the passed id was found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "folders"
+        ],
+        "description": "updates the folder with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Action Not Allowed.<br />Either you tried to move a folder into one of its child folders, or you tried to move it to a location already containing a folder with that name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "either the target folder was not found, or the parent folder it's being moved to is not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "folders"
+        ],
+        "description": "attempts to delete the passed folder. <br /><strong>THIS WILL DELETE EVERY FOLDER AND FILE WITHIN THAT FOLDER. THERE IS NO RECOVERING FROM THIS. USE WITH CAUTION</strong>",
+        "responses": {
+          "204": {
+            "description": "folder successfully deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "That folder could not be found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "localhost",
+      "url": "https://localhost:8000"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "version": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "example": "1.0.0"
+          }
+        }
+      },
+      "createFileRequest": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary"
+          },
+          "extension": {
+            "type": "string",
+            "example": ".png"
+          },
+          "folder_id": {
+            "type": "number",
+            "nullable": true
+          }
+        }
+      },
+      "updateFileRequest": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "folderId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "createFolderRequest": {
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "updateFolderRequest": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true,
+            "description": "set to null for the root folder"
+          }
+        }
+      },
+      "authorizationRequest": {
+        "properties": {
+          "username": {
+            "type": "string"
+          },
+          "password": {
+            "type": "string"
+          }
+        }
+      },
+      "basicMessage": {
+        "properties": {
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "file": {
+        "type": "string",
+        "format": "binary"
+      },
+      "fileMetadata": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "name": {
+            "type": "string"
+          }
+        }
+      },
+      "folderMetadata": {
+        "properties": {
+          "id": {
+            "type": "number"
+          },
+          "parentId": {
+            "type": "number",
+            "nullable": true
+          },
+          "path": {
+            "type": "string"
+          },
+          "folders": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/folderMetadata"
+            }
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/fileMetadata"
+            }
+          }
+        }
+      }
+    },
+    "responses": {
+      "unauthorizedResponse": {
+        "description": "missing or invalid password",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/basicMessage"
+            }
+          }
+        }
+      },
+      "genericErrorResponse": {
+        "description": "something failed on the db or file system side of the operation. Check server logs.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/basicMessage"
+            }
+          }
+        }
+      },
+      "fileMetadataResponse": {
+        "description": "represents a file's metadata in the server",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/fileMetadata"
+            }
+          }
+        }
+      }
+    },
+    "securitySchemes": {
+      "BasicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      }
+    }
+  },
+  "security": [
+    {
+      "BasicAuth": []
+    }
+  ]
+}

@@ -8,7 +8,7 @@ pub struct CreateFileRequest<'a> {
     pub file: TempFile<'a>,
     /// because I don't feel like mapping from content-type header
     pub extension: String,
-    /// leave blank for top level folder
+    /// leave blank for top level folder TODO rename to folderId
     pub folder_id: Option<u32>,
 }
 
