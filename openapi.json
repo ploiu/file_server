@@ -168,6 +168,7 @@
       "parameters": [
         {
           "name": "id",
+          "required": true,
           "description": "the id of the file to retrieve",
           "schema": {
             "type": "number"
@@ -222,7 +223,9 @@
       ],
       "get": {
         "description": "searches for and retrieves all files whose metadata match the passed search string",
-        "tags": ["files"],
+        "tags": [
+          "files"
+        ],
         "responses": {
           "200": {
             "description": "successfully searched files",
@@ -267,6 +270,7 @@
       "parameters": [
         {
           "name": "id",
+          "required": true,
           "schema": {
             "type": "number"
           },
@@ -274,7 +278,9 @@
         }
       ],
       "get": {
-        "tags": ["files"],
+        "tags": [
+          "files"
+        ],
         "description": "downloads the file with the passed id",
         "responses": {
           "200": {
@@ -306,7 +312,9 @@
         }
       },
       "delete": {
-        "tags": ["files"],
+        "tags": [
+          "files"
+        ],
         "description": "delete the file from the disk with the passed id",
         "responses": {
           "204": {
@@ -335,6 +343,7 @@
       "parameters": [
         {
           "name": "id",
+          "required": true,
           "schema": {
             "type": "number",
             "nullable": true,
@@ -344,7 +353,9 @@
         }
       ],
       "get": {
-        "tags": ["folders"],
+        "tags": [
+          "folders"
+        ],
         "description": "retrieves the folder metadata with the passed id",
         "responses": {
           "200": {
@@ -376,11 +387,84 @@
         }
       },
       "put": {
+        "tags": [
+          "folders"
+        ],
+        "description": "updates the folder with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Action Not Allowed.<br />Either you tried to move a folder into one of its child folders, or you tried to move it to a location already containing a folder with that name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "either the target folder was not found, or the parent folder it's being moved to is not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
       },
       "delete": {
+        "tags": [
+          "folders"
+        ],
+        "description": "attempts to delete the passed folder. <br /><strong>THIS WILL DELETE EVERY FOLDER AND FILE WITHIN THAT FOLDER. THERE IS NO RECOVERING FROM THIS. USE WITH CAUTION</strong>",
+        "responses": {
+          "204": {
+            "description": "folder successfully deleted"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "That folder could not be found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
       }
     }
   },
+  "servers": [
+    {
+      "description": "localhost",
+      "url": "https://localhost:8000"
+    }
+  ],
   "components": {
     "schemas": {
       "version": {
@@ -538,6 +622,17 @@
           }
         }
       }
+    },
+    "securitySchemes": {
+      "BasicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      }
     }
-  }
+  },
+  "security": [
+    {
+      "BasicAuth": []
+    }
+  ]
 }
