@@ -29,7 +29,7 @@ pub enum GetFileResponse {
     #[response(status = 500, content_type = "json")]
     FileDbError(Json<BasicMessage>),
     #[response(status = 200, content_type = "json")]
-    Success(Json<FileRecord>),
+    Success(Json<FileMetadataResponse>),
     #[response(status = 401)]
     Unauthorized(String),
 }
