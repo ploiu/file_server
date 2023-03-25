@@ -848,17 +848,51 @@ mod file_tests {
 
     #[test]
     fn delete_file_without_creds() {
-        fail()
+        refresh_db();
+        remove_files();
+        let client = client();
+        let res = client.delete(uri!("/files/1")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.delete(uri!("/files/1")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn delete_file_not_found() {
-        fail()
+        set_password();
+        remove_files();
+        let client = client();
+        let res = client
+            .delete(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("The file with the passed id could not be found.")
+        );
     }
 
     #[test]
     fn delete_file() {
-        fail()
+        set_password();
+        create_file_db_entry("test.txt");
+        create_file_disk("test.txt", "hi");
+        let client = client();
+        let res = client
+            .delete(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::NoContent);
+        // make sure the file was removed from the disk
+        match fs::read(format!("{}/{}", FILE_DIR, "test.txt")) {
+            Ok(_) => fail(), // file still exists on disk
+            Err(_) => { /* passed - no op */ }
+        };
     }
 
     #[test]

@@ -110,9 +110,9 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
     };
     return match file_service::delete_file(id) {
         Ok(()) => DeleteFileResponse::Deleted(()),
-        Err(e) if e == DeleteFileError::NotFound => {
-            DeleteFileResponse::NotFound(BasicMessage::new("No file with the passed id was found."))
-        }
+        Err(e) if e == DeleteFileError::NotFound => DeleteFileResponse::NotFound(
+            BasicMessage::new("The file with the passed id could not be found."),
+        ),
         Err(e) if e == DeleteFileError::DbError => DeleteFileResponse::Failure(BasicMessage::new(
             "Failed to remove file reference from database.",
         )),
