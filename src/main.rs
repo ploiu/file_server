@@ -94,10 +94,11 @@ mod api_tests {
 
 #[cfg(test)]
 mod folder_tests {
+    use std::path::Path;
+
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
-    use std::path::Path;
 
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::folder_responses::FolderResponse;
@@ -624,15 +625,25 @@ mod folder_tests {
 
 #[cfg(test)]
 mod file_tests {
+    use std::ffi::OsString;
+    use std::path::{Path, PathBuf};
+
+    use crate::model::repository::FileRecord;
+    use rocket::form::prelude::Entity::Form;
+    use rocket::fs::TempFile;
+    use rocket::futures::TryFutureExt;
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
-    use std::path::Path;
+    use rocket::Either;
+    use rocket::Either::Right;
 
+    use crate::model::request::file_requests::CreateFileRequest;
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
+    use crate::model::response::file_responses::FileMetadataResponse;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
-    use crate::repository::initialize_db;
+    use crate::repository::{file_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
     use crate::test::{refresh_db, remove_files, AUTH};
 
@@ -658,52 +669,97 @@ mod file_tests {
 
     #[test]
     fn upload_file_without_creds() {
-        fail()
-    }
-
-    #[test]
-    fn upload_file_missing_info() {
-        fail()
-    }
-
-    #[test]
-    fn upload_file_parent_folder_not_found() {
-        fail()
-    }
-
-    #[test]
-    fn upload_file_already_exists() {
-        fail()
-    }
-
-    #[test]
-    fn upload_file() {
-        fail()
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.post(uri!("/files")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.post(uri!("/files")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn get_file_without_creds() {
-        fail()
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.get(uri!("/files/metadata/1234")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.get(uri!("/files/metadata/1234")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn get_file_not_found() {
-        fail()
+        set_password();
+        remove_files();
+        let client = client();
+        let res = client
+            .get(uri!("/files/metadata/1234"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
     }
 
     #[test]
     fn get_file() {
-        fail()
+        set_password();
+        remove_files();
+        // need to add to the database
+        let connection = open_connection();
+        file_repository::create_file(
+            &FileRecord {
+                id: None,
+                name: String::from("file_name.txt"),
+            },
+            &connection,
+        )
+        .unwrap();
+        connection.close().unwrap();
+        let client = client();
+        let res = client
+            .get(uri!("/files/metadata/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        let status = res.status();
+        let body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(status, Status::Ok);
+        assert_eq!(body.name, String::from("file_name.txt"));
+        assert_eq!(body.id, 1);
     }
 
     #[test]
     fn search_files_without_creds() {
-        fail()
+        initialize_db().unwrap();
+        remove_files();
+        let client = client();
+        let res = client.get(uri!("/files?search=test")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.get(uri!("/files?search=test")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn search_files_bad_search_query() {
-        fail()
+        set_password();
+        remove_files();
+        let client = client();
+        let res = client
+            .get("/files?search")
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(body.message, String::from("Search string is required."));
     }
 
     #[test]

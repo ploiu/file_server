@@ -1,10 +1,8 @@
-use regex::Regex;
 use std::fs;
 use std::fs::File;
 use std::path::Path;
 
-use crate::repository;
-use crate::repository::{file_repository, folder_repository};
+use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
@@ -16,6 +14,8 @@ use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
 use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::folder_responses::FolderResponse;
+use crate::repository;
+use crate::repository::{file_repository, folder_repository};
 use crate::service::folder_service;
 
 pub static FILE_DIR: &str = "./files";

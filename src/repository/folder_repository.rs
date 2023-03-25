@@ -1,5 +1,6 @@
-use crate::model::repository;
 use rusqlite::{params, Connection, Row, Rows};
+
+use crate::model::repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
     // if id is none, we're talking about the root folder

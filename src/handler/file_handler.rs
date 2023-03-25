@@ -22,7 +22,7 @@ pub async fn upload_file(
     auth: Auth,
 ) -> CreateFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return CreateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return CreateFileResponse::Unauthorized("Bad Credentials".to_string())
     }
@@ -51,7 +51,7 @@ pub async fn upload_file(
 #[get("/metadata/<id>")]
 pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFileResponse::Unauthorized("Bad Credentials".to_string())
     }
@@ -71,12 +71,12 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
 #[get("/?<search>")]
 pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
     if search.trim().is_empty() {
-        return SearchFileResponse::BadRequest(BasicMessage::new("Search string is required"));
+        return SearchFileResponse::BadRequest(BasicMessage::new("Search string is required."));
     }
     return match file_service::search_files(search) {
         Ok(files) => SearchFileResponse::Success(Json::from(files)),
@@ -89,7 +89,7 @@ pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
 #[get("/<id>")]
 pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return DownloadFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return DownloadFileResponse::Unauthorized("Bad Credentials".to_string())
     }
@@ -104,7 +104,7 @@ pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
 #[delete("/<id>")]
 pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return DeleteFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return DeleteFileResponse::Unauthorized("Bad Credentials".to_string())
     };
@@ -126,7 +126,7 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
 #[put("/", data = "<data>")]
 pub async fn update_file(data: Json<UpdateFileRequest>, auth: Auth) -> UpdateFileResponse {
     match auth.validate() {
-        ValidateResult::Ok => {/*no op*/}
+        ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return UpdateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return UpdateFileResponse::Unauthorized("Bad Credentials".to_string())
     };

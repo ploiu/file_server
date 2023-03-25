@@ -1,6 +1,6 @@
 #[derive(PartialEq)]
 pub enum CreateFileError {
-    #[allow(dead_code)] // this is actually used. Thanks rust linter!
+    #[deprecated(note = "rocket will enforce validation for us")]
     MissingInfo(String),
     FailWriteDisk,
     FailWriteDb,
