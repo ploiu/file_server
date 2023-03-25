@@ -625,23 +625,14 @@ mod folder_tests {
 
 #[cfg(test)]
 mod file_tests {
-    use std::ffi::OsString;
-    use std::path::{Path, PathBuf};
+    use std::fs;
+    use std::path::Path;
 
     use crate::model::repository::FileRecord;
-    use rocket::form::prelude::Entity::Form;
-    use rocket::fs::TempFile;
-    use rocket::futures::TryFutureExt;
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
-    use rocket::serde::json::serde_json as serde;
-    use rocket::Either;
-    use rocket::Either::Right;
 
-    use crate::model::request::file_requests::CreateFileRequest;
-    use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::file_responses::FileMetadataResponse;
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
@@ -655,6 +646,31 @@ mod file_tests {
 
     fn fail() {
         assert!(false);
+    }
+
+    fn create_file_db_entry(name: &str) {
+        let connection = open_connection();
+        file_repository::create_file(
+            &FileRecord {
+                id: None,
+                name: String::from(name),
+            },
+            &connection,
+        )
+        .unwrap();
+        connection.close().unwrap();
+    }
+
+    fn create_file_disk(file_name: &str, contents: &str) {
+        // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
+        fs::create_dir(Path::new("files"))
+            .or_else(|_| Ok::<(), ()>(()))
+            .unwrap();
+        fs::write(
+            Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
+            contents,
+        )
+        .unwrap();
     }
 
     fn set_password() {
@@ -736,7 +752,7 @@ mod file_tests {
 
     #[test]
     fn search_files_without_creds() {
-        initialize_db().unwrap();
+        refresh_db();
         remove_files();
         let client = client();
         let res = client.get(uri!("/files?search=test")).dispatch();
@@ -764,22 +780,70 @@ mod file_tests {
 
     #[test]
     fn search_files() {
-        fail()
+        set_password();
+        remove_files();
+        // need to add to the database
+        create_file_db_entry("should_return.txt");
+        create_file_db_entry("should_not_return.txt");
+        let client = client();
+        let res = client
+            .get("/files?search=should_return")
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        let body: Vec<FileMetadataResponse> = res.into_json().unwrap();
+        assert_eq!(body.len(), 1);
+        let file = &body[0];
+        assert_eq!(file.id, 1);
+        assert_eq!(file.name, String::from("should_return.txt"));
     }
 
     #[test]
     fn download_file_without_creds() {
-        fail()
+        refresh_db();
+        remove_files();
+        let client = client();
+        let res = client.get(uri!("/files/1")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.get(uri!("/files/1")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn download_file_not_found() {
-        fail()
+        set_password();
+        remove_files();
+        let client = client();
+        let res = client
+            .get(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("The file with the passed id could not be found.")
+        );
     }
 
     #[test]
     fn download_file() {
-        fail()
+        set_password();
+        remove_files();
+        create_file_db_entry("test.txt");
+        create_file_disk("test.txt", "hello");
+        let client = client();
+        let res = client
+            .get(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        // TODO res content type test
+        let body: String = res.into_string().unwrap();
+        assert_eq!(body, String::from("hello"));
     }
 
     #[test]
