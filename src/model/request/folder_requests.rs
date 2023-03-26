@@ -1,6 +1,6 @@
-use rocket::serde::Deserialize;
+use rocket::serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct CreateFolderRequest {
     pub name: String,
@@ -8,7 +8,7 @@ pub struct CreateFolderRequest {
     pub parent_id: Option<u32>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]
 pub struct UpdateFolderRequest {
     pub id: u32,

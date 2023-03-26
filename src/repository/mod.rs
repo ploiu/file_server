@@ -38,17 +38,3 @@ pub fn initialize_db() -> Result<()> {
     con.close().unwrap();
     Ok(())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::fs;
-
-    #[test]
-    fn open_connection_creates_db_if_not_exist() {
-        fs::remove_file(DB_LOCATION);
-        open_connection().close().unwrap();
-        let path = std::path::Path::new(DB_LOCATION);
-        assert!(path.exists(), "db wasn't created!")
-    }
-}

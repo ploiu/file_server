@@ -1,5 +1,6 @@
-use crate::model::response::BasicMessage;
 use rocket::serde::json::Json;
+
+use crate::model::response::BasicMessage;
 
 type NoContent = ();
 

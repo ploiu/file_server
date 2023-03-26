@@ -1,3 +1,11 @@
+use std::fs;
+use std::path::Path;
+
+use regex::Regex;
+use rusqlite::Connection;
+
+use model::repository::Folder;
+
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
@@ -6,16 +14,13 @@ use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
+use crate::repository::folder_repository::get_child_folders;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
 use crate::{model, repository};
-use model::repository::Folder;
-use regex::Regex;
-use rusqlite::Connection;
-use std::fs;
-use std::path::Path;
 
-pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+    check_root_dir(FILE_DIR).await;
     let folder = get_folder_by_id(id)?;
     let mut folder = FolderResponse {
         // should always have an id when coming from the database
@@ -195,6 +200,17 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         Some(parent_id) => match folder_repository::get_by_id(Some(parent_id), &con) {
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
+                // make sure a folder with our name doesn't exist
+                let already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
+                    Ok(exists) => exists,
+                    Err(_e) => {
+                        con.close().unwrap();
+                        return Err(UpdateFolderError::DbFailure);
+                    }
+                };
+                if already_exists {
+                    return Err(UpdateFolderError::AlreadyExists);
+                }
                 // check to make sure we're not moving to a sub-child
                 let check =
                     is_attempt_move_to_sub_child(&folder.id.unwrap(), &parent.id.unwrap(), &con);
@@ -214,6 +230,17 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             }
         },
         None => {
+            // make sure a folder with our name doesn't exist
+            let already_exists = match does_folder_exist(&folder.name, None, &con) {
+                Ok(exists) => exists,
+                Err(_e) => {
+                    con.close().unwrap();
+                    return Err(UpdateFolderError::DbFailure);
+                }
+            };
+            if already_exists {
+                return Err(UpdateFolderError::AlreadyExists);
+            }
             new_path = format!("{}/{}", FILE_DIR, new_path);
         }
     };
@@ -232,6 +259,23 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         parent_id: folder.parent_id,
         name: new_path,
     })
+}
+
+/// checks if a folder with the passed name exists within the folder with the passed id
+fn does_folder_exist(
+    name: &String,
+    id: Option<u32>,
+    con: &Connection,
+) -> Result<bool, rusqlite::Error> {
+    let matching_folder = get_child_folders(id, &con)?
+        .iter()
+        .map(|folder| Folder {
+            id: folder.id,
+            parent_id: folder.parent_id,
+            name: String::from(folder.name.to_lowercase().split("/").last().unwrap()),
+        })
+        .find(|folder| folder.name == name.to_lowercase().split("/").last().unwrap());
+    return Ok(matching_folder.is_some());
 }
 
 /// checks if the new_parent_id being passed matches any id of any sub child of the passed folder_id
