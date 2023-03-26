@@ -41,7 +41,8 @@ fn rocket() -> Rocket<Build> {
 }
 
 ///
-/// Look at .run/test.run.xml for run arguments - since there's file system ops we need to run with 1 thread
+/// Look at .run/test.run.xml for run arguments - since there's ops on the same db file we need to run with 1 thread
+/// TODO maybe change file directory for each test...that might make it so we can run tests in parallel
 ///
 #[cfg(test)]
 mod api_tests {
@@ -628,13 +629,14 @@ mod file_tests {
     use std::fs;
     use std::path::Path;
 
-    use crate::model::repository::FileRecord;
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
 
+    use crate::model::repository::{FileRecord, Folder};
     use crate::model::response::file_responses::FileMetadataResponse;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
-    use crate::repository::{file_repository, initialize_db, open_connection};
+    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
     use crate::test::{refresh_db, remove_files, AUTH};
 
@@ -648,12 +650,29 @@ mod file_tests {
         assert!(false);
     }
 
-    fn create_file_db_entry(name: &str) {
+    fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
         let connection = open_connection();
-        file_repository::create_file(
+        let file_id = file_repository::create_file(
             &FileRecord {
+                id: folder_id,
+                name: String::from(name),
+            },
+            &connection,
+        )
+        .unwrap();
+        if let Some(id) = folder_id {
+            folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
+        }
+        connection.close().unwrap();
+    }
+
+    fn create_folder_db_entry(name: &str) {
+        let connection = open_connection();
+        folder_repository::create_folder(
+            &Folder {
                 id: None,
                 name: String::from(name),
+                parent_id: None,
             },
             &connection,
         )
@@ -671,6 +690,10 @@ mod file_tests {
             contents,
         )
         .unwrap();
+    }
+
+    fn create_folder_disk(folder_name: &str) {
+        fs::create_dir_all(Path::new(format!("{}/{}", FILE_DIR, folder_name).as_str())).unwrap();
     }
 
     fn set_password() {
@@ -783,8 +806,8 @@ mod file_tests {
         set_password();
         remove_files();
         // need to add to the database
-        create_file_db_entry("should_return.txt");
-        create_file_db_entry("should_not_return.txt");
+        create_file_db_entry("should_return.txt", None);
+        create_file_db_entry("should_not_return.txt", None);
         let client = client();
         let res = client
             .get("/files?search=should_return")
@@ -833,7 +856,7 @@ mod file_tests {
     fn download_file() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt");
+        create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "hello");
         let client = client();
         let res = client
@@ -880,7 +903,7 @@ mod file_tests {
     #[test]
     fn delete_file() {
         set_password();
-        create_file_db_entry("test.txt");
+        create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "hi");
         let client = client();
         let res = client
@@ -888,40 +911,171 @@ mod file_tests {
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(res.status(), Status::NoContent);
-        // make sure the file was removed from the disk
+        // make sure the file was removed from the disk and db
         match fs::read(format!("{}/{}", FILE_DIR, "test.txt")) {
             Ok(_) => fail(), // file still exists on disk
             Err(_) => { /* passed - no op */ }
         };
+        let get_res = client
+            .get(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        assert_eq!(get_res.status(), Status::NotFound);
     }
 
     #[test]
     fn update_file_without_creds() {
-        fail()
+        refresh_db();
+        remove_files();
+        let client = client();
+        let res = client.put(uri!("/files")).dispatch();
+        // without a password set
+        assert_eq!(res.status(), Status::Unauthorized);
+        // now with a password set
+        set_password();
+        let res = client.put(uri!("/files")).dispatch();
+        assert_eq!(res.status(), Status::Unauthorized);
     }
 
     #[test]
     fn update_file_file_not_found() {
-        fail()
+        set_password();
+        remove_files();
+        let client = client();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            //language=json
+            .body(r#"{"id":1,"name":"test","folderId":null}"#)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("The file with the passed id could not be found.")
+        );
     }
 
     #[test]
     fn update_file_target_folder_not_found() {
-        fail()
+        set_password();
+        remove_files();
+        create_file_db_entry("test", None);
+        create_file_disk("test", "test");
+        let client = client();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            //language=json
+            .body(r#"{"id": 1,"name": "test","folderId": 1}"#)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("The folder with the passed id could not be found.")
+        );
     }
 
     #[test]
     fn update_file_file_already_exists_root() {
-        fail()
+        set_password();
+        remove_files();
+        create_file_db_entry("test.txt", None);
+        create_file_db_entry("test2.txt", None);
+        create_file_disk("test.txt", "test");
+        create_file_disk("test2.txt", "test2");
+        let client = client();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            //language=json ; rename test.txt to test2.txt
+            .body(r#"{"id": 1,"name": "test2.txt","parentId": null}"#)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("A file with the same name already exists in the specified folder")
+        );
+        // now make sure that the files weren't changed on the disk
+        let first = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
+        let second = fs::read_to_string(format!("{}/{}", FILE_DIR, "test2.txt")).unwrap();
+        assert_eq!(first, String::from("test"));
+        assert_eq!(second, String::from("test2"));
     }
 
     #[test]
     fn update_file_file_already_exists_target_folder() {
-        fail()
+        set_password();
+        remove_files();
+        create_folder_db_entry("test"); // id 1
+        create_folder_db_entry("target"); // id 2
+        create_folder_disk("test");
+        create_folder_disk("target");
+        // put the files in the folders
+        create_file_db_entry("test.txt", Some(1)); // id 1
+        create_file_db_entry("test.txt", Some(2)); // id 2
+        create_file_disk("test/test.txt", "test");
+        create_file_disk("target/test.txt", "target");
+        // now try to move test/test.txt to target/test.txt
+        let client = client();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            //language=json
+            .body(r#"{"id": 1, "name": "test.txt", "folderId": 2}"#)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(
+            body.message,
+            String::from("A file with the same name already exists in the specified folder")
+        );
+        // now make sure the file wasn't moved on the disk or db
+        let get_first_res: String = client
+            .get(uri!("/files/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch()
+            .into_string()
+            .unwrap();
+        let get_second_res: String = client
+            .get(uri!("/files/2"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch()
+            .into_string()
+            .unwrap();
+        assert_eq!(get_first_res, "test");
+        assert_eq!(get_second_res, "target");
     }
 
     #[test]
     fn update_file() {
-        fail()
+        set_password();
+        remove_files();
+        create_folder_db_entry("target_folder"); // id 1
+        create_file_db_entry("test.txt", None); // id 1
+        create_file_db_entry("other.txt", Some(1)); // id 2
+        create_file_disk("test.txt", "test"); // (1)
+        create_folder_disk("target_folder"); // (1)
+        create_file_disk("target_folder/other.txt", "other"); // (2)
+        let client = client();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            //language=json
+            .body(r#"{"id": 1, "name": "new_name.txt", "folderId": 1}"#)
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        let body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(body.id, 1);
+        assert_eq!(body.name, String::from("new_name.txt"));
+        let folder_res: FolderResponse = client
+            .get(uri!("/folders/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch()
+            .into_json()
+            .unwrap();
+        assert_eq!(folder_res.files.len(), 2);
     }
 }
