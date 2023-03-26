@@ -67,8 +67,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
     };
 }
 
-// TODO change to /metadata/?<search>
-#[get("/?<search>")]
+#[get("/metadata?<search>")]
 pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }

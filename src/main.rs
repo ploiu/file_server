@@ -58,7 +58,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"1.0.1"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.0.1"}"#);
     }
 
     #[test]
@@ -778,12 +778,12 @@ mod file_tests {
         refresh_db();
         remove_files();
         let client = client();
-        let res = client.get(uri!("/files?search=test")).dispatch();
+        let res = client.get(uri!("/files/metadata?search=test")).dispatch();
         // without a password set
         assert_eq!(res.status(), Status::Unauthorized);
         // now with a password set
         set_password();
-        let res = client.get(uri!("/files?search=test")).dispatch();
+        let res = client.get(uri!("/files/metadata?search=test")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
     }
 
@@ -793,7 +793,7 @@ mod file_tests {
         remove_files();
         let client = client();
         let res = client
-            .get("/files?search")
+            .get("/files/metadata?search")
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
@@ -810,7 +810,7 @@ mod file_tests {
         create_file_db_entry("should_not_return.txt", None);
         let client = client();
         let res = client
-            .get("/files?search=should_return")
+            .get("/files/metadata?search=should_return")
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(res.status(), Status::Ok);

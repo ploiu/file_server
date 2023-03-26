@@ -164,6 +164,61 @@
         }
       }
     },
+    "/files/metadata": {
+      "get": {
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "description": "searches for and retrieves all files whose metadata match the passed search string",
+        "tags": [
+          "files"
+        ],
+        "responses": {
+          "200": {
+            "description": "successfully searched files",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/fileMetadata"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing search parameter, or search parameter is invalid",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "500": {
+            "description": "failed to search database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/files/metadata/{id}": {
       "parameters": [
         {
@@ -200,61 +255,6 @@
           },
           "500": {
             "description": "failed to retrieve file info. Check server logs.",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/basicMessage"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/files?search": {
-      "parameters": [
-        {
-          "in": "query",
-          "name": "search",
-          "schema": {
-            "type": "string"
-          }
-        }
-      ],
-      "get": {
-        "description": "searches for and retrieves all files whose metadata match the passed search string",
-        "tags": [
-          "files"
-        ],
-        "responses": {
-          "200": {
-            "description": "successfully searched files",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/fileMetadata"
-                  }
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Missing search parameter, or search parameter is invalid",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/basicMessage"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/unauthorizedResponse"
-          },
-          "500": {
-            "description": "failed to search database",
             "content": {
               "application/json": {
                 "schema": {
