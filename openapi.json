@@ -459,12 +459,16 @@
       }
     },
     "/folders": {
-      "parameters": [
-        {
-          "$ref": "#/components/schemas/createFolderRequest"
-        }
-      ],
       "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/createFolderRequest"
+              }
+            }
+          }
+        },
         "description": "creates a folder in the specified location",
         "tags": ["folders"],
         "responses": {
