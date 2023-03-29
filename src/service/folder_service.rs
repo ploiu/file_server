@@ -181,7 +181,10 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
                 name: folder_path,
             })
         }
-        _ => Err(CreateFolderError::DbFailure),
+        Err(e) => {
+            eprintln!("Error trying to save folder!\nException is: {:?}", e);
+            Err(CreateFolderError::DbFailure)
+        }
     };
     con.close().unwrap();
     created
