@@ -457,6 +457,55 @@
           }
         }
       }
+    },
+    "/folders": {
+      "parameters": [
+        {
+          "$ref": "#/components/schemas/createFolderRequest"
+        }
+      ],
+      "post": {
+        "description": "creates a folder in the specified location",
+        "tags": ["folders"],
+        "responses": {
+          "200": {
+            "description": "folder successfully created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "folder with that name already exists in that location",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "parent folder not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
     }
   },
   "servers": [
