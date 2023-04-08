@@ -29,9 +29,6 @@ pub async fn upload_file(
     return match save_file(&mut file_input.into_inner()).await {
         Ok(f) => CreateFileResponse::Success(Json::from(f)),
         Err(e) => match e {
-            CreateFileError::MissingInfo(message) => {
-                CreateFileResponse::BadRequest(BasicMessage::new(message.as_str()))
-            }
             CreateFileError::FailWriteDisk => {
                 CreateFileResponse::Failure(BasicMessage::new("Failed to save file to disk!"))
             }

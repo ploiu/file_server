@@ -52,8 +52,6 @@ pub enum DownloadFileResponse {
 pub enum CreateFileResponse {
     #[response(status = 201)]
     Success(Json<FileMetadataResponse>),
-    #[response(status = 400, content_type = "json")]
-    BadRequest(Json<BasicMessage>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 500, content_type = "json")]

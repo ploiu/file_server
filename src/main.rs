@@ -2,6 +2,8 @@
 extern crate rocket;
 
 use rocket::{Build, Rocket};
+use std::fs;
+use std::path::Path;
 
 use handler::{
     api_handler::{api_version, set_password},
@@ -16,11 +18,18 @@ mod handler;
 mod model;
 mod repository;
 mod service;
+#[cfg(test)]
 mod test;
+
+static TEMP_DIR: &str = "./.file_server_temp";
 
 #[launch]
 fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
+    fs::remove_dir_all(Path::new(TEMP_DIR))
+        .or_else(|_| Ok::<(), ()>(()))
+        .unwrap();
+    fs::create_dir(Path::new(TEMP_DIR)).unwrap();
     rocket::build()
         .mount("/api", routes![api_version, set_password])
         .mount(
@@ -58,7 +67,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.0.1"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.1.0"}"#);
     }
 
     #[test]

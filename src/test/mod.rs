@@ -10,13 +10,17 @@ pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 
 #[cfg(test)]
 pub fn refresh_db() {
-    remove_file(Path::new("db.sqlite")).unwrap();
+    remove_file(Path::new("db.sqlite"))
+        .or_else(|_| Ok::<(), ()>(()))
+        .unwrap();
     initialize_db().unwrap();
 }
 
 #[cfg(test)]
 pub fn remove_files() {
     if Path::new(FILE_DIR).exists() {
-        remove_dir_all(Path::new("files")).unwrap();
+        remove_dir_all(Path::new("files"))
+            .or_else(|_| Ok::<(), ()>(()))
+            .unwrap();
     }
 }

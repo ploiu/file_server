@@ -1,7 +1,5 @@
 #[derive(PartialEq)]
 pub enum CreateFileError {
-    #[deprecated(note = "rocket will enforce validation for us")]
-    MissingInfo(String),
     FailWriteDisk,
     FailWriteDb,
     ParentFolderNotFound,

@@ -3,6 +3,10 @@
 key = "./private-key.pem"
 certs = "./cert.pem"
 
+[default]
+# make the temp directory on the same disk. This fixes issues with the server running on a different device from the temp directory
+temp_dir = "./.file_server_temp"
+
 [default.limits]
 file = "100 Mib"
 data-form = "100 Mib"
