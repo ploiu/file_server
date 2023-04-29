@@ -59,7 +59,7 @@ impl Auth {
         let mut hasher = Sha256::new();
         // hash username and password combined
         let combined = format!("{}:{}", self.username.trim(), self.password.trim());
-        hasher.write(combined.as_bytes()).unwrap();
+        hasher.write_all(combined.as_bytes()).unwrap();
         format!("{:x}", hasher.finalize())
     }
 }
