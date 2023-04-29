@@ -14,14 +14,18 @@ use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
-use crate::repository::folder_repository::get_child_folders;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
 use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+    let db_id = if Some(0) == id || None == id {
+        None
+    } else {
+        id
+    };
     check_root_dir(FILE_DIR).await;
-    let folder = get_folder_by_id(id)?;
+    let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse {
         // should always have an id when coming from the database
         id: folder.id.unwrap(),
@@ -31,7 +35,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
         files: Vec::new(),
     };
     let con = repository::open_connection();
-    let child_folders = folder_repository::get_child_folders(id, &con).or_else(|e| {
+    let child_folders = folder_repository::get_child_folders(db_id, &con).or_else(|e| {
         eprintln!(
             "Failed to pull child folder info from database! Nested exception is: \n {:?}",
             e
@@ -40,7 +44,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
     });
     con.close().unwrap();
     folder.folders(child_folders?);
-    folder.files(get_files_for_folder(id).unwrap());
+    folder.files(get_files_for_folder(db_id).unwrap());
     Ok(folder)
 }
 
@@ -48,10 +52,16 @@ pub async fn create_folder(
     folder: &CreateFolderRequest,
 ) -> Result<FolderResponse, CreateFolderError> {
     check_root_dir(FILE_DIR).await;
+    // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
+    let db_folder = if let Some(0) = folder.parent_id {
+        None
+    } else {
+        folder.parent_id
+    };
     let db_folder = Folder {
         id: None,
         name: String::from(&folder.name),
-        parent_id: folder.parent_id,
+        parent_id: db_folder,
     };
     match create_folder_internal(&db_folder) {
         Ok(f) => {
@@ -73,6 +83,9 @@ pub async fn create_folder(
 }
 
 pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, UpdateFolderError> {
+    if folder.id == 0 {
+        return Err(UpdateFolderError::NotFound);
+    }
     let original_folder = match get_folder_by_id(Some(folder.id)) {
         Ok(f) => f,
         Err(e) if e == GetFolderError::NotFound => return Err(UpdateFolderError::NotFound),
@@ -108,6 +121,9 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
 }
 
 pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
+    if id == 0 {
+        return Err(DeleteFolderError::FolderNotFound);
+    }
     let con = repository::open_connection();
     let deleted_folder = delete_folder_recursively(id, &con);
     con.close().unwrap();
@@ -126,8 +142,10 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
 
 // private functions
 fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
+    // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
+    let db_folder = if let Some(0) = id { None } else { id };
     let con = repository::open_connection();
-    let result = match folder_repository::get_by_id(id, &con) {
+    let result = match folder_repository::get_by_id(db_folder, &con) {
         Ok(folder) => Ok(folder),
         Err(error) if error == rusqlite::Error::QueryReturnedNoRows => {
             Err(GetFolderError::NotFound)
@@ -198,8 +216,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         con.close().unwrap();
         return Err(UpdateFolderError::NotFound);
     }
+    let parent_id = if Some(0) == folder.parent_id || None == folder.parent_id {
+        None
+    } else {
+        folder.parent_id
+    };
+
     // first we need to check if the parent folder exists
-    match folder.parent_id {
+    match parent_id {
         Some(parent_id) => match folder_repository::get_by_id(Some(parent_id), &con) {
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
@@ -247,7 +271,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             new_path = format!("{}/{}", FILE_DIR, new_path);
         }
     };
-    let update = folder_repository::update_folder(&folder, &con);
+    let update = folder_repository::update_folder(
+        &Folder {
+            id: folder.id,
+            name: String::from(&folder.name),
+            parent_id,
+        },
+        &con,
+    );
     if update.is_err() {
         con.close().unwrap();
         eprintln!(
@@ -270,7 +301,7 @@ fn does_folder_exist(
     id: Option<u32>,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    let matching_folder = get_child_folders(id, &con)?
+    let matching_folder = folder_repository::get_child_folders(id, &con)?
         .iter()
         .map(|folder| Folder {
             id: folder.id,

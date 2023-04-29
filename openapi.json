@@ -386,50 +386,6 @@
           }
         }
       },
-      "put": {
-        "tags": [
-          "folders"
-        ],
-        "description": "updates the folder with the passed id",
-        "responses": {
-          "200": {
-            "description": "folder updated successfully",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/folderMetadata"
-                }
-              }
-            }
-          },
-          "400": {
-            "description": "Action Not Allowed.<br />Either you tried to move a folder into one of its child folders, or you tried to move it to a location already containing a folder with that name",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/basicMessage"
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/unauthorizedResponse"
-          },
-          "404": {
-            "description": "either the target folder was not found, or the parent folder it's being moved to is not found",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/basicMessage"
-                }
-              }
-            }
-          },
-          "500": {
-            "$ref": "#/components/responses/genericErrorResponse"
-          }
-        }
-      },
       "delete": {
         "tags": [
           "folders"
@@ -509,6 +465,59 @@
             "$ref": "#/components/responses/genericErrorResponse"
           }
         }
+      },
+      "put": {
+        "tags": [
+          "folders"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/createFolderRequest"
+              }
+            }
+          }
+        },
+        "description": "updates the folder with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder updated successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/folderMetadata"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Action Not Allowed.<br />Either you tried to move a folder into one of its child folders, or you tried to move it to a location already containing a folder with that name",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "either the target folder was not found, or the parent folder it's being moved to is not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
       }
     }
   },
@@ -524,7 +533,7 @@
         "properties": {
           "version": {
             "type": "string",
-            "example": "1.0.0"
+            "example": "2.2.0"
           }
         }
       },
@@ -540,7 +549,8 @@
           },
           "folder_id": {
             "type": "number",
-            "nullable": true
+            "nullable": true,
+            "minimum": 0
           }
         }
       },
@@ -555,7 +565,7 @@
           "folderId": {
             "type": "number",
             "nullable": true,
-            "description": "set to null for the root folder"
+            "minimum": 0
           }
         }
       },
@@ -567,7 +577,7 @@
           "parentId": {
             "type": "number",
             "nullable": true,
-            "description": "set to null for the root folder"
+            "minimum": 0
           }
         }
       },
@@ -582,7 +592,7 @@
           "parentId": {
             "type": "number",
             "nullable": true,
-            "description": "set to null for the root folder"
+            "minimum": 0
           }
         }
       },
