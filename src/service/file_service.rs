@@ -39,7 +39,8 @@ pub async fn save_file(
     check_root_dir(FILE_DIR).await;
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
-    return if let Some(parent_id) = file_input.folder_id {
+    let parent_id = file_input.folder_id.unwrap_or(0);
+    return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id))
             .await
@@ -165,7 +166,12 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         file_repository::get_file_path(file.id, &con).unwrap()
     );
     // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
-    if let Err(e) = file_repository::update_file(&file.id, &file.folder_id, &file.name, &con) {
+    let new_parent_id = if file.folder_id == Some(0) {
+        None
+    } else {
+        file.folder_id
+    };
+    if let Err(e) = file_repository::update_file(&file.id, &new_parent_id, &file.name, &con) {
         con.close().unwrap();
         eprintln!(
             "Failed to update file record in database. Nested exception is {:?}",

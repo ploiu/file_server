@@ -648,6 +648,25 @@ mod folder_tests {
     }
 
     #[test]
+    fn update_folder_root_not_found() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(0),
+            name: String::from("test"),
+            id: 0,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/folders"))
+            .header(Header::new("Authorization", AUTH))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+    }
+
+    #[test]
     fn delete_folder_without_creds() {
         initialize_db().unwrap();
         remove_files();
@@ -816,6 +835,72 @@ mod file_tests {
         set_password();
         let res = client.post(uri!("/files")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+    }
+
+    #[test]
+    fn upload_file() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+
+        let res = client
+            .post(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
+    }
+
+    #[test]
+    fn upload_file_parent_not_found() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+1\r\n\
+--BOUNDARY--";
+
+        let res = client
+            .post(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
     }
 
     #[test]
