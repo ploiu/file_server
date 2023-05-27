@@ -67,7 +67,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.1.0"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.2.0"}"#);
     }
 
     #[test]
@@ -157,6 +157,29 @@ mod folder_tests {
     }
 
     #[test]
+    fn get_root_folder_with_0_id() {
+        set_password();
+        remove_files();
+        let client = client();
+        let uri = uri!("/folders/0");
+        let res = client
+            .get(uri)
+            .header(Header::new("Authorization", AUTH))
+            .dispatch();
+        let expected = FolderResponse {
+            id: 0,
+            parent_id: None,
+            path: String::from("root"),
+            folders: Vec::new(),
+            files: Vec::new(),
+        };
+        let status = res.status();
+        let res_json: FolderResponse = res.into_json().unwrap();
+        assert_eq!(status, Status::Ok);
+        assert_eq!(res_json, expected);
+    }
+
+    #[test]
     fn get_non_existent_folder() {
         set_password();
         remove_files();
@@ -209,7 +232,24 @@ mod folder_tests {
         let client = client();
         let req_body = CreateFolderRequest {
             name: String::from("whatever"),
-            parent_id: None,
+            parent_id: Some(0),
+        };
+        let res = client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(serde::to_string(&req_body).unwrap())
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
+    }
+
+    #[test]
+    fn create_folder_parent_0_id() {
+        set_password();
+        remove_files();
+        let client = client();
+        let req_body = CreateFolderRequest {
+            name: String::from("whatever"),
+            parent_id: Some(0),
         };
         let res = client
             .post("/folders")
@@ -226,7 +266,7 @@ mod folder_tests {
         let client = client();
         let req_body = CreateFolderRequest {
             name: String::from("whatever"),
-            parent_id: None,
+            parent_id: Some(0),
         };
         client
             .post("/folders")
@@ -291,7 +331,7 @@ mod folder_tests {
         let client = client();
         let create_request = serde::to_string(&CreateFolderRequest {
             name: String::from("test"),
-            parent_id: None,
+            parent_id: Some(0),
         })
         .unwrap();
         client
@@ -301,7 +341,7 @@ mod folder_tests {
             .dispatch();
         // folder should have id of 1 since it's the first one
         let update_request = serde::to_string(&UpdateFolderRequest {
-            parent_id: None,
+            parent_id: Some(0),
             name: String::from("testRenamed"),
             id: 1,
         })
@@ -315,7 +355,56 @@ mod folder_tests {
         let body: FolderResponse = res.into_json().unwrap();
         let expected = FolderResponse {
             id: 1,
-            parent_id: None,
+            parent_id: Some(0),
+            path: String::from("testRenamed"),
+            folders: Vec::new(),
+            files: Vec::new(),
+        };
+        assert_eq!(body, expected);
+    }
+
+    #[test]
+    fn update_folder_new_folder_0_id() {
+        set_password();
+        remove_files();
+        let client = client();
+        let create_request = serde::to_string(&CreateFolderRequest {
+            name: String::from("test"),
+            parent_id: Some(0),
+        })
+        .unwrap();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(create_request)
+            .dispatch();
+        client
+            .post("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(
+                serde::to_string(&CreateFolderRequest {
+                    name: String::from("test2"),
+                    parent_id: Some(1),
+                })
+                .unwrap(),
+            )
+            .dispatch();
+        let update_request = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(0),
+            name: String::from("testRenamed"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put("/folders")
+            .header(Header::new("Authorization", AUTH))
+            .body(update_request)
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        let body: FolderResponse = res.into_json().unwrap();
+        let expected = FolderResponse {
+            id: 2,
+            parent_id: Some(0),
             path: String::from("testRenamed"),
             folders: Vec::new(),
             files: Vec::new(),
@@ -330,7 +419,7 @@ mod folder_tests {
         let client = client();
         let create_request = serde::to_string(&CreateFolderRequest {
             name: String::from("test"),
-            parent_id: None,
+            parent_id: Some(0),
         })
         .unwrap();
         client
@@ -339,7 +428,7 @@ mod folder_tests {
             .body(create_request)
             .dispatch();
         let update_request = serde::to_string(&UpdateFolderRequest {
-            parent_id: None,
+            parent_id: Some(0),
             name: String::from("testRenamed"),
             id: 2,
         })
@@ -366,7 +455,7 @@ mod folder_tests {
         let client = client();
         let create_request = serde::to_string(&CreateFolderRequest {
             name: String::from("test"),
-            parent_id: None,
+            parent_id: Some(0),
         })
         .unwrap();
         client
@@ -406,7 +495,7 @@ mod folder_tests {
             .body(
                 serde::to_string(&CreateFolderRequest {
                     name: String::from("test"),
-                    parent_id: None,
+                    parent_id: Some(0),
                 })
                 .unwrap(),
             )
@@ -417,14 +506,14 @@ mod folder_tests {
             .body(
                 serde::to_string(&CreateFolderRequest {
                     name: String::from("test2"),
-                    parent_id: None,
+                    parent_id: Some(0),
                 })
                 .unwrap(),
             )
             .dispatch();
         // rename to the second created folder
         let update_request = serde::to_string(&UpdateFolderRequest {
-            parent_id: None,
+            parent_id: Some(0),
             // windows is a case insensitive file system
             name: String::from("Test2"),
             id: 1,
@@ -458,7 +547,7 @@ mod folder_tests {
             .body(
                 serde::to_string(&CreateFolderRequest {
                     name: String::from("test"),
-                    parent_id: None,
+                    parent_id: Some(0),
                 })
                 .unwrap(),
             )
@@ -507,7 +596,7 @@ mod folder_tests {
             .body(
                 serde::to_string(&CreateFolderRequest {
                     name: String::from("test"),
-                    parent_id: None,
+                    parent_id: Some(0),
                 })
                 .unwrap(),
             )
@@ -559,6 +648,25 @@ mod folder_tests {
     }
 
     #[test]
+    fn update_folder_root_not_found() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(0),
+            name: String::from("test"),
+            id: 0,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/folders"))
+            .header(Header::new("Authorization", AUTH))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
+    }
+
+    #[test]
     fn delete_folder_without_creds() {
         initialize_db().unwrap();
         remove_files();
@@ -584,7 +692,7 @@ mod folder_tests {
             .body(
                 serde::to_string(&CreateFolderRequest {
                     name: String::from("To Delete"),
-                    parent_id: None,
+                    parent_id: Some(0),
                 })
                 .unwrap(),
             )
@@ -727,6 +835,72 @@ mod file_tests {
         set_password();
         let res = client.post(uri!("/files")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+    }
+
+    #[test]
+    fn upload_file() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+
+        let res = client
+            .post(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
+    }
+
+    #[test]
+    fn upload_file_parent_not_found() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+1\r\n\
+--BOUNDARY--";
+
+        let res = client
+            .post(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::NotFound);
     }
 
     #[test]

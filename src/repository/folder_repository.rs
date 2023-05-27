@@ -4,7 +4,7 @@ use crate::model::repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
     // if id is none, we're talking about the root folder
-    if id.is_none() {
+    if id.is_none() || id == Some(0) {
         return Ok(repository::Folder {
             id: Some(0), // will never collide with an id since sqlite starts with 1
             name: String::from("root"),
