@@ -30,7 +30,7 @@ pub fn api_version() -> Json<ApiVersion> {
 #[post("/password", data = "<auth>")]
 pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
     let result = api_service::create_password(auth.into_inner());
-    return match result {
+    match result {
         Ok(_) => SetPassWordResponse::Created(()),
         Err(e) if e == CreatePasswordError::AlreadyExists => SetPassWordResponse::AlreadyExists(
             BasicMessage::new("password cannot be set, as it already has been set"),
@@ -38,5 +38,5 @@ pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
         Err(_) => SetPassWordResponse::Failure(BasicMessage::new(
             "Failed to set password due to unknown error",
         )),
-    };
+    }
 }

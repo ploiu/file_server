@@ -10,7 +10,7 @@ pub fn get_version(con: &mut Connection) -> Result<String, rusqlite::Error> {
         [],
         |row| row.get(0),
     );
-    return result;
+    result
 }
 
 /// retrieves the encrypted authentication string for requests in the database
@@ -39,18 +39,18 @@ pub fn check_auth(auth: Auth, con: &mut Connection) -> Result<CheckAuthResult, r
             Err(e)
         }
     };
-    return result;
+    result
 }
 
 pub fn set_auth(auth: Auth, con: &mut Connection) -> Result<(), rusqlite::Error> {
     let mut statement = con
         .prepare(include_str!("../assets/queries/metadata/set_auth_hash.sql"))
         .unwrap();
-    return match statement.execute([auth.to_string()]) {
+    match statement.execute([auth.to_string()]) {
         Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("Failed to set password. Nested exception is {:?}", e);
             Err(e)
         }
-    };
+    }
 }

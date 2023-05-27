@@ -19,7 +19,7 @@ use crate::service::file_service::{check_root_dir, FILE_DIR};
 use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
-    let db_id = if Some(0) == id || None == id {
+    let db_id = if Some(0) == id || id.is_none() {
         None
     } else {
         id
@@ -35,12 +35,12 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
         files: Vec::new(),
     };
     let con = repository::open_connection();
-    let child_folders = folder_repository::get_child_folders(db_id, &con).or_else(|e| {
+    let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
         eprintln!(
             "Failed to pull child folder info from database! Nested exception is: \n {:?}",
             e
         );
-        Err(GetFolderError::DbFailure)
+        GetFolderError::DbFailure
     });
     con.close().unwrap();
     folder.folders(child_folders?);
@@ -190,7 +190,7 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
         con.close().unwrap();
         return Err(CreateFolderError::AlreadyExists);
     }
-    let created = match folder_repository::create_folder(&folder, &con) {
+    let created = match folder_repository::create_folder(folder, &con) {
         Ok(f) => {
             // so that I don't have to make yet another repository query to get parent folder path
             Ok(Folder {
@@ -216,7 +216,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         con.close().unwrap();
         return Err(UpdateFolderError::NotFound);
     }
-    let parent_id = if Some(0) == folder.parent_id || None == folder.parent_id {
+    let parent_id = if Some(0) == folder.parent_id || folder.parent_id.is_none() {
         None
     } else {
         folder.parent_id
@@ -301,15 +301,15 @@ fn does_folder_exist(
     id: Option<u32>,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    let matching_folder = folder_repository::get_child_folders(id, &con)?
+    let matching_folder = folder_repository::get_child_folders(id, con)?
         .iter()
         .map(|folder| Folder {
             id: folder.id,
             parent_id: folder.parent_id,
-            name: String::from(folder.name.to_lowercase().split("/").last().unwrap()),
+            name: String::from(folder.name.to_lowercase().split('/').last().unwrap()),
         })
-        .find(|folder| folder.name == name.to_lowercase().split("/").last().unwrap());
-    return Ok(matching_folder.is_some());
+        .find(|folder| folder.name == name.to_lowercase().split('/').last().unwrap());
+    Ok(matching_folder.is_some())
 }
 
 /// checks if the new_parent_id being passed matches any id of any sub child of the passed folder_id
@@ -318,7 +318,7 @@ fn is_attempt_move_to_sub_child(
     new_parent_id: &u32,
     con: &Connection,
 ) -> Result<bool, UpdateFolderError> {
-    return match folder_repository::get_all_child_folder_ids(*folder_id, &con) {
+    return match folder_repository::get_all_child_folder_ids(*folder_id, con) {
         Ok(ids) => {
             if ids.contains(new_parent_id) {
                 Err(UpdateFolderError::NotAllowed)
@@ -376,23 +376,23 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         };
     })?;
     // now that we have the folder, we can delete all the files for that folder
-    let files = folder_repository::get_files_for_folder(Some(id), &con)
+    let files = folder_repository::get_files_for_folder(Some(id), con)
         .or_else(|_| Err(DeleteFolderError::DbFailure))?;
     for file in files.iter() {
-        match file_service::delete_file_by_id_with_connection(file.id.unwrap(), &con) {
+        match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(e) if e == DeleteFileError::NotFound => {}
             Err(_) => return Err(DeleteFolderError::DbFailure),
             Ok(_) => { /*no op - file was removed properly*/ }
         };
     }
     // now that we've deleted all files, we can try with all folders
-    let sub_folders = folder_repository::get_child_folders(Some(id), &con)
+    let sub_folders = folder_repository::get_child_folders(Some(id), con)
         .or_else(|_| Err(DeleteFolderError::DbFailure))?;
     for sub_folder in sub_folders.iter() {
-        delete_folder_recursively(sub_folder.id.unwrap(), &con)?;
+        delete_folder_recursively(sub_folder.id.unwrap(), con)?;
     }
     // now that we've deleted everything beneath it, delete the requested folder from the repository
-    if let Err(e) = folder_repository::delete_folder(id, &con) {
+    if let Err(e) = folder_repository::delete_folder(id, con) {
         eprintln!(
             "Failed to delete root folder in recursive folder delete. Nested exception is: \n {:?}",
             e

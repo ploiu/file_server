@@ -19,7 +19,7 @@ pub async fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match folder_service::get_folder(id).await {
+    match folder_service::get_folder(id).await {
         Ok(folder) => GetFolderResponse::Success(Json::from(folder)),
         Err(message) if message == GetFolderError::NotFound => GetFolderResponse::FolderNotFound(
             BasicMessage::new("The folder with the passed id could not be found."),
@@ -28,7 +28,7 @@ pub async fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
         Err(_) => GetFolderResponse::FolderDbError(BasicMessage::new(
             "Failed to pull folder info from database. Check server logs for details",
         )),
-    };
+    }
 }
 
 #[post("/", data = "<folder>")]
@@ -38,7 +38,7 @@ pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> Cre
         ValidateResult::NoPasswordSet => return CreateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return CreateFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match folder_service::create_folder(&folder.into_inner()).await {
+    match folder_service::create_folder(&folder.into_inner()).await {
         Ok(f) => CreateFolderResponse::Success(Json::from(f)),
         Err(message) if message == CreateFolderError::ParentNotFound => {
             CreateFolderResponse::ParentNotFound(BasicMessage::new(
@@ -65,7 +65,7 @@ pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> Cre
                 "Failed to save folder info to the database. Check server logs for details",
             ))
         }
-    };
+    }
 }
 
 #[put("/", data = "<folder>")]
@@ -85,7 +85,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         Err(e) if e == UpdateFolderError::NotAllowed => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot move parent folder into its own child.")),
         Err(e) => panic!("Update Folder: non-listed error {:?}", e)
     };
-    return result;
+    result
 }
 
 #[delete("/<id>")]

@@ -27,7 +27,7 @@ impl Auth {
         match general_purpose::STANDARD.decode(stripped_header.as_str()) {
             Ok(value) => {
                 let combined = String::from_utf8(value).unwrap();
-                let split = combined.split(":").collect::<Vec<&str>>();
+                let split = combined.split(':').collect::<Vec<&str>>();
                 // if there aren't exactly 2 parts, then something is wrong here
                 if split.len() != 2 || split.contains(&"") {
                     return Err("Invalid basic auth format: missing username or password");

@@ -6,14 +6,14 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
-    let res = match pst.insert(params![file.name]) {
+
+    match pst.insert(params![file.name]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
             return Err(e);
         }
-    };
-    res
+    }
 }
 
 pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error> {
@@ -21,12 +21,12 @@ pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
 
-    Ok(pst.query_row([id], |row| {
+    pst.query_row([id], |row| {
         Ok(FileRecord {
             id: row.get(0)?,
             name: row.get(1)?,
         })
-    })?)
+    })
 }
 
 /// returns the full path (excluding root name) of the specified file in the database
@@ -36,8 +36,8 @@ pub fn get_file_path(id: u32, con: &Connection) -> Result<String, rusqlite::Erro
             "../assets/queries/file/get_file_path_by_id.sql"
         ))
         .unwrap();
-    let result = pst.query_row([id], |row| Ok(row.get(0)?));
-    return result;
+    let result = pst.query_row([id], |row| row.get(0));
+    result
 }
 
 /// removes the file with the passed id from the database
@@ -47,13 +47,13 @@ pub fn delete_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Er
         .unwrap();
 
     // we need to be able to delete the file off the disk, so we have to return the FileRecord too
-    let record = get_file(id, &con)?;
+    let record = get_file(id, con)?;
 
     if let Err(e) = pst.execute([id]) {
         eprintln!("Failed to delete file by id. Nested exception is {:?}", e);
         return Err(e);
     }
-    return Ok(record);
+    Ok(record)
 }
 
 /// renames the file with the passed id and links it to the folder with the passed id in the database.

@@ -27,7 +27,7 @@ static TEMP_DIR: &str = "./.file_server_temp";
 fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(TEMP_DIR))
-        .or_else(|_| Ok::<(), ()>(()))
+        .or(Ok::<(), ()>(()))
         .unwrap();
     fs::create_dir(Path::new(TEMP_DIR)).unwrap();
     rocket::build()
@@ -800,7 +800,7 @@ mod file_tests {
     fn create_file_disk(file_name: &str, contents: &str) {
         // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
         fs::create_dir(Path::new("files"))
-            .or_else(|_| Ok::<(), ()>(()))
+            .or(Ok::<(), ()>(()))
             .unwrap();
         fs::write(
             Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),

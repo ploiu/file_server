@@ -26,7 +26,7 @@ pub async fn upload_file(
         ValidateResult::NoPasswordSet => return CreateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return CreateFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    return match save_file(&mut file_input.into_inner()).await {
+    match save_file(&mut file_input.into_inner()).await {
         Ok(f) => CreateFileResponse::Success(Json::from(f)),
         Err(e) => match e {
             CreateFileError::FailWriteDisk => {
@@ -42,7 +42,7 @@ pub async fn upload_file(
                 CreateFileResponse::AlreadyExists(BasicMessage::new("That file already exists"))
             }
         },
-    };
+    }
 }
 
 #[get("/metadata/<id>")]
@@ -52,7 +52,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    return match file_service::get_file_metadata(id) {
+    match file_service::get_file_metadata(id) {
         Ok(file) => GetFileResponse::Success(Json::from(FileMetadataResponse::from(&file))),
         Err(message) if message == GetFileError::NotFound => GetFileResponse::FileNotFound(
             BasicMessage::new("The file with the passed id could not be found."),
@@ -61,7 +61,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
         Err(_) => GetFileResponse::FileDbError(BasicMessage::new(
             "Failed to pull file info from database. Check server logs for details",
         )),
-    };
+    }
 }
 
 #[get("/metadata?<search>")]
@@ -74,12 +74,12 @@ pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
     if search.trim().is_empty() {
         return SearchFileResponse::BadRequest(BasicMessage::new("Search string is required."));
     }
-    return match file_service::search_files(search) {
+    match file_service::search_files(search) {
         Ok(files) => SearchFileResponse::Success(Json::from(files)),
         Err(SearchFileError::DbError) => SearchFileResponse::GenericError(BasicMessage::new(
             "Failed to search files. Check server logs for details",
         )),
-    };
+    }
 }
 
 #[get("/<id>")]
@@ -89,12 +89,12 @@ pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
         ValidateResult::NoPasswordSet => return DownloadFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return DownloadFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    return match file_service::get_file_contents(id) {
+    match file_service::get_file_contents(id) {
         Ok(f) => DownloadFileResponse::Success(f),
         Err(e) if e == GetFileError::NotFound => DownloadFileResponse::FileNotFound(BasicMessage::new("The file with the passed id could not be found.")),
         Err(e) if e == GetFileError::DbFailure => DownloadFileResponse::FileDbError(BasicMessage::new("Failed to retrieve the file info from the database. Check the server logs for details")),
         Err(_) => panic!("Download file: We should never get here")
-    };
+    }
 }
 
 #[delete("/<id>")]
@@ -104,7 +104,7 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
         ValidateResult::NoPasswordSet => return DeleteFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return DeleteFileResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match file_service::delete_file(id) {
+    match file_service::delete_file(id) {
         Ok(()) => DeleteFileResponse::Deleted(()),
         Err(e) if e == DeleteFileError::NotFound => DeleteFileResponse::NotFound(
             BasicMessage::new("The file with the passed id could not be found."),
@@ -116,7 +116,7 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
             BasicMessage::new("Failed to remove file from the file system."),
         ),
         _ => panic!("delete file - we shouldn't reach here!"),
-    };
+    }
 }
 
 #[put("/", data = "<data>")]
@@ -127,7 +127,7 @@ pub async fn update_file(data: Json<UpdateFileRequest>, auth: Auth) -> UpdateFil
         ValidateResult::Invalid => return UpdateFileResponse::Unauthorized("Bad Credentials".to_string())
     };
 
-    return match file_service::update_file(data.into_inner()).await {
+    match file_service::update_file(data.into_inner()).await {
         Ok(f) => UpdateFileResponse::Success(Json::from(f)),
         Err(e) if e == UpdateFileError::NotFound => UpdateFileResponse::NotFound(
             BasicMessage::new("The file with the passed id could not be found."),
@@ -141,5 +141,5 @@ pub async fn update_file(data: Json<UpdateFileRequest>, auth: Auth) -> UpdateFil
         Err(_) => UpdateFileResponse::GenericError(BasicMessage::new(
             "Failed to update the file. Check the server logs for details",
         )),
-    };
+    }
 }

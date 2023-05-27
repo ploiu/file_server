@@ -95,7 +95,7 @@ pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
     let res = get_file_path(id);
     return if let Ok(path) = res {
         let path = format!("{}/{}", FILE_DIR, path);
-        File::open(path).or_else(|_| Err(GetFileError::NotFound))
+        File::open(path).map_err(|_| GetFileError::NotFound)
     } else {
         Err(res.unwrap_err())
     };
@@ -113,12 +113,12 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     con.close().unwrap();
     // helps avoid nested matches
     delete_result?;
-    return fs::remove_file(&file_path).or_else(|e| {
+    return fs::remove_file(&file_path).map_err(|e| {
         eprintln!(
             "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
             file_path, e
         );
-        Err(DeleteFileError::FileSystemError)
+        DeleteFileError::FileSystemError
     });
 }
 
@@ -127,7 +127,7 @@ pub fn delete_file_by_id_with_connection(
     id: u32,
     con: &Connection,
 ) -> Result<FileRecord, DeleteFileError> {
-    let result = match file_repository::delete_file(id, &con) {
+    let result = match file_repository::delete_file(id, con) {
         Ok(record) => Ok(record),
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
         Err(e) => {
@@ -138,7 +138,7 @@ pub fn delete_file_by_id_with_connection(
             Err(DeleteFileError::DbError)
         }
     };
-    return result;
+    result
 }
 
 pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
@@ -151,7 +151,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     // now check if the folder exists
     let parent_folder = folder_service::get_folder(file.folder_id)
         .await
-        .or_else(|_| Err(UpdateFileError::FolderNotFound))?;
+        .map_err(|_| UpdateFileError::FolderNotFound)?;
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("{}$", file.name).as_str()).unwrap();
     for f in parent_folder.files.iter() {
@@ -232,7 +232,7 @@ async fn persist_save_file_to_folder(
         "{}/{}/{}.{}",
         FILE_DIR, folder.path, file_name, file_input.extension
     );
-    return match file_input.file.persist_to(&file_name).await {
+    match file_input.file.persist_to(&file_name).await {
         Ok(_) => {
             let id = save_file_record(&file_name)?;
             // file and folder are both in repository, now link them
@@ -245,7 +245,7 @@ async fn persist_save_file_to_folder(
             eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(CreateFileError::FailWriteDisk)
         }
-    };
+    }
 }
 
 /// persists the passed file to the disk and the database
@@ -256,23 +256,23 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
         file_input.file.name().unwrap(),
         file_input.extension
     );
-    return match file_input.file.persist_to(&file_name).await {
+    match file_input.file.persist_to(&file_name).await {
         Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {
             eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(CreateFileError::FailWriteDisk)
         }
-    };
+    }
 }
 
 fn save_file_record(name: &String) -> Result<u32, CreateFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
-    let formatted_name = begin_path_regex.replace(&name, "");
+    let formatted_name = begin_path_regex.replace(name, "");
     let file_record = FileRecord::from(formatted_name.to_string());
     let con = repository::open_connection();
-    let res = file_repository::create_file(&file_record, &con)
-        .or_else(|_| Err(CreateFileError::FailWriteDb));
+    let res =
+        file_repository::create_file(&file_record, &con).map_err(|_| CreateFileError::FailWriteDb);
     con.close().unwrap();
     res
 }
@@ -300,7 +300,7 @@ fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderErr
     if link_result.is_err() {
         return Err(LinkFolderError::DbError);
     }
-    return Ok(());
+    Ok(())
 }
 
 /// checks the db to see if we have a record of the passed file
@@ -308,7 +308,7 @@ fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
     file_name: &String,
 ) -> Result<(), CreateFileError> {
-    let full_file_name = String::from(format!("{}.{}", &file_name, &file_input.extension));
+    let full_file_name = format!("{}.{}", &file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let child_files = folder_repository::get_files_for_folder(file_input.folder_id, &con);

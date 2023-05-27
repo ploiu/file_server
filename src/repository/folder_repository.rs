@@ -21,14 +21,14 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder
         Ok(repository::Folder {
             id: Some(row.get(0)?),
             name: row.get(1)?,
-            parent_id: row.get(2).ok().or_else(|| None),
+            parent_id: row.get(2).ok().or(None),
         })
     };
 
-    return match id {
+    match id {
         Some(id) => Ok(pst.query_row([id], row_mapper)?),
         None => Ok(pst.query_row([rusqlite::types::Null], row_mapper)?),
-    };
+    }
 }
 
 pub fn get_child_folders(
@@ -74,7 +74,7 @@ pub fn create_folder(
     let mut pst = con
         .prepare(include_str!("../assets/queries/folder/create_folder.sql"))
         .unwrap();
-    return match folder.parent_id {
+    match folder.parent_id {
         Some(id) => {
             let folder_id = pst.insert(rusqlite::params![folder.name, id])? as u32;
             Ok(repository::Folder {
@@ -92,7 +92,7 @@ pub fn create_folder(
                 parent_id: folder.parent_id,
             })
         }
-    };
+    }
 }
 
 /// updates a folder record in the database.
@@ -173,13 +173,13 @@ pub fn link_folder_to_file(
             "../assets/queries/folder_file/create_folder_file.sql"
         ))
         .unwrap();
-    return match pst.insert([file_id, folder_id]) {
+    match pst.insert([file_id, folder_id]) {
         Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("Failed to link file to folder. Nested exception is {:?}", e);
             return Err(e);
         }
-    };
+    }
 }
 
 /// returns all the ids of all child folders
@@ -190,7 +190,7 @@ pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, r
         ))
         .unwrap();
     let mut ids = Vec::<u32>::new();
-    let res = pst.query_map([id], |row| Ok(row.get(0)?))?;
+    let res = pst.query_map([id], |row| row.get(0))?;
     for i in res.into_iter() {
         ids.push(i.unwrap());
     }
