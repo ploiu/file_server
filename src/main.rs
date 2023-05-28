@@ -68,7 +68,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.3.0"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.3.1"}"#);
     }
 
     #[test]
@@ -752,10 +752,8 @@ mod file_tests {
     use rocket::serde::json::serde_json as serde;
 
     use crate::model::repository::{FileRecord, Folder};
-    use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
-    use crate::model::response::file_responses::{
-        CreateFileResponse, FileMetadataResponse, UpdateFileResponse,
-    };
+    use crate::model::request::file_requests::UpdateFileRequest;
+    use crate::model::response::file_responses::FileMetadataResponse;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
@@ -874,10 +872,13 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::Created);
         let res_body: FileMetadataResponse = res.into_json().unwrap();
-        assert_eq!(res_body, FileMetadataResponse {
-            id: 1,
-            name: String::from("test.txt"),
-        });
+        assert_eq!(
+            res_body,
+            FileMetadataResponse {
+                id: 1,
+                name: String::from("test.txt"),
+            }
+        );
     }
 
     #[test]
@@ -946,6 +947,20 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             FileMetadataResponse {
                 id: 1,
                 name: String::from("test")
+            }
+        );
+        // make sure that the file comes back with the right name
+        let res: FileMetadataResponse = client
+            .get(uri!("/files/metadata/1"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch()
+            .into_json()
+            .unwrap();
+        assert_eq!(
+            res,
+            FileMetadataResponse {
+                id: 1,
+                name: String::from("test"),
             }
         );
     }

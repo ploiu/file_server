@@ -233,14 +233,11 @@ async fn persist_save_file_to_folder(
     folder: &FolderResponse,
     file_name: String,
 ) -> Result<u32, CreateFileError> {
-    let file_extension = determine_file_name(&file_name, &file_input.extension);
-    let file_name = format!(
-        "{}/{}/{}{}",
-        FILE_DIR, folder.path, file_name, file_extension
-    );
-    match file_input.file.persist_to(&file_name).await {
+    let file_name = determine_file_name(&file_name, &file_input.extension);
+    let formatted_name = format!("{}/{}/{}", FILE_DIR, folder.path, file_name);
+    match file_input.file.persist_to(&formatted_name).await {
         Ok(_) => {
-            let id = save_file_record(&file_name)?;
+            let id = save_file_record(&formatted_name)?;
             // file and folder are both in repository, now link them
             if link_folder_to_file(id, folder.id).is_err() {
                 return Err(CreateFileError::FailWriteDb);
@@ -256,16 +253,11 @@ async fn persist_save_file_to_folder(
 
 /// persists the passed file to the disk and the database
 async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, CreateFileError> {
-    let file_extension = determine_file_name(
+    let file_name = determine_file_name(
         &String::from(file_input.file.name().unwrap()),
         &file_input.extension,
     );
-    let file_name = format!(
-        "{}/{}{}",
-        &FILE_DIR,
-        file_input.file.name().unwrap(),
-        file_extension
-    );
+    let file_name = format!("{}/{}", &FILE_DIR, file_name);
     match file_input.file.persist_to(&file_name).await {
         Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {
@@ -318,8 +310,7 @@ fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
     file_name: &String,
 ) -> Result<(), CreateFileError> {
-    let file_extension = determine_file_name(&file_name, &file_input.extension);
-    let full_file_name = format!("{}{}", &file_name, file_extension);
+    let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let child_files = folder_repository::get_files_for_folder(file_input.folder_id, &con);
@@ -336,10 +327,39 @@ fn check_file_in_dir(
     Ok(())
 }
 
+/// Creates the file name based on whether or not the extension exists
+/// Example:
+/// ```
+/// let root_name = String::from("test");
+/// let extension = Some(String::from("txt"));
+/// let file_name = determine_file_name(&root_name, &extension);
+/// assert_eq!(file_name, String::from("test.txt"));
+/// ```
 fn determine_file_name(root_name: &String, extension: &Option<String>) -> String {
     if let Some(ext) = extension {
         format!("{}.{}", root_name, ext)
     } else {
         root_name.to_string()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::determine_file_name;
+
+    #[test]
+    fn determine_file_name_with_ext() {
+        let root_name = String::from("test");
+        let extension = Some(String::from("txt"));
+        let file_name = determine_file_name(&root_name, &extension);
+        assert_eq!(file_name, String::from("test.txt"));
+    }
+
+    #[test]
+    fn determine_file_name_without_ext() {
+        let root_name = String::from("test");
+        let extension = None;
+        let file_name = determine_file_name(&root_name, &extension);
+        assert_eq!(file_name, String::from("test"));
     }
 }

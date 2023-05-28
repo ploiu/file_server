@@ -6,7 +6,7 @@ use crate::model::response::api_responses::SetPassWordResponse;
 use crate::model::response::BasicMessage;
 use crate::service::api_service;
 
-static API_VERSION_NUMBER: &str = "2.3.0";
+static API_VERSION_NUMBER: &str = "2.3.1";
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
