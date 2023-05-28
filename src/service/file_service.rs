@@ -63,7 +63,12 @@ pub async fn save_file(
             name: String::from(root_regex.replace(&file_name, "")),
         })
     } else {
-        let file_name = format!("{}/{}.{}", &FILE_DIR, file_name, file_input.extension);
+        let file_extension = if let Some(ext) = &file_input.extension {
+            format!(".{}", ext)
+        } else {
+            String::from("")
+        };
+        let file_name = format!("{}/{}{}", &FILE_DIR, file_name, file_extension);
         let file_id = persist_save_file(file_input).await?;
         Ok(FileMetadataResponse {
             id: file_id,
@@ -228,9 +233,10 @@ async fn persist_save_file_to_folder(
     folder: &FolderResponse,
     file_name: String,
 ) -> Result<u32, CreateFileError> {
+    let file_extension = determine_file_name(&file_name, &file_input.extension);
     let file_name = format!(
-        "{}/{}/{}.{}",
-        FILE_DIR, folder.path, file_name, file_input.extension
+        "{}/{}/{}{}",
+        FILE_DIR, folder.path, file_name, file_extension
     );
     match file_input.file.persist_to(&file_name).await {
         Ok(_) => {
@@ -250,11 +256,15 @@ async fn persist_save_file_to_folder(
 
 /// persists the passed file to the disk and the database
 async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, CreateFileError> {
+    let file_extension = determine_file_name(
+        &String::from(file_input.file.name().unwrap()),
+        &file_input.extension,
+    );
     let file_name = format!(
-        "{}/{}.{}",
+        "{}/{}{}",
         &FILE_DIR,
         file_input.file.name().unwrap(),
-        file_input.extension
+        file_extension
     );
     match file_input.file.persist_to(&file_name).await {
         Ok(_) => Ok(save_file_record(&file_name)?),
@@ -308,7 +318,8 @@ fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
     file_name: &String,
 ) -> Result<(), CreateFileError> {
-    let full_file_name = format!("{}.{}", &file_name, &file_input.extension);
+    let file_extension = determine_file_name(&file_name, &file_input.extension);
+    let full_file_name = format!("{}{}", &file_name, file_extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let child_files = folder_repository::get_files_for_folder(file_input.folder_id, &con);
@@ -323,4 +334,12 @@ fn check_file_in_dir(
         }
     }
     Ok(())
+}
+
+fn determine_file_name(root_name: &String, extension: &Option<String>) -> String {
+    if let Some(ext) = extension {
+        format!("{}.{}", root_name, ext)
+    } else {
+        root_name.to_string()
+    }
 }

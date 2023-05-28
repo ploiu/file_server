@@ -1,9 +1,10 @@
 #[macro_use]
 extern crate rocket;
 
-use rocket::{Build, Rocket};
 use std::fs;
 use std::path::Path;
+
+use rocket::{Build, Rocket};
 
 use handler::{
     api_handler::{api_version, set_password},
@@ -67,7 +68,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.2.0"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.3.0"}"#);
     }
 
     #[test]
@@ -748,9 +749,13 @@ mod file_tests {
 
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
+    use rocket::serde::json::serde_json as serde;
 
     use crate::model::repository::{FileRecord, Folder};
-    use crate::model::response::file_responses::FileMetadataResponse;
+    use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
+    use crate::model::response::file_responses::{
+        CreateFileResponse, FileMetadataResponse, UpdateFileResponse,
+    };
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
@@ -868,6 +873,11 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             .body(body)
             .dispatch();
         assert_eq!(res.status(), Status::Created);
+        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(res_body, FileMetadataResponse {
+            id: 1,
+            name: String::from("test.txt"),
+        });
     }
 
     #[test]
@@ -901,6 +911,43 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             .body(body)
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
+    }
+
+    #[test]
+    fn upload_file_without_extension() {
+        set_password();
+        remove_files();
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+        let res = client
+            .post(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        let status = res.status();
+        assert_eq!(status, Status::Created);
+        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(
+            res_body,
+            FileMetadataResponse {
+                id: 1,
+                name: String::from("test")
+            }
+        );
     }
 
     #[test]
@@ -1230,6 +1277,37 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             .unwrap();
         assert_eq!(get_first_res, "test");
         assert_eq!(get_second_res, "target");
+    }
+
+    #[test]
+    fn update_file_no_extension() {
+        set_password();
+        remove_files();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        let client = client();
+        let body = serde::to_string(&UpdateFileRequest {
+            id: 1,
+            name: String::from("test"),
+            folder_id: Some(0),
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(body)
+            .dispatch();
+        let status = res.status();
+        assert_eq!(status, Status::Ok);
+        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(
+            res_body,
+            FileMetadataResponse {
+                id: 1,
+                name: String::from("test")
+            }
+        );
     }
 
     #[test]
