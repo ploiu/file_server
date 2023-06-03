@@ -1,4 +1,4 @@
-use rocket::form::Form;
+use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
 
 use crate::guard::Auth;
@@ -18,7 +18,7 @@ use crate::service::file_service::save_file;
 /// accepts a file via request body and stores it off
 #[post("/", data = "<file_input>")]
 pub async fn upload_file(
-    file_input: Form<CreateFileRequest<'_>>,
+    file_input: Form<Strict<CreateFileRequest<'_>>>,
     auth: Auth,
 ) -> CreateFileResponse {
     match auth.validate() {

@@ -39,7 +39,7 @@ pub async fn save_file(
     check_root_dir(FILE_DIR).await;
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
-    let parent_id = file_input.folder_id.unwrap_or(0);
+    let parent_id = file_input.folder_id();
     return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id))
@@ -313,7 +313,7 @@ fn check_file_in_dir(
     let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
-    let child_files = folder_repository::get_files_for_folder(file_input.folder_id, &con);
+    let child_files = folder_repository::get_files_for_folder(Some(file_input.folder_id()), &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);
