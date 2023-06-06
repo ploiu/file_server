@@ -138,6 +138,11 @@ pub async fn update_file(data: Json<UpdateFileRequest>, auth: Auth) -> UpdateFil
         Err(e) if e == UpdateFileError::FileAlreadyExists => UpdateFileResponse::BadRequest(
             BasicMessage::new("A file with the same name already exists in the specified folder"),
         ),
+        Err(e) if e == UpdateFileError::FolderAlreadyExistsWithSameName => {
+            UpdateFileResponse::BadRequest(BasicMessage::new(
+                "A folder with that name already exists.",
+            ))
+        }
         Err(_) => UpdateFileResponse::GenericError(BasicMessage::new(
             "Failed to update the file. Check the server logs for details",
         )),

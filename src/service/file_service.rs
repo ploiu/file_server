@@ -164,6 +164,11 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
+    for f in parent_folder.folders.iter() {
+        if name_regex.is_match(f.path.as_str()) {
+            return Err(UpdateFileError::FolderAlreadyExistsWithSameName);
+        }
+    }
     // we have to create this before we update the file
     let old_path = format!(
         "{}/{}",
