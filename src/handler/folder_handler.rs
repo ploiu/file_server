@@ -80,6 +80,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         Err(e) if e == UpdateFolderError::NotFound => UpdateFolderResponse::FolderNotFound(BasicMessage::new("The folder with the passed id could not be found.")),
         Err(e) if e == UpdateFolderError::ParentNotFound => UpdateFolderResponse::ParentNotFound(BasicMessage::new("The parent folder with the passed id could not be found.")),
         Err(e) if e == UpdateFolderError::AlreadyExists => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot update folder, because another one with the new path already exists.")),
+        Err(e) if e == UpdateFolderError::FileAlreadyExists => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("A file with that name already exists.")),
         Err(e) if e == UpdateFolderError::DbFailure => UpdateFolderResponse::FolderDbError(BasicMessage::new("Could not update the folder in the database. Please check the server logs for more details.")),
         Err(e) if e == UpdateFolderError::FileSystemFailure => UpdateFolderResponse::FileSystemError(BasicMessage::new("Could not move the folder! Please see server logs for details.")),
         Err(e) if e == UpdateFolderError::NotAllowed => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot move parent folder into its own child.")),

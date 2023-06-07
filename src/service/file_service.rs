@@ -318,7 +318,7 @@ fn check_file_in_dir(
     let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
-    let child_files = folder_repository::get_files_for_folder(Some(file_input.folder_id()), &con);
+    let child_files = folder_repository::get_child_files(Some(file_input.folder_id()), &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);

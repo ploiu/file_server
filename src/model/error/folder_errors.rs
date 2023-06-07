@@ -20,6 +20,8 @@ pub enum CreateFolderError {
 pub enum UpdateFolderError {
     /// a folder with the name in the selected path already exists
     AlreadyExists,
+    /// a file with the name in the selected path already exists
+    FileAlreadyExists,
     /// the database failed to update the folder
     DbFailure,
     /// the file system failed to move the folder

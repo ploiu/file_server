@@ -111,7 +111,7 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
 }
 
 /// retrieves all the
-pub fn get_files_for_folder(
+pub fn get_child_files(
     id: Option<u32>,
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
