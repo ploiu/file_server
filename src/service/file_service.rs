@@ -164,6 +164,11 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
+    for f in parent_folder.folders.iter() {
+        if name_regex.is_match(f.path.as_str()) {
+            return Err(UpdateFileError::FolderAlreadyExistsWithSameName);
+        }
+    }
     // we have to create this before we update the file
     let old_path = format!(
         "{}/{}",
@@ -313,7 +318,7 @@ fn check_file_in_dir(
     let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
-    let child_files = folder_repository::get_files_for_folder(Some(file_input.folder_id()), &con);
+    let child_files = folder_repository::get_child_files(Some(file_input.folder_id()), &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);

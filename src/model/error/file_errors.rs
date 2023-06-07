@@ -34,6 +34,8 @@ pub enum UpdateFileError {
     FolderNotFound,
     /// file already exists in the target directory
     FileAlreadyExists,
+    /// folder with the new file name already exists in the target directory
+    FolderAlreadyExistsWithSameName,
 }
 
 #[derive(PartialEq)]

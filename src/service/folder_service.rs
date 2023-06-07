@@ -228,15 +228,26 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
                 // make sure a folder with our name doesn't exist
-                let already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
+                let folder_already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
                     Ok(exists) => exists,
                     Err(_e) => {
                         con.close().unwrap();
                         return Err(UpdateFolderError::DbFailure);
                     }
                 };
-                if already_exists {
+                if folder_already_exists {
                     return Err(UpdateFolderError::AlreadyExists);
+                }
+                // make sure we're not renaming to a file that already exists in the target parent directory
+                let file_already_exists = match does_file_exist(&folder.name, parent.id, &con) {
+                    Ok(exists) => exists,
+                    Err(_e) => {
+                        con.close().unwrap();
+                        return Err(UpdateFolderError::DbFailure);
+                    }
+                };
+                if file_already_exists {
+                    return Err(UpdateFolderError::FileAlreadyExists);
                 }
                 // check to make sure we're not moving to a sub-child
                 let check =
@@ -258,15 +269,26 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         },
         None => {
             // make sure a folder with our name doesn't exist
-            let already_exists = match does_folder_exist(&folder.name, None, &con) {
+            let folder_already_exists = match does_folder_exist(&folder.name, None, &con) {
                 Ok(exists) => exists,
                 Err(_e) => {
                     con.close().unwrap();
                     return Err(UpdateFolderError::DbFailure);
                 }
             };
-            if already_exists {
+            if folder_already_exists {
                 return Err(UpdateFolderError::AlreadyExists);
+            }
+            // make sure we're not renaming to a file that already exists in the target parent directory
+            let file_already_exists = match does_file_exist(&folder.name, None, &con) {
+                Ok(exists) => exists,
+                Err(_e) => {
+                    con.close().unwrap();
+                    return Err(UpdateFolderError::DbFailure);
+                }
+            };
+            if file_already_exists {
+                return Err(UpdateFolderError::FileAlreadyExists);
             }
             new_path = format!("{}/{}", FILE_DIR, new_path);
         }
@@ -312,6 +334,22 @@ fn does_folder_exist(
     Ok(matching_folder.is_some())
 }
 
+fn does_file_exist(
+    name: &String,
+    folder_id: Option<u32>,
+    con: &Connection,
+) -> Result<bool, rusqlite::Error> {
+    let matching_file = folder_repository::get_child_files(folder_id, &con)?
+        .iter()
+        // this is required because apparently the file is dropped immediately when it's used...
+        .map(|file| FileRecord {
+            id: file.id,
+            name: String::from(&file.name),
+        })
+        .find(|file| file.name == name.to_lowercase());
+    Ok(matching_file.is_some())
+}
+
 /// checks if the new_parent_id being passed matches any id of any sub child of the passed folder_id
 fn is_attempt_move_to_sub_child(
     folder_id: &u32,
@@ -347,7 +385,7 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
         };
     }
     // now we can retrieve all the file records in this folder
-    let result = match folder_repository::get_files_for_folder(id, &con) {
+    let result = match folder_repository::get_child_files(id, &con) {
         Ok(files) => files,
         Err(e) => {
             con.close().unwrap();
@@ -376,7 +414,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         };
     })?;
     // now that we have the folder, we can delete all the files for that folder
-    let files = folder_repository::get_files_for_folder(Some(id), con)
+    let files = folder_repository::get_child_files(Some(id), con)
         .or_else(|_| Err(DeleteFolderError::DbFailure))?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {

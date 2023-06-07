@@ -105,8 +105,10 @@ mod api_tests {
 
 #[cfg(test)]
 mod folder_tests {
-    use std::path::Path;
+    use std::fs;
+    use std::path::{Path, PathBuf};
 
+    use crate::model::repository::{FileRecord, Folder};
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
@@ -114,7 +116,7 @@ mod folder_tests {
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
-    use crate::repository::initialize_db;
+    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
     use crate::test::{refresh_db, remove_files, AUTH};
 
@@ -132,6 +134,52 @@ mod folder_tests {
             .post(uri)
             .body(r#"{"username":"username","password":"password"}"#)
             .dispatch();
+    }
+
+    fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
+        let connection = open_connection();
+        let file_id = file_repository::create_file(
+            &FileRecord {
+                id: folder_id,
+                name: String::from(name),
+            },
+            &connection,
+        )
+        .unwrap();
+        if let Some(id) = folder_id {
+            folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
+        }
+        connection.close().unwrap();
+    }
+
+    fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
+        let connection = open_connection();
+        folder_repository::create_folder(
+            &Folder {
+                id: None,
+                name: String::from(name),
+                parent_id,
+            },
+            &connection,
+        )
+        .unwrap();
+        connection.close().unwrap();
+    }
+
+    fn create_file_disk(file_name: &str, contents: &str) {
+        // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
+        fs::create_dir(Path::new("files"))
+            .or(Ok::<(), ()>(()))
+            .unwrap();
+        fs::write(
+            Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
+            contents,
+        )
+        .unwrap();
+    }
+
+    fn create_folder_disk(folder_name: &str) {
+        fs::create_dir_all(Path::new(format!("{}/{}", FILE_DIR, folder_name).as_str())).unwrap();
     }
 
     #[test]
@@ -740,12 +788,210 @@ mod folder_tests {
             .dispatch();
         assert_eq!(response.status(), Status::NotFound);
     }
+
+    #[test]
+    fn update_folder_to_file_with_same_name_root() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None); // id 1
+        create_folder_disk("test");
+        create_file_db_entry("file", None); // id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(0),
+            name: String::from("file"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/folders"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A file with that name already exists.");
+        // verify the database hasn't changed (file id 1 should be named file in root folder)
+        let con = open_connection();
+        let root_files = folder_repository::get_child_files(None, &con).unwrap_or(vec![]);
+        assert_eq!(
+            root_files[0],
+            FileRecord {
+                id: Some(1),
+                name: String::from("file")
+            }
+        );
+        let root_folders = folder_repository::get_child_folders(None, &con).unwrap();
+        assert_eq!(root_folders.len(), 1);
+        assert_eq!(
+            root_folders[0],
+            Folder {
+                id: Some(1),
+                name: String::from("test"),
+                parent_id: None
+            }
+        );
+        con.close().unwrap();
+        // verify the file system hasn't changed either
+        let files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect::<Vec<_>>();
+        assert_eq!(2, files.len());
+        assert!(files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+    }
+
+    #[test]
+    fn update_folder_to_file_with_same_name_same_folder() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_disk("test");
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_folder_disk("test/a");
+        create_file_db_entry("file", Some(1)); // file id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(1),
+            name: String::from("file"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/folders"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A file with that name already exists.");
+        // verify the database hasn't changed (folder id 2 should be named a in test folder)
+        let con = open_connection();
+        let root_folders = folder_repository::get_child_folders(None, &con).unwrap();
+        assert_eq!(root_folders.len(), 1);
+        assert_eq!(
+            root_folders[0],
+            Folder {
+                id: Some(1),
+                name: String::from("test"),
+                parent_id: None
+            }
+        );
+        let folder_1_folders = folder_repository::get_child_folders(Some(1), &con).unwrap();
+        assert_eq!(folder_1_folders.len(), 1);
+        assert_eq!(
+            folder_1_folders[0],
+            Folder {
+                id: Some(2),
+                name: String::from("test/a"),
+                parent_id: Some(1)
+            }
+        );
+        con.close().unwrap();
+        /* verify the file system hasn't changed either
+        ./files
+            -> test
+                -> a
+            -> file
+         */
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert_eq!(1, folder_1_files.len());
+        assert_eq!(2, root_files.len());
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+    }
+
+    #[test]
+    fn update_folder_to_file_with_same_name_different_folder() {
+        set_password();
+        remove_files();
+        /*
+        ./files
+            -> test
+                -> a
+            -> file
+         */
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_disk("test");
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_folder_disk("test/a");
+        create_file_db_entry("file", None); // file id 1; from root to folder id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFolderRequest {
+            parent_id: Some(0),
+            name: String::from("file"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/folders"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A file with that name already exists.");
+        // verify the database hasn't changed (file id 1 should be named file in test folder)
+        let con = open_connection();
+        let root_folder = folder_repository::get_child_folders(Some(1), &con).unwrap_or(vec![]);
+        con.close().unwrap();
+        assert_eq!(
+            root_folder[0],
+            Folder {
+                id: Some(2),
+                name: String::from("test/a"),
+                parent_id: Some(1)
+            }
+        );
+        /* verify the file system hasn't changed either
+        ./files
+            -> test
+                -> a
+            -> file
+         */
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect::<Vec<_>>();
+        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert_eq!(1, folder_1_files.len());
+        assert_eq!(2, root_files.len());
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+    }
 }
 
 #[cfg(test)]
 mod file_tests {
     use std::fs;
-    use std::path::Path;
+    use std::path::{Path, PathBuf};
 
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
@@ -786,13 +1032,13 @@ mod file_tests {
         connection.close().unwrap();
     }
 
-    fn create_folder_db_entry(name: &str) {
+    fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
         let connection = open_connection();
         folder_repository::create_folder(
             &Folder {
                 id: None,
                 name: String::from(name),
-                parent_id: None,
+                parent_id,
             },
             &connection,
         )
@@ -1254,8 +1500,8 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
     fn update_file_file_already_exists_target_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test"); // id 1
-        create_folder_db_entry("target"); // id 2
+        create_folder_db_entry("test", None); // id 1
+        create_folder_db_entry("target", None); // id 2
         create_folder_disk("test");
         create_folder_disk("target");
         // put the files in the folders
@@ -1329,7 +1575,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
     fn update_file() {
         set_password();
         remove_files();
-        create_folder_db_entry("target_folder"); // id 1
+        create_folder_db_entry("target_folder", None); // id 1
         create_file_db_entry("test.txt", None); // id 1
         create_file_db_entry("other.txt", Some(1)); // id 2
         create_file_disk("test.txt", "test"); // (1)
@@ -1353,5 +1599,159 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             .into_json()
             .unwrap();
         assert_eq!(folder_res.files.len(), 2);
+    }
+
+    #[test]
+    fn update_file_to_folder_with_same_name_root() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None); // id 1
+        create_folder_disk("test");
+        create_file_db_entry("file", None); // id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFileRequest {
+            folder_id: Some(0),
+            name: String::from("test"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A folder with that name already exists.");
+        // verify the database hasn't changed (file id 1 should be named file in root folder)
+        let con = open_connection();
+        let root_files = folder_repository::get_child_files(None, &con).unwrap_or(vec![]);
+        con.close().unwrap();
+        assert_eq!(
+            root_files[0],
+            FileRecord {
+                id: Some(1),
+                name: String::from("file")
+            }
+        );
+        // verify the file system hasn't changed either
+        let files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect::<Vec<_>>();
+        assert_eq!(2, files.len());
+        assert!(files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+    }
+
+    #[test]
+    fn update_file_to_folder_with_same_name_same_folder() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_disk("test");
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_folder_disk("test/a");
+        create_file_db_entry("file", None); // file id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFileRequest {
+            folder_id: Some(1),
+            name: String::from("a"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A folder with that name already exists.");
+        // verify the database hasn't changed (file id 1 should be named file in test folder)
+        let con = open_connection();
+        let folder_1_db_files = folder_repository::get_child_files(Some(1), &con).unwrap();
+        assert_eq!(folder_1_db_files.len(), 0);
+        con.close().unwrap();
+        // verify the file system hasn't changed either
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert_eq!(1, folder_1_files.len());
+        assert_eq!(2, root_files.len());
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+    }
+
+    #[test]
+    fn update_file_to_folder_with_same_name_different_folder() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_disk("test");
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_folder_disk("test/a");
+        create_file_db_entry("file", None); // file id 1; from root to folder id 1
+        create_file_disk("file", "test");
+        let client = client();
+        let req = serde::to_string(&UpdateFileRequest {
+            folder_id: Some(1),
+            name: String::from("a"),
+            id: 1,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        let status = res.status();
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!(status, Status::BadRequest);
+        assert_eq!(res_body.message, "A folder with that name already exists.");
+        // verify the database hasn't changed (file id 1 should be named file in test folder)
+        let con = open_connection();
+        let root_folder = folder_repository::get_child_folders(Some(1), &con).unwrap_or(vec![]);
+        con.close().unwrap();
+        assert_eq!(
+            root_folder[0],
+            Folder {
+                id: Some(2),
+                name: String::from("test/a"),
+                parent_id: Some(1)
+            }
+        );
+        // verify the file system hasn't changed either
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect::<Vec<_>>();
+        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+            .unwrap()
+            .filter_map(|e| e.ok())
+            .map(|e| e.path())
+            .collect();
+        assert_eq!(1, folder_1_files.len());
+        assert_eq!(2, root_files.len());
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
     }
 }
