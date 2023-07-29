@@ -4,5 +4,6 @@
 *.iml
 *.sqlite
 *.pem
+*.key
 cert_options.conf
 /.file_server_temp
