@@ -21,10 +21,10 @@ This project is still in development, but here is what I want from something lik
 - lightweight (should be hostable on a cheap device, such as a raspberry pi)
 - supports any file type
 - supports flexible and powerful search based on file attributes:
-    - name
-    - user-defined tags
-    - file type
-    - date
+    - [x] name
+    - [ ] user-defined tags (see [#30](https://github.com/ploiu/file_server/issues/30))
+    - [ ] file type
+    - [ ] date
 - allows for organizing files into folders
 - has a well-documented rest api
 
