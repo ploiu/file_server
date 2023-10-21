@@ -68,7 +68,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.4.0"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.0"}"#);
     }
 
     #[test]

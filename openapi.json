@@ -74,7 +74,8 @@
             "in": "query",
             "name": "force",
             "description": "force overwrite any file with the same name",
-            "example": "?force"
+            "example": "?force",
+            "schema": {}
           }
         ],
         "requestBody": {
