@@ -1108,7 +1108,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 0\r\n\
 --BOUNDARY--";
@@ -1149,7 +1149,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 1\r\n\
 --BOUNDARY--";
@@ -1187,7 +1187,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 0\r\n\
 --BOUNDARY--";
@@ -1225,7 +1225,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 1\r\n\
 --BOUNDARY--";
@@ -1260,7 +1260,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 0\r\n\
 --BOUNDARY--";
@@ -1301,7 +1301,7 @@ Content-Disposition: form-data; name=\"extension\"\r\n\
 \r\n\
 txt\r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 1\r\n\
 --BOUNDARY--";
@@ -1330,7 +1330,7 @@ Content-Type: text/plain\r\n\
 aGk=\r\n\
 \r\n\
 --BOUNDARY\r\n\
-Content-Disposition: form-data; name=\"folder_id\"\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
 \r\n\
 0\r\n\
 --BOUNDARY--";
@@ -1705,12 +1705,8 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         let client = client();
-        let body = serde::to_string(&UpdateFileRequest {
-            id: 1,
-            name: String::from("test"),
-            folder_id: Some(0),
-        })
-        .unwrap();
+        let body =
+            serde::to_string(&UpdateFileRequest::new(1, Some(0), "test".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1768,12 +1764,8 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         create_file_db_entry("file", None); // id 1
         create_file_disk("file", "test");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest {
-            folder_id: Some(0),
-            name: String::from("test"),
-            id: 1,
-        })
-        .unwrap();
+        let req =
+            serde::to_string(&UpdateFileRequest::new(1, Some(0), "test".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1817,12 +1809,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         create_file_db_entry("file", None); // file id 1
         create_file_disk("file", "test");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest {
-            folder_id: Some(1),
-            name: String::from("a"),
-            id: 1,
-        })
-        .unwrap();
+        let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1867,12 +1854,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         create_file_db_entry("file", None); // file id 1; from root to folder id 1
         create_file_disk("file", "test");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest {
-            folder_id: Some(1),
-            name: String::from("a"),
-            id: 1,
-        })
-        .unwrap();
+        let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1923,12 +1905,8 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         create_file_db_entry("thing.txt", Some(1));
         create_file_disk("inner/thing.txt", "thing");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest {
-            folder_id: None,
-            name: String::from("thing.txt"),
-            id: 2,
-        })
-        .unwrap();
+        let req =
+            serde::to_string(&UpdateFileRequest::new(2, None, "thing.txt".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))

@@ -35,6 +35,7 @@ pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
     force: bool,
 ) -> Result<FileMetadataResponse, CreateFileError> {
+    println!("{}", file_input.file.raw_name().unwrap().as_str().unwrap());
     let file_name = String::from(file_input.file.name().unwrap());
     check_root_dir(FILE_DIR).await;
     if !force {
@@ -161,7 +162,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         .await
         .map_err(|_| UpdateFileError::FolderNotFound)?;
     // now check if a file with the passed name is already under that folder
-    let name_regex = Regex::new(format!("^{}$", file.name).as_str()).unwrap();
+    let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
     for f in parent_folder.files.iter() {
         if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
@@ -184,7 +185,9 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     } else {
         file.folder_id
     };
-    if let Err(e) = file_repository::update_file(&file.id, &new_parent_id, &file.name, &con) {
+    if let Err(e) =
+        file_repository::update_file(&file.id, &new_parent_id, &file.name().unwrap(), &con)
+    {
         con.close().unwrap();
         eprintln!(
             "Failed to update file record in database. Nested exception is {:?}",
@@ -193,7 +196,12 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         return Err(UpdateFileError::DbError);
     }
     // now that we've updated the file in the database, it's time to update the file system
-    let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
+    let new_path = format!(
+        "{}/{}/{}",
+        FILE_DIR,
+        parent_folder.path,
+        file.name().unwrap()
+    );
     // we're done with the database for now
     con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
@@ -206,7 +214,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     }
     Ok(FileMetadataResponse {
         id: file.id,
-        name: file.name,
+        name: file.name().unwrap(),
     })
 }
 
