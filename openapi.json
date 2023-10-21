@@ -426,7 +426,9 @@
           }
         },
         "description": "creates a folder in the specified location",
-        "tags": ["folders"],
+        "tags": [
+          "folders"
+        ],
         "responses": {
           "200": {
             "description": "folder successfully created",
@@ -637,7 +639,12 @@
             "nullable": true
           },
           "path": {
-            "type": "string"
+            "type": "string",
+            "example": "./root/test"
+          },
+          "name": {
+            "type": "string",
+            "example": "test"
           },
           "folders": {
             "type": "array",

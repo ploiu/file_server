@@ -1,8 +1,8 @@
-use rocket::serde::{json::Json, Deserialize, Serialize};
+use rocket::serde::{Deserialize, json::Json, Serialize};
 
 use crate::model::repository::{FileRecord, Folder};
-use crate::model::response::file_responses::FileMetadataResponse;
 use crate::model::response::BasicMessage;
+use crate::model::response::file_responses::FileMetadataResponse;
 
 type NoContent = ();
 
@@ -13,17 +13,22 @@ pub struct FolderResponse {
     #[serde(rename = "parentId")]
     pub parent_id: Option<u32>,
     pub path: String,
+    pub name: String,
     pub folders: Vec<FolderResponse>,
     pub files: Vec<FileMetadataResponse>,
 }
 
 impl FolderResponse {
     pub fn from(base: &Folder) -> FolderResponse {
+        let split_name = String::from(&base.name);
+        let split_name = split_name.split("/");
+        let name = String::from(split_name.last().unwrap_or(base.name.as_str()));
         FolderResponse {
             // should always have an id when coming from the database
             id: base.id.unwrap(),
             parent_id: base.parent_id,
             path: String::from(&base.name),
+            name,
             folders: Vec::new(),
             files: Vec::new(),
         }
