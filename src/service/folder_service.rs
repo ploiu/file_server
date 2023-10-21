@@ -27,14 +27,6 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
     check_root_dir(FILE_DIR).await;
     let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse::from(&folder);
-    // let mut folder = FolderResponse {
-    //     // should always have an id when coming from the database
-    //     id: folder.id.unwrap(),
-    //     parent_id: folder.parent_id,
-    //     path: folder.name,
-    //     folders: Vec::new(),
-    //     files: Vec::new(),
-    // };
     let con = repository::open_connection();
     let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
         eprintln!(
@@ -69,13 +61,7 @@ pub async fn create_folder(
             let folder_path = format!("{}/{}", FILE_DIR, f.name);
             let fs_path = Path::new(folder_path.as_str());
             match fs::create_dir(fs_path) {
-                Ok(_) => Ok(/*FolderResponse {
-                    id: f.id.unwrap(),
-                    parent_id: f.parent_id,
-                    path: f.name,
-                    folders: Vec::new(),
-                    files: Vec::new(),
-                }*/FolderResponse::from(&f)),
+                Ok(_) => Ok(FolderResponse::from(&f)),
                 Err(_) => Err(CreateFolderError::FileSystemFailure),
             }
         }
