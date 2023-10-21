@@ -6,6 +6,7 @@ use rusqlite::Connection;
 
 use model::repository::Folder;
 
+use crate::{model, repository};
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
@@ -16,7 +17,6 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
-use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
@@ -26,14 +26,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
     };
     check_root_dir(FILE_DIR).await;
     let folder = get_folder_by_id(db_id)?;
-    let mut folder = FolderResponse {
-        // should always have an id when coming from the database
-        id: folder.id.unwrap(),
-        parent_id: folder.parent_id,
-        path: folder.name,
-        folders: Vec::new(),
-        files: Vec::new(),
-    };
+    let mut folder = FolderResponse::from(&folder);
     let con = repository::open_connection();
     let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
         eprintln!(
@@ -68,13 +61,7 @@ pub async fn create_folder(
             let folder_path = format!("{}/{}", FILE_DIR, f.name);
             let fs_path = Path::new(folder_path.as_str());
             match fs::create_dir(fs_path) {
-                Ok(_) => Ok(FolderResponse {
-                    id: f.id.unwrap(),
-                    parent_id: f.parent_id,
-                    path: f.name,
-                    folders: Vec::new(),
-                    files: Vec::new(),
-                }),
+                Ok(_) => Ok(FolderResponse::from(&f)),
                 Err(_) => Err(CreateFolderError::FileSystemFailure),
             }
         }
@@ -108,6 +95,10 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         eprintln!("Failed to move folder! Nested exception is: \n {:?}", e);
         return Err(UpdateFolderError::FileSystemFailure);
     }
+    // updated folder name will be a path, so we need to get just the folder name
+    let split_name = String::from(&updated_folder.name);
+    let split_name = split_name.split("/");
+    let name = String::from(split_name.last().unwrap_or(updated_folder.name.as_str()));
     Ok(FolderResponse {
         id: updated_folder.id.unwrap(),
         folders: Vec::new(),
@@ -117,6 +108,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .unwrap()
             .replace(&updated_folder.name, "")
             .to_string(),
+        name,
     })
 }
 

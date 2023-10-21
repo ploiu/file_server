@@ -15,7 +15,6 @@ set -o nounset
 set -o pipefail
 set -o xtrace
 
-
 #readonly TARGET_HOST=pi@raspberrypi
 #readonly TARGET_PATH=/home/pi/file_server
 readonly TARGET_ARCH=aarch64-unknown-linux-gnu
