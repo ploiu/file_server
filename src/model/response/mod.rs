@@ -1,5 +1,5 @@
-use rocket::serde::{Deserialize, Serialize};
 use rocket::serde::json::Json;
+use rocket::serde::{Deserialize, Serialize};
 
 pub mod api_responses;
 pub mod file_responses;

@@ -114,11 +114,11 @@ mod folder_tests {
 
     use crate::model::repository::{FileRecord, Folder};
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-    use crate::model::response::BasicMessage;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
-    use crate::test::{AUTH, refresh_db, remove_files};
+    use crate::test::{refresh_db, remove_files, AUTH};
 
     use super::rocket;
 
@@ -145,7 +145,7 @@ mod folder_tests {
             },
             &connection,
         )
-            .unwrap();
+        .unwrap();
         if let Some(id) = folder_id {
             folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
         }
@@ -162,7 +162,7 @@ mod folder_tests {
             },
             &connection,
         )
-            .unwrap();
+        .unwrap();
         connection.close().unwrap();
     }
 
@@ -175,7 +175,7 @@ mod folder_tests {
             Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
             contents,
         )
-            .unwrap();
+        .unwrap();
     }
 
     fn create_folder_disk(folder_name: &str) {
@@ -384,7 +384,7 @@ mod folder_tests {
             name: String::from("test"),
             parent_id: Some(0),
         })
-            .unwrap();
+        .unwrap();
         client
             .post("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -396,7 +396,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -424,7 +424,7 @@ mod folder_tests {
             name: String::from("test"),
             parent_id: Some(0),
         })
-            .unwrap();
+        .unwrap();
         client
             .post("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -438,7 +438,7 @@ mod folder_tests {
                     name: String::from("test2"),
                     parent_id: Some(1),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         let update_request = serde::to_string(&UpdateFolderRequest {
@@ -446,7 +446,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             id: 2,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -474,7 +474,7 @@ mod folder_tests {
             name: String::from("test"),
             parent_id: Some(0),
         })
-            .unwrap();
+        .unwrap();
         client
             .post("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -485,7 +485,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             id: 2,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -510,7 +510,7 @@ mod folder_tests {
             name: String::from("test"),
             parent_id: Some(0),
         })
-            .unwrap();
+        .unwrap();
         client
             .post("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -521,7 +521,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -550,7 +550,7 @@ mod folder_tests {
                     name: String::from("test"),
                     parent_id: Some(0),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         client
@@ -561,7 +561,7 @@ mod folder_tests {
                     name: String::from("test2"),
                     parent_id: Some(0),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         // rename to the second created folder
@@ -571,7 +571,7 @@ mod folder_tests {
             name: String::from("Test2"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -602,7 +602,7 @@ mod folder_tests {
                     name: String::from("test"),
                     parent_id: Some(0),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         client
@@ -613,7 +613,7 @@ mod folder_tests {
                     name: String::from("test2"),
                     parent_id: Some(1),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         // move the parent folder into the child
@@ -622,7 +622,7 @@ mod folder_tests {
             name: String::from("test"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -651,7 +651,7 @@ mod folder_tests {
                     name: String::from("test"),
                     parent_id: Some(0),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         client
@@ -662,7 +662,7 @@ mod folder_tests {
                     name: String::from("test2"),
                     parent_id: Some(1),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         client
@@ -673,7 +673,7 @@ mod folder_tests {
                     name: String::from("test3"),
                     parent_id: Some(1),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         // move the parent folder into the child
@@ -682,7 +682,7 @@ mod folder_tests {
             name: String::from("test3"),
             id: 2,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put("/folders")
             .header(Header::new("Authorization", AUTH))
@@ -710,7 +710,7 @@ mod folder_tests {
             name: String::from("test"),
             id: 0,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/folders"))
             .header(Header::new("Authorization", AUTH))
@@ -747,7 +747,7 @@ mod folder_tests {
                     name: String::from("To Delete"),
                     parent_id: Some(0),
                 })
-                    .unwrap(),
+                .unwrap(),
             )
             .dispatch();
         // now delete the folder
@@ -807,7 +807,7 @@ mod folder_tests {
             name: String::from("file"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/folders"))
             .header(Header::new("Authorization", AUTH))
@@ -866,7 +866,7 @@ mod folder_tests {
             name: String::from("file"),
             id: 2,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/folders"))
             .header(Header::new("Authorization", AUTH))
@@ -945,7 +945,7 @@ mod folder_tests {
             name: String::from("file"),
             id: 2,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/folders"))
             .header(Header::new("Authorization", AUTH))
@@ -1003,12 +1003,12 @@ mod file_tests {
 
     use crate::model::repository::{FileRecord, Folder};
     use crate::model::request::file_requests::UpdateFileRequest;
-    use crate::model::response::BasicMessage;
-    use crate::model::response::file_responses::{FileMetadataResponse};
+    use crate::model::response::file_responses::FileMetadataResponse;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
-    use crate::test::{AUTH, refresh_db, remove_files};
+    use crate::test::{refresh_db, remove_files, AUTH};
 
     use super::rocket;
 
@@ -1029,7 +1029,7 @@ mod file_tests {
             },
             &connection,
         )
-            .unwrap();
+        .unwrap();
         if let Some(id) = folder_id {
             folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
         }
@@ -1046,7 +1046,7 @@ mod file_tests {
             },
             &connection,
         )
-            .unwrap();
+        .unwrap();
         connection.close().unwrap();
     }
 
@@ -1059,7 +1059,7 @@ mod file_tests {
             Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
             contents,
         )
-            .unwrap();
+        .unwrap();
     }
 
     fn create_folder_disk(folder_name: &str) {
@@ -1408,7 +1408,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             },
             &connection,
         )
-            .unwrap();
+        .unwrap();
         connection.close().unwrap();
         let client = client();
         let res = client
@@ -1710,7 +1710,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             name: String::from("test"),
             folder_id: Some(0),
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1773,7 +1773,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             name: String::from("test"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1822,7 +1822,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             name: String::from("a"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1872,7 +1872,7 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
             name: String::from("a"),
             id: 1,
         })
-            .unwrap();
+        .unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1911,5 +1911,40 @@ Content-Disposition: form-data; name=\"folder_id\"\r\n\
         assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
         assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
         assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+    }
+    #[test]
+    fn test_update_file_trailing_name_fix() {
+        set_password();
+        remove_files();
+        create_file_db_entry("test_thing.txt", None);
+        create_file_disk("test_thing.txt", "test_thing");
+        create_folder_db_entry("inner", None);
+        create_folder_disk("inner");
+        create_file_db_entry("thing.txt", Some(1));
+        create_file_disk("inner/thing.txt", "thing");
+        let client = client();
+        let req = serde::to_string(&UpdateFileRequest {
+            folder_id: None,
+            name: String::from("thing.txt"),
+            id: 2,
+        })
+        .unwrap();
+        let res = client
+            .put(uri!("/files"))
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new("Content-Type", "application/json"))
+            .body(req)
+            .dispatch();
+        assert_eq!(res.status(), Status::Ok);
+        let body: FileMetadataResponse = res.into_json().unwrap();
+        assert_eq!(body.id, 2);
+        assert_eq!(body.name, String::from("thing.txt"));
+        let folder_res: FolderResponse = client
+            .get(uri!("/folders/0"))
+            .header(Header::new("Authorization", AUTH))
+            .dispatch()
+            .into_json()
+            .unwrap();
+        assert_eq!(folder_res.files.len(), 2);
     }
 }

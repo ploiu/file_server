@@ -33,7 +33,7 @@ pub async fn check_root_dir(dir: &str) {
 /// saves a file to the disk and database
 pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
-    force: bool
+    force: bool,
 ) -> Result<FileMetadataResponse, CreateFileError> {
     let file_name = String::from(file_input.file.name().unwrap());
     check_root_dir(FILE_DIR).await;
@@ -161,14 +161,14 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         .await
         .map_err(|_| UpdateFileError::FolderNotFound)?;
     // now check if a file with the passed name is already under that folder
-    let name_regex = Regex::new(format!("{}$", file.name).as_str()).unwrap();
+    let name_regex = Regex::new(format!("^{}$", file.name).as_str()).unwrap();
     for f in parent_folder.files.iter() {
         if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
     for f in parent_folder.folders.iter() {
-        if name_regex.is_match(f.path.as_str()) {
+        if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FolderAlreadyExistsWithSameName);
         }
     }
@@ -239,7 +239,7 @@ pub fn search_files(criteria: String) -> Result<Vec<FileMetadataResponse>, Searc
 async fn persist_save_file_to_folder(
     file_input: &mut CreateFileRequest<'_>,
     folder: &FolderResponse,
-    file_name: String
+    file_name: String,
 ) -> Result<u32, CreateFileError> {
     let file_name = determine_file_name(&file_name, &file_input.extension);
     let formatted_name = format!("{}/{}/{}", FILE_DIR, folder.path, file_name);

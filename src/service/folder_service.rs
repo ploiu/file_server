@@ -6,7 +6,6 @@ use rusqlite::Connection;
 
 use model::repository::Folder;
 
-use crate::{model, repository};
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
@@ -17,6 +16,7 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, FILE_DIR};
+use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
