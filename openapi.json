@@ -69,6 +69,14 @@
           "files"
         ],
         "description": "upload file",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "force",
+            "description": "force overwrite any file with the same name",
+            "example": "?force"
+          }
+        ],
         "requestBody": {
           "content": {
             "multipart/form-data": {

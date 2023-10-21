@@ -33,10 +33,13 @@ pub async fn check_root_dir(dir: &str) {
 /// saves a file to the disk and database
 pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
+    force: bool
 ) -> Result<FileMetadataResponse, CreateFileError> {
     let file_name = String::from(file_input.file.name().unwrap());
-    check_file_in_dir(file_input, &file_name)?;
     check_root_dir(FILE_DIR).await;
+    if !force {
+        check_file_in_dir(file_input, &file_name)?;
+    }
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     let parent_id = file_input.folder_id();
@@ -236,7 +239,7 @@ pub fn search_files(criteria: String) -> Result<Vec<FileMetadataResponse>, Searc
 async fn persist_save_file_to_folder(
     file_input: &mut CreateFileRequest<'_>,
     folder: &FolderResponse,
-    file_name: String,
+    file_name: String
 ) -> Result<u32, CreateFileError> {
     let file_name = determine_file_name(&file_name, &file_input.extension);
     let formatted_name = format!("{}/{}/{}", FILE_DIR, folder.path, file_name);
@@ -318,7 +321,12 @@ fn check_file_in_dir(
     let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
-    let child_files = folder_repository::get_child_files(Some(file_input.folder_id()), &con);
+    let db_parent_id = if 0 == file_input.folder_id() {
+        None
+    } else {
+        Some(file_input.folder_id())
+    };
+    let child_files = folder_repository::get_child_files(db_parent_id, &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);

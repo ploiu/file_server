@@ -1004,7 +1004,7 @@ mod file_tests {
     use crate::model::repository::{FileRecord, Folder};
     use crate::model::request::file_requests::UpdateFileRequest;
     use crate::model::response::BasicMessage;
-    use crate::model::response::file_responses::FileMetadataResponse;
+    use crate::model::response::file_responses::{FileMetadataResponse};
     use crate::model::response::folder_responses::FolderResponse;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::FILE_DIR;
@@ -1088,6 +1088,160 @@ mod file_tests {
         set_password();
         let res = client.post(uri!("/files")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+    }
+
+    #[test]
+    fn upload_file_already_exists_no_query_param_root() {
+        set_password();
+        remove_files();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+        let res = client
+            .post("/files")
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!("That file already exists", res_body.message);
+        // ensure we didn't overwrite the file on the disk
+        let disk_file = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
+        assert_eq!("test", disk_file);
+    }
+
+    #[test]
+    fn upload_file_already_exists_no_query_param_sub_folder() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None);
+        create_folder_disk("test");
+        create_file_db_entry("test.txt", Some(1));
+        create_file_disk("test/test.txt", "test");
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+1\r\n\
+--BOUNDARY--";
+        let res = client
+            .post("/files")
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::BadRequest);
+        let res_body: BasicMessage = res.into_json().unwrap();
+        assert_eq!("That file already exists", res_body.message);
+        // ensure we didn't overwrite the file on the disk
+        let disk_file = fs::read_to_string(format!("{}/test/{}", FILE_DIR, "test.txt")).unwrap();
+        assert_eq!("test", disk_file);
+    }
+
+    #[test]
+    fn upload_file_already_exists_with_query_param_root() {
+        set_password();
+        remove_files();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+        let res = client
+            .post("/files?force")
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
+        // ensure the file was overwritten
+        let disk_file = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
+        assert_eq!("aGk=", disk_file);
+    }
+
+    #[test]
+    fn upload_file_already_exists_with_query_param_sub_folder() {
+        set_password();
+        remove_files();
+        create_folder_db_entry("test", None);
+        create_folder_disk("test");
+        create_file_db_entry("test.txt", Some(1));
+        create_file_disk("test/test.txt", "test");
+        let client = client();
+        let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+aGk=\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folder_id\"\r\n\
+\r\n\
+1\r\n\
+--BOUNDARY--";
+        let res = client
+            .post("/files?force")
+            .header(Header::new("Authorization", AUTH))
+            .header(Header::new(
+                "Content-Type",
+                "multipart/form-data; boundary=BOUNDARY",
+            ))
+            .body(body)
+            .dispatch();
+        assert_eq!(res.status(), Status::Created);
+        // ensure the file was overwritten
+        let disk_file = fs::read_to_string(format!("{}/test/{}", FILE_DIR, "test.txt")).unwrap();
+        assert_eq!("aGk=", disk_file);
     }
 
     #[test]
