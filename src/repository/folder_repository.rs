@@ -1,4 +1,4 @@
-use rusqlite::{Connection, params, Row, Rows};
+use rusqlite::{params, Connection, Row, Rows};
 
 use crate::model::repository;
 
@@ -39,12 +39,12 @@ pub fn get_child_folders(
         con.prepare(include_str!(
             "../assets/queries/folder/get_child_folders_with_id.sql"
         ))
-            .unwrap()
+        .unwrap()
     } else {
         con.prepare(include_str!(
             "../assets/queries/folder/get_child_folders_without_id.sql"
         ))
-            .unwrap()
+        .unwrap()
     };
     let mut folders = Vec::<repository::Folder>::new();
     let mut rows: Rows;
@@ -119,12 +119,12 @@ pub fn get_child_files(
         con.prepare(include_str!(
             "../assets/queries/folder_file/get_child_files_with_id.sql"
         ))
-            .unwrap()
+        .unwrap()
     } else {
         con.prepare(include_str!(
             "../assets/queries/file/get_child_files_without_id.sql"
         ))
-            .unwrap()
+        .unwrap()
     };
     let row_mapper = |row: &Row| {
         Ok(repository::FileRecord {

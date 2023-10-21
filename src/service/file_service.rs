@@ -33,10 +33,14 @@ pub async fn check_root_dir(dir: &str) {
 /// saves a file to the disk and database
 pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
+    force: bool,
 ) -> Result<FileMetadataResponse, CreateFileError> {
+    println!("{}", file_input.file.raw_name().unwrap().as_str().unwrap());
     let file_name = String::from(file_input.file.name().unwrap());
-    check_file_in_dir(file_input, &file_name)?;
     check_root_dir(FILE_DIR).await;
+    if !force {
+        check_file_in_dir(file_input, &file_name)?;
+    }
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
     let parent_id = file_input.folder_id();
@@ -158,14 +162,14 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         .await
         .map_err(|_| UpdateFileError::FolderNotFound)?;
     // now check if a file with the passed name is already under that folder
-    let name_regex = Regex::new(format!("{}$", file.name).as_str()).unwrap();
+    let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
     for f in parent_folder.files.iter() {
         if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
     for f in parent_folder.folders.iter() {
-        if name_regex.is_match(f.path.as_str()) {
+        if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FolderAlreadyExistsWithSameName);
         }
     }
@@ -181,7 +185,9 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     } else {
         file.folder_id
     };
-    if let Err(e) = file_repository::update_file(&file.id, &new_parent_id, &file.name, &con) {
+    if let Err(e) =
+        file_repository::update_file(&file.id, &new_parent_id, &file.name().unwrap(), &con)
+    {
         con.close().unwrap();
         eprintln!(
             "Failed to update file record in database. Nested exception is {:?}",
@@ -190,7 +196,12 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         return Err(UpdateFileError::DbError);
     }
     // now that we've updated the file in the database, it's time to update the file system
-    let new_path = format!("{}/{}/{}", FILE_DIR, parent_folder.path, file.name);
+    let new_path = format!(
+        "{}/{}/{}",
+        FILE_DIR,
+        parent_folder.path,
+        file.name().unwrap()
+    );
     // we're done with the database for now
     con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
@@ -203,7 +214,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     }
     Ok(FileMetadataResponse {
         id: file.id,
-        name: file.name,
+        name: file.name().unwrap(),
     })
 }
 
@@ -318,7 +329,12 @@ fn check_file_in_dir(
     let full_file_name = determine_file_name(&file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
-    let child_files = folder_repository::get_child_files(Some(file_input.folder_id()), &con);
+    let db_parent_id = if 0 == file_input.folder_id() {
+        None
+    } else {
+        Some(file_input.folder_id())
+    };
+    let child_files = folder_repository::get_child_files(db_parent_id, &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);

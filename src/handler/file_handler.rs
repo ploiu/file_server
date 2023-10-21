@@ -7,18 +7,19 @@ use crate::model::error::file_errors::{
 };
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
-use crate::model::response::BasicMessage;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, FileMetadataResponse,
     GetFileResponse, SearchFileResponse, UpdateFileResponse,
 };
+use crate::model::response::BasicMessage;
 use crate::service::file_service;
 use crate::service::file_service::save_file;
 
 /// accepts a file via request body and stores it off
-#[post("/", data = "<file_input>")]
+#[post("/?<force>", data = "<file_input>")]
 pub async fn upload_file(
     file_input: Form<Strict<CreateFileRequest<'_>>>,
+    force: Option<bool>,
     auth: Auth,
 ) -> CreateFileResponse {
     match auth.validate() {
@@ -26,7 +27,7 @@ pub async fn upload_file(
         ValidateResult::NoPasswordSet => return CreateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return CreateFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    match save_file(&mut file_input.into_inner()).await {
+    match save_file(&mut file_input.into_inner(), force.unwrap_or(false)).await {
         Ok(f) => CreateFileResponse::Success(Json::from(f)),
         Err(e) => match e {
             CreateFileError::FailWriteDisk => {
