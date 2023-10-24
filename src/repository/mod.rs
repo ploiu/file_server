@@ -27,7 +27,7 @@ fn create_db(con: &mut Connection) {
 pub fn initialize_db() -> Result<()> {
     let mut con = open_connection();
     // table_version will be used once we have more versions of the database
-    let _table_version = match metadata_repository::get_version(&mut con) {
+    let table_version = match metadata_repository::get_version(&mut con) {
         Ok(value) => value.parse::<u64>().unwrap(),
         Err(_) => {
             // tables haven't been created yet
@@ -35,6 +35,21 @@ pub fn initialize_db() -> Result<()> {
             1
         }
     };
+    migrate_db(&con, table_version)?;
     con.close().unwrap();
+    Ok(())
+}
+
+fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
+    if table_version < 2 {
+        println!("Migrating database to v2...");
+        migrate_v2(&con)?;
+    }
+    Ok(())
+}
+
+fn migrate_v2(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("../assets/migration/v2.sql");
+    con.execute_batch(migration_script)?;
     Ok(())
 }

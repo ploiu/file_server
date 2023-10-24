@@ -6,7 +6,7 @@ use crate::model::service::metadata::CheckAuthResult;
 /// returns the current version of the database as a String
 pub fn get_version(con: &mut Connection) -> Result<String, rusqlite::Error> {
     let result = con.query_row(
-        include_str!("../assets/queries/metadata/get_api_version.sql"),
+        include_str!("../assets/queries/metadata/get_database_version.sql"),
         [],
         |row| row.get(0),
     );
