@@ -1,3 +1,3 @@
-select id, name
-from FileRecords
-where id = ?1
+select F.id, name
+from FileRecords F
+where F.id = ?1

@@ -3,6 +3,7 @@ use core::option::Option;
 use regex::Regex;
 use rocket::fs::TempFile;
 use rocket::serde::{Deserialize, Serialize};
+use crate::model::response::Tag;
 
 #[derive(FromForm)]
 #[allow(non_snake_case)] // cannot serde rename the field, and it's better to have camel case for the api
@@ -39,6 +40,7 @@ pub struct UpdateFileRequest {
     pub folder_id: Option<u32>,
     /// this value may be unsafe, see [`UpdateFileRequest::name`]
     name: String,
+    tags: Vec<Tag>
 }
 
 impl UpdateFileRequest {
@@ -66,11 +68,13 @@ impl UpdateFileRequest {
     }
 
     // this gets warned as dead code, but it has a ton of usage. maybe the rust foundation should fix this instead of playing politics
+    #[cfg(test)]
     pub fn new(id: u32, folder_id: Option<u32>, name: String) -> UpdateFileRequest {
         UpdateFileRequest {
             id,
             folder_id,
             name,
+            tags: Vec::new()
         }
     }
 }

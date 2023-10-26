@@ -1,6 +1,7 @@
-use rusqlite::{params, Connection, Row, Rows};
+use rusqlite::{params, Connection, Rows};
 
 use crate::model::repository;
+use crate::repository::file_repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
     // if id is none, we're talking about the root folder
@@ -9,6 +10,7 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder
             id: Some(0), // will never collide with an id since sqlite starts with 1
             name: String::from("root"),
             parent_id: None,
+            tags: Vec::new(),
         });
     }
     let mut pst = con
@@ -17,17 +19,9 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder
         ))
         .unwrap();
 
-    let row_mapper = |row: &Row| {
-        Ok(repository::Folder {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-            parent_id: row.get(2).ok().or(None),
-        })
-    };
-
     match id {
-        Some(id) => Ok(pst.query_row([id], row_mapper)?),
-        None => Ok(pst.query_row([rusqlite::types::Null], row_mapper)?),
+        Some(id) => Ok(pst.query_row([id], map_folder)?),
+        None => Ok(pst.query_row([rusqlite::types::Null], map_folder)?),
     }
 }
 
@@ -54,12 +48,7 @@ pub fn get_child_folders(
         rows = pst.query([])?;
     }
     while let Some(row) = rows.next()? {
-        // these folders are guaranteed to have a parent folder id
-        folders.push(repository::Folder {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-        })
+        folders.push(map_folder(row)?)
     }
     Ok(folders)
 }
@@ -81,6 +70,7 @@ pub fn create_folder(
                 id: Some(folder_id),
                 name: String::from(&folder.name),
                 parent_id: folder.parent_id,
+                tags: Vec::new(),
             })
         }
         None => {
@@ -90,6 +80,7 @@ pub fn create_folder(
                 id: Some(folder_id),
                 name: String::from(&folder.name),
                 parent_id: folder.parent_id,
+                tags: Vec::new(),
             })
         }
     }
@@ -110,7 +101,7 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
     Ok(())
 }
 
-/// retrieves all the
+// TODO move to file_repository
 pub fn get_child_files(
     id: Option<u32>,
     con: &Connection,
@@ -126,16 +117,10 @@ pub fn get_child_files(
         ))
         .unwrap()
     };
-    let row_mapper = |row: &Row| {
-        Ok(repository::FileRecord {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-        })
-    };
     let mapped = if id.is_some() {
-        pst.query_map([id.unwrap()], row_mapper)?
+        pst.query_map([id.unwrap()], file_repository::map_file)?
     } else {
-        pst.query_map([], row_mapper)?
+        pst.query_map([], file_repository::map_file)?
     };
 
     let mut files: Vec<repository::FileRecord> = Vec::new();
@@ -195,4 +180,21 @@ pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, r
         ids.push(i.unwrap());
     }
     Ok(ids)
+}
+
+fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
+    let id: Option<u32> = row.get(0)?;
+    let name: String = row.get(1)?;
+    let parent_id: Option<u32> = row.get(2)?;
+    let tags: Option<String> = row.get(2)?;
+    let tags = match tags {
+        Some(t) => t.split(",").map(|s| s.to_string()).collect::<Vec<String>>(),
+        None => Vec::new(),
+    };
+    Ok(repository::Folder {
+        id,
+        name,
+        parent_id,
+        tags,
+    })
 }

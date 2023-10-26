@@ -5,6 +5,7 @@ use rusqlite::{Connection, OpenFlags, Result};
 pub mod file_repository;
 pub mod folder_repository;
 pub mod metadata_repository;
+pub mod tag_repository;
 
 static DB_LOCATION: &str = "./db.sqlite";
 
@@ -40,6 +41,7 @@ pub fn initialize_db() -> Result<()> {
     Ok(())
 }
 
+/// incrementally upgrades the database for each version the database is behind
 fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
     if table_version < 2 {
         println!("Migrating database to v2...");
@@ -50,6 +52,5 @@ fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
 
 fn migrate_v2(con: &Connection) -> Result<()> {
     let migration_script = include_str!("../assets/migration/v2.sql");
-    con.execute_batch(migration_script)?;
-    Ok(())
+    Ok(con.execute_batch(migration_script)?)
 }

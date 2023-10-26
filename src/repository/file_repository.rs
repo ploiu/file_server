@@ -21,12 +21,7 @@ pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
 
-    pst.query_row([id], |row| {
-        Ok(FileRecord {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })
+    pst.query_row([id], map_file)
 }
 
 /// returns the full path (excluding root name) of the specified file in the database
@@ -98,14 +93,20 @@ pub fn search_files(
         .prepare(include_str!("../assets/queries/file/search_files.sql"))
         .unwrap();
     let mut results: Vec<FileRecord> = Vec::new();
-    let rows = pst.query_map([&criteria], |row| {
-        Ok(FileRecord {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })?;
+    let rows = pst.query_map([&criteria], map_file)?;
     for file in rows.into_iter() {
         results.push(file?);
     }
     Ok(results)
+}
+
+pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
+    let id = row.get(0)?;
+    let name = row.get(1)?;
+    let tags: Option<String> = row.get(2)?;
+    let tags = match tags {
+        Some(t) => t.split(",").map(|s| s.to_string()).collect::<Vec<String>>(),
+        None => Vec::new(),
+    };
+    Ok(FileRecord { id, name, tags })
 }

@@ -142,6 +142,7 @@ mod folder_tests {
             &FileRecord {
                 id: folder_id,
                 name: String::from(name),
+                tags: Vec::new(),
             },
             &connection,
         )
@@ -159,6 +160,7 @@ mod folder_tests {
                 id: None,
                 name: String::from(name),
                 parent_id,
+                tags: Vec::new(),
             },
             &connection,
         )
@@ -395,6 +397,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("testRenamed"),
             id: 1,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -445,6 +448,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("testRenamed"),
             id: 2,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -484,6 +488,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("testRenamed"),
             id: 2,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -520,6 +525,7 @@ mod folder_tests {
             parent_id: Some(3),
             name: String::from("testRenamed"),
             id: 1,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -570,6 +576,7 @@ mod folder_tests {
             // windows is a case insensitive file system
             name: String::from("Test2"),
             id: 1,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -621,6 +628,7 @@ mod folder_tests {
             parent_id: Some(2),
             name: String::from("test"),
             id: 1,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -681,6 +689,7 @@ mod folder_tests {
             parent_id: Some(1),
             name: String::from("test3"),
             id: 2,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -709,6 +718,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("test"),
             id: 0,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -806,6 +816,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("file"),
             id: 1,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -826,6 +837,7 @@ mod folder_tests {
             FileRecord {
                 id: Some(1),
                 name: String::from("file"),
+                tags: Vec::new()
             }
         );
         let root_folders = folder_repository::get_child_folders(None, &con).unwrap();
@@ -836,6 +848,7 @@ mod folder_tests {
                 id: Some(1),
                 name: String::from("test"),
                 parent_id: None,
+                tags: Vec::new()
             }
         );
         con.close().unwrap();
@@ -865,6 +878,7 @@ mod folder_tests {
             parent_id: Some(1),
             name: String::from("file"),
             id: 2,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -887,6 +901,7 @@ mod folder_tests {
                 id: Some(1),
                 name: String::from("test"),
                 parent_id: None,
+                tags: Vec::new()
             }
         );
         let folder_1_folders = folder_repository::get_child_folders(Some(1), &con).unwrap();
@@ -897,6 +912,7 @@ mod folder_tests {
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
+                tags: Vec::new()
             }
         );
         con.close().unwrap();
@@ -944,6 +960,7 @@ mod folder_tests {
             parent_id: Some(0),
             name: String::from("file"),
             id: 2,
+            tags: Vec::new(),
         })
         .unwrap();
         let res = client
@@ -966,6 +983,7 @@ mod folder_tests {
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
+                tags: Vec::new()
             }
         );
         /* verify the file system hasn't changed either
@@ -1026,6 +1044,7 @@ mod file_tests {
             &FileRecord {
                 id: folder_id,
                 name: String::from(name),
+                tags: Vec::new(),
             },
             &connection,
         )
@@ -1043,6 +1062,7 @@ mod file_tests {
                 id: None,
                 name: String::from(name),
                 parent_id,
+                tags: Vec::new(),
             },
             &connection,
         )
@@ -1405,6 +1425,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             &FileRecord {
                 id: None,
                 name: String::from("file_name.txt"),
+                tags: Vec::new(),
             },
             &connection,
         )
@@ -1785,6 +1806,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             FileRecord {
                 id: Some(1),
                 name: String::from("file"),
+                tags: Vec::new()
             }
         );
         // verify the file system hasn't changed either
@@ -1875,6 +1897,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
+                tags: Vec::new()
             }
         );
         // verify the file system hasn't changed either

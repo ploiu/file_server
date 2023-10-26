@@ -6,7 +6,7 @@ create table Tags
     title varchar not null unique
 );
 
-create table FileRecords_Tags
+create table Files_Tags
 (
     fileRecordTagId integer primary key autoincrement,
     fileRecordId    integer,
