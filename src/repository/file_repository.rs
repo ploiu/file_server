@@ -103,10 +103,5 @@ pub fn search_files(
 pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
     let id = row.get(0)?;
     let name = row.get(1)?;
-    let tags: Option<String> = row.get(2)?;
-    let tags = match tags {
-        Some(t) => t.split(",").map(|s| s.to_string()).collect::<Vec<String>>(),
-        None => Vec::new(),
-    };
-    Ok(FileRecord { id, name, tags })
+    Ok(FileRecord { id, name })
 }

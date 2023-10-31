@@ -1,9 +1,9 @@
 use core::option::Option;
 
+use crate::model::response::Tag;
 use regex::Regex;
 use rocket::fs::TempFile;
 use rocket::serde::{Deserialize, Serialize};
-use crate::model::response::Tag;
 
 #[derive(FromForm)]
 #[allow(non_snake_case)] // cannot serde rename the field, and it's better to have camel case for the api
@@ -40,7 +40,7 @@ pub struct UpdateFileRequest {
     pub folder_id: Option<u32>,
     /// this value may be unsafe, see [`UpdateFileRequest::name`]
     name: String,
-    tags: Vec<Tag>
+    tags: Vec<Tag>,
 }
 
 impl UpdateFileRequest {
@@ -74,7 +74,7 @@ impl UpdateFileRequest {
             id,
             folder_id,
             name,
-            tags: Vec::new()
+            tags: Vec::new(),
         }
     }
 }

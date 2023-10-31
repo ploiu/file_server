@@ -19,18 +19,21 @@ values ('with_tags.txt'),                  -- 1
        ('without_tags.txt'),               -- 2
        ('in_folder_with_tags.txt'),        -- 3
        ('in_nested_folder_with_tags.txt'), -- 4
-       ('in_folder_without_tags.txt'); -- 5
+       ('in_folder_without_tags.txt'),     -- 5
+       ('recursive_test.txt'); -- 6
 
 insert into Folders(name, parentId)
 values ('with tags', null),     -- 1
        ('without tags', null),  -- 2
        ('nested with tags', 1), -- 3
-       ('deep nested', 3); -- 4
+       ('deep nested', 3),      -- 4
+       ('deeper nested', 4); -- 5
 
 insert into Folder_Files(folderId, fileId)
 values (2, 3), -- root/without tags/in_folder_with_tags
        (3, 4), -- root/with tags/nested with tags/in_nested_folder_with_tags
-       (2, 5); -- root/without tags/in_folder_without_tags
+       (2, 5), -- root/without tags/in_folder_without_tags
+       (5, 6); --  root/with tags/nested with tags/deep nested/deeper nested
 
 insert into Tags(title)
 values ('Tag1'), -- 1
@@ -56,3 +59,4 @@ values
     (3, 4),
     (3, 3);
 
+-- file 4 should return folders 3 and 1

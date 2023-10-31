@@ -7,8 +7,6 @@ pub struct FileRecord {
     pub id: Option<u32>,
     /// the name of the file to save in the repository and disk
     pub name: String,
-    /// user-defined-tags
-    pub tags: Vec<String>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -19,8 +17,6 @@ pub struct Folder {
     pub name: String,
     /// may be `None` to represent it being a top-level folder
     pub parent_id: Option<u32>,
-    /// user-defined tags
-    pub tags: Vec<String>,
 }
 
 #[derive(Debug)]
@@ -38,16 +34,12 @@ pub struct Tag {
     /// the id of the tag
     id: u32,
     /// the display name of the tag
-    title: String
+    title: String,
 }
 
 // ----------------------------
 impl FileRecord {
     pub fn from(name: String) -> FileRecord {
-        FileRecord {
-            id: None,
-            name,
-            tags: Vec::new(),
-        }
+        FileRecord { id: None, name }
     }
 }

@@ -17,7 +17,7 @@ pub struct BasicMessage {
 pub struct Tag {
     /// will be None if new
     id: Option<u32>,
-    title: String
+    title: String,
 }
 
 // ----------------------------------

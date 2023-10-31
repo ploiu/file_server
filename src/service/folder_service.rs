@@ -55,7 +55,6 @@ pub async fn create_folder(
         id: None,
         name: String::from(&folder.name),
         parent_id: db_folder,
-        tags: Vec::new(),
     };
     match create_folder_internal(&db_folder) {
         Ok(f) => {
@@ -79,12 +78,10 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         Err(e) if e == GetFolderError::NotFound => return Err(UpdateFolderError::NotFound),
         _ => return Err(UpdateFolderError::DbFailure),
     };
-    let tags = &folder.tags;
     let db_folder = Folder {
         id: Some(folder.id),
         parent_id: folder.parent_id,
         name: folder.name.to_string(),
-        tags: tags.clone(),
     };
     if db_folder.parent_id == db_folder.id {
         return Err(UpdateFolderError::NotAllowed);
@@ -192,7 +189,6 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
                 parent_id: f.parent_id,
                 // so that I don't have to make yet another repository query to get parent folder path
                 name: folder_path,
-                tags: f.tags,
             })
         }
         Err(e) => {
@@ -294,7 +290,6 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             id: folder.id,
             name: String::from(&folder.name),
             parent_id,
-            tags: folder.tags.clone(),
         },
         &con,
     );
@@ -311,7 +306,6 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         id: folder.id,
         parent_id: folder.parent_id,
         name: new_path,
-        tags: folder.tags.clone(),
     })
 }
 
@@ -327,7 +321,6 @@ fn does_folder_exist(
             id: folder.id,
             parent_id: folder.parent_id,
             name: String::from(folder.name.to_lowercase().split('/').last().unwrap()),
-            tags: folder.tags.clone(),
         })
         .find(|folder| folder.name == name.to_lowercase().split('/').last().unwrap());
     Ok(matching_folder.is_some())
@@ -344,8 +337,6 @@ fn does_file_exist(
         .map(|file| FileRecord {
             id: file.id,
             name: String::from(&file.name),
-            // FIXME
-            tags: Vec::new(),
         })
         .find(|file| file.name == name.to_lowercase());
     Ok(matching_file.is_some())

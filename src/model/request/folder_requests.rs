@@ -1,5 +1,5 @@
-use rocket::serde::{Deserialize, Serialize};
 use crate::model::response::Tag;
+use rocket::serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
 #[serde(crate = "rocket::serde")]

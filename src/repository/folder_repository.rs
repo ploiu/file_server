@@ -10,7 +10,6 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder
             id: Some(0), // will never collide with an id since sqlite starts with 1
             name: String::from("root"),
             parent_id: None,
-            tags: Vec::new(),
         });
     }
     let mut pst = con
@@ -70,7 +69,6 @@ pub fn create_folder(
                 id: Some(folder_id),
                 name: String::from(&folder.name),
                 parent_id: folder.parent_id,
-                tags: Vec::new(),
             })
         }
         None => {
@@ -80,7 +78,6 @@ pub fn create_folder(
                 id: Some(folder_id),
                 name: String::from(&folder.name),
                 parent_id: folder.parent_id,
-                tags: Vec::new(),
             })
         }
     }
@@ -99,6 +96,25 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
         None => pst.execute(params![&folder.name, rusqlite::types::Null, &folder.id])?,
     };
     Ok(())
+}
+
+pub fn get_all_parent_folders(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<repository::Folder>, rusqlite::Error> {
+    let mut parents = Vec::<repository::Folder>::new();
+    let mut parent_id_pst = con
+        .prepare(include_str!(
+            "../assets/queries/folder/get_parent_folders_with_id.sql"
+        ))
+        .unwrap();
+    let mut parent_id_rows = parent_id_pst.query([folder_id])?;
+    while let Some(row) = parent_id_rows.next()? {
+        let id: Option<u32> = row.get(0)?;
+        let folder = get_by_id(id, &con)?;
+        parents.push(folder);
+    }
+    Ok(parents)
 }
 
 // TODO move to file_repository
@@ -186,15 +202,67 @@ fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error
     let id: Option<u32> = row.get(0)?;
     let name: String = row.get(1)?;
     let parent_id: Option<u32> = row.get(2)?;
-    let tags: Option<String> = row.get(2)?;
-    let tags = match tags {
-        Some(t) => t.split(",").map(|s| s.to_string()).collect::<Vec<String>>(),
-        None => Vec::new(),
-    };
     Ok(repository::Folder {
         id,
         name,
         parent_id,
-        tags,
     })
+}
+
+#[cfg(test)]
+mod get_all_parent_folders_tests {
+    use crate::model::repository::Folder;
+    use crate::repository::folder_repository::get_all_parent_folders;
+    use crate::repository::open_connection;
+    use crate::test::{create_file_db_entry, create_folder_db_entry, refresh_db};
+
+    #[test]
+    fn returns_empty_when_no_parent() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        let connection = open_connection();
+        let result = get_all_parent_folders(1, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(vec![]), result);
+    }
+
+    #[test]
+    fn returns_parent_when_only_one() {
+        refresh_db();
+        create_folder_db_entry("parent", None);
+        create_folder_db_entry("child", Some(1));
+        let connection = open_connection();
+        let expected_parent = Folder {
+            id: Some(1),
+            name: "parent".to_string(),
+            parent_id: None,
+        };
+        let result = get_all_parent_folders(2, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(vec![expected_parent]), result);
+    }
+
+    #[test]
+    fn returns_all_parents_when_multiple() {
+        refresh_db();
+        create_folder_db_entry("top", None);
+        create_folder_db_entry("middle", Some(1));
+        create_folder_db_entry("bottom", Some(2));
+        let expected = vec![
+            Folder {
+                id: Some(1),
+                name: "top".to_string(),
+                parent_id: None,
+            },
+            Folder {
+                id: Some(2),
+                name: "top/middle".to_string(),
+                parent_id: Some(1),
+            },
+        ];
+        let connection = open_connection();
+        let result = get_all_parent_folders(3, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(expected), result);
+    }
 }

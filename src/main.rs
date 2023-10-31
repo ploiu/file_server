@@ -142,7 +142,6 @@ mod folder_tests {
             &FileRecord {
                 id: folder_id,
                 name: String::from(name),
-                tags: Vec::new(),
             },
             &connection,
         )
@@ -160,7 +159,6 @@ mod folder_tests {
                 id: None,
                 name: String::from(name),
                 parent_id,
-                tags: Vec::new(),
             },
             &connection,
         )
@@ -837,7 +835,6 @@ mod folder_tests {
             FileRecord {
                 id: Some(1),
                 name: String::from("file"),
-                tags: Vec::new()
             }
         );
         let root_folders = folder_repository::get_child_folders(None, &con).unwrap();
@@ -848,7 +845,6 @@ mod folder_tests {
                 id: Some(1),
                 name: String::from("test"),
                 parent_id: None,
-                tags: Vec::new()
             }
         );
         con.close().unwrap();
@@ -901,7 +897,6 @@ mod folder_tests {
                 id: Some(1),
                 name: String::from("test"),
                 parent_id: None,
-                tags: Vec::new()
             }
         );
         let folder_1_folders = folder_repository::get_child_folders(Some(1), &con).unwrap();
@@ -912,7 +907,6 @@ mod folder_tests {
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
-                tags: Vec::new()
             }
         );
         con.close().unwrap();
@@ -983,7 +977,6 @@ mod folder_tests {
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
-                tags: Vec::new()
             }
         );
         /* verify the file system hasn't changed either
@@ -1028,7 +1021,7 @@ mod file_tests {
     use crate::service::file_service::FILE_DIR;
     use crate::test::{refresh_db, remove_files, AUTH};
 
-    use super::rocket;
+    use super::{rocket, test};
 
     fn client() -> Client {
         Client::tracked(rocket()).unwrap()
@@ -1036,38 +1029,6 @@ mod file_tests {
 
     fn fail() {
         assert!(false);
-    }
-
-    fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
-        let connection = open_connection();
-        let file_id = file_repository::create_file(
-            &FileRecord {
-                id: folder_id,
-                name: String::from(name),
-                tags: Vec::new(),
-            },
-            &connection,
-        )
-        .unwrap();
-        if let Some(id) = folder_id {
-            folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
-        }
-        connection.close().unwrap();
-    }
-
-    fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
-        let connection = open_connection();
-        folder_repository::create_folder(
-            &Folder {
-                id: None,
-                name: String::from(name),
-                parent_id,
-                tags: Vec::new(),
-            },
-            &connection,
-        )
-        .unwrap();
-        connection.close().unwrap();
     }
 
     fn create_file_disk(file_name: &str, contents: &str) {
@@ -1114,7 +1075,7 @@ mod file_tests {
     fn upload_file_already_exists_no_query_param_root() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         let client = client();
         let body = "--BOUNDARY\r\n\
@@ -1153,9 +1114,9 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn upload_file_already_exists_no_query_param_sub_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None);
+        test::create_folder_db_entry("test", None);
         create_folder_disk("test");
-        create_file_db_entry("test.txt", Some(1));
+        test::create_file_db_entry("test.txt", Some(1));
         create_file_disk("test/test.txt", "test");
         let client = client();
         let body = "--BOUNDARY\r\n\
@@ -1194,7 +1155,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn upload_file_already_exists_with_query_param_root() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         let client = client();
         let body = "--BOUNDARY\r\n\
@@ -1230,9 +1191,9 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn upload_file_already_exists_with_query_param_sub_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None);
+        test::create_folder_db_entry("test", None);
         create_folder_disk("test");
-        create_file_db_entry("test.txt", Some(1));
+        test::create_file_db_entry("test.txt", Some(1));
         create_file_disk("test/test.txt", "test");
         let client = client();
         let body = "--BOUNDARY\r\n\
@@ -1425,7 +1386,6 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             &FileRecord {
                 id: None,
                 name: String::from("file_name.txt"),
-                tags: Vec::new(),
             },
             &connection,
         )
@@ -1476,8 +1436,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         remove_files();
         // need to add to the database
-        create_file_db_entry("should_return.txt", None);
-        create_file_db_entry("should_not_return.txt", None);
+        test::create_file_db_entry("should_return.txt", None);
+        test::create_file_db_entry("should_not_return.txt", None);
         let client = client();
         let res = client
             .get("/files/metadata?search=should_return")
@@ -1526,7 +1486,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn download_file() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "hello");
         let client = client();
         let res = client
@@ -1573,7 +1533,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     #[test]
     fn delete_file() {
         set_password();
-        create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "hi");
         let client = client();
         let res = client
@@ -1616,7 +1576,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
             //language=json
-            .body(r#"{"id":1,"name":"test","folderId":null}"#)
+            .body(r#"{"id": 1, "name": "test","folderId": null, "tags":  []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
         let body: BasicMessage = res.into_json().unwrap();
@@ -1630,14 +1590,14 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_target_folder_not_found() {
         set_password();
         remove_files();
-        create_file_db_entry("test", None);
+        test::create_file_db_entry("test", None);
         create_file_disk("test", "test");
         let client = client();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
             //language=json
-            .body(r#"{"id": 1,"name": "test","folderId": 1}"#)
+            .body(r#"{"id": 1, "name": "test", "folderId": 1, "tags": []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
         let body: BasicMessage = res.into_json().unwrap();
@@ -1651,8 +1611,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_file_already_exists_root() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt", None);
-        create_file_db_entry("test2.txt", None);
+        test::create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test2.txt", None);
         create_file_disk("test.txt", "test");
         create_file_disk("test2.txt", "test2");
         let client = client();
@@ -1660,7 +1620,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
             //language=json ; rename test.txt to test2.txt
-            .body(r#"{"id": 1,"name": "test2.txt","parentId": null}"#)
+            .body(r#"{"id": 1,"name": "test2.txt","parentId": null, "tags":  []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
         let body: BasicMessage = res.into_json().unwrap();
@@ -1679,13 +1639,13 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_file_already_exists_target_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None); // id 1
-        create_folder_db_entry("target", None); // id 2
+        test::create_folder_db_entry("test", None); // id 1
+        test::create_folder_db_entry("target", None); // id 2
         create_folder_disk("test");
         create_folder_disk("target");
         // put the files in the folders
-        create_file_db_entry("test.txt", Some(1)); // id 1
-        create_file_db_entry("test.txt", Some(2)); // id 2
+        test::create_file_db_entry("test.txt", Some(1)); // id 1
+        test::create_file_db_entry("test.txt", Some(2)); // id 2
         create_file_disk("test/test.txt", "test");
         create_file_disk("target/test.txt", "target");
         // now try to move test/test.txt to target/test.txt
@@ -1694,7 +1654,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
             //language=json
-            .body(r#"{"id": 1, "name": "test.txt", "folderId": 2}"#)
+            .body(r#"{"id": 1, "name": "test.txt", "folderId": 2, "tags":  []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
         let body: BasicMessage = res.into_json().unwrap();
@@ -1723,7 +1683,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_no_extension() {
         set_password();
         remove_files();
-        create_file_db_entry("test.txt", None);
+        test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         let client = client();
         let body =
@@ -1750,9 +1710,9 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file() {
         set_password();
         remove_files();
-        create_folder_db_entry("target_folder", None); // id 1
-        create_file_db_entry("test.txt", None); // id 1
-        create_file_db_entry("other.txt", Some(1)); // id 2
+        test::create_folder_db_entry("target_folder", None); // id 1
+        test::create_file_db_entry("test.txt", None); // id 1
+        test::create_file_db_entry("other.txt", Some(1)); // id 2
         create_file_disk("test.txt", "test"); // (1)
         create_folder_disk("target_folder"); // (1)
         create_file_disk("target_folder/other.txt", "other"); // (2)
@@ -1761,7 +1721,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
             //language=json
-            .body(r#"{"id": 1, "name": "new_name.txt", "folderId": 1}"#)
+            .body(r#"{"id": 1, "name": "new_name.txt", "folderId": 1, "tags":  []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::Ok);
         let body: FileMetadataResponse = res.into_json().unwrap();
@@ -1780,9 +1740,9 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_to_folder_with_same_name_root() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None); // id 1
+        test::create_folder_db_entry("test", None); // id 1
         create_folder_disk("test");
-        create_file_db_entry("file", None); // id 1
+        test::create_file_db_entry("file", None); // id 1
         create_file_disk("file", "test");
         let client = client();
         let req =
@@ -1806,7 +1766,6 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             FileRecord {
                 id: Some(1),
                 name: String::from("file"),
-                tags: Vec::new()
             }
         );
         // verify the file system hasn't changed either
@@ -1824,11 +1783,11 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_to_folder_with_same_name_same_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None); // folder id 1
+        test::create_folder_db_entry("test", None); // folder id 1
         create_folder_disk("test");
-        create_folder_db_entry("a", Some(1)); // folder id 2
+        test::create_folder_db_entry("a", Some(1)); // folder id 2
         create_folder_disk("test/a");
-        create_file_db_entry("file", None); // file id 1
+        test::create_file_db_entry("file", None); // file id 1
         create_file_disk("file", "test");
         let client = client();
         let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
@@ -1869,11 +1828,11 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn update_file_to_folder_with_same_name_different_folder() {
         set_password();
         remove_files();
-        create_folder_db_entry("test", None); // folder id 1
+        test::create_folder_db_entry("test", None); // folder id 1
         create_folder_disk("test");
-        create_folder_db_entry("a", Some(1)); // folder id 2
+        test::create_folder_db_entry("a", Some(1)); // folder id 2
         create_folder_disk("test/a");
-        create_file_db_entry("file", None); // file id 1; from root to folder id 1
+        test::create_file_db_entry("file", None); // file id 1; from root to folder id 1
         create_file_disk("file", "test");
         let client = client();
         let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
@@ -1897,7 +1856,6 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
                 id: Some(2),
                 name: String::from("test/a"),
                 parent_id: Some(1),
-                tags: Vec::new()
             }
         );
         // verify the file system hasn't changed either
@@ -1921,11 +1879,11 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     fn test_update_file_trailing_name_fix() {
         set_password();
         remove_files();
-        create_file_db_entry("test_thing.txt", None);
+        test::create_file_db_entry("test_thing.txt", None);
         create_file_disk("test_thing.txt", "test_thing");
-        create_folder_db_entry("inner", None);
+        test::create_folder_db_entry("inner", None);
         create_folder_disk("inner");
-        create_file_db_entry("thing.txt", Some(1));
+        test::create_file_db_entry("thing.txt", Some(1));
         create_file_disk("inner/thing.txt", "thing");
         let client = client();
         let req =
