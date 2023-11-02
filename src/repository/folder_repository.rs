@@ -214,7 +214,7 @@ mod get_all_parent_folders_tests {
     use crate::model::repository::Folder;
     use crate::repository::folder_repository::get_all_parent_folders;
     use crate::repository::open_connection;
-    use crate::test::{create_file_db_entry, create_folder_db_entry, refresh_db};
+    use crate::test::{create_folder_db_entry, refresh_db};
 
     #[test]
     fn returns_empty_when_no_parent() {

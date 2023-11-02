@@ -67,7 +67,6 @@ impl UpdateFileRequest {
         Some(replaced)
     }
 
-    // this gets warned as dead code, but it has a ton of usage. maybe the rust foundation should fix this instead of playing politics
     #[cfg(test)]
     pub fn new(id: u32, folder_id: Option<u32>, name: String) -> UpdateFileRequest {
         UpdateFileRequest {
@@ -82,10 +81,6 @@ impl UpdateFileRequest {
 #[cfg(test)]
 mod update_file_request_tests {
     use crate::model::request::file_requests::UpdateFileRequest;
-
-    fn fail() {
-        assert!(false)
-    }
 
     #[test]
     fn name_removes_invalid_names() {

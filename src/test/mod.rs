@@ -55,3 +55,7 @@ pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
     .unwrap();
     connection.close().unwrap();
 }
+
+pub fn fail() {
+    panic!("unimplemented test");
+}

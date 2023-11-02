@@ -29,12 +29,12 @@ pub struct FolderFiles {
     pub file_id: u32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct Tag {
     /// the id of the tag
-    id: u32,
+    pub id: u32,
     /// the display name of the tag
-    title: String,
+    pub title: String,
 }
 
 // ----------------------------
