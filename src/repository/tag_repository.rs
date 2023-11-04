@@ -1,3 +1,4 @@
+use rocket::http::ext::IntoCollection;
 use rusqlite::Connection;
 
 use crate::model::repository;
@@ -58,6 +59,30 @@ pub fn delete_tag(id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
         .unwrap();
     pst.execute(rusqlite::params![id])?;
     Ok(())
+}
+
+/// the caller of this function will need to make sure the tag already exists,
+/// but this function makes sure the tag isn't on the file already
+pub fn add_tag_to_file(file_id: u32, tag_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
+    panic!("unimplemented");
+}
+
+// TODO tests when my brain isn't melting
+pub fn get_tags_on_file(
+    file_id: u32,
+    con: &Connection,
+) -> Result<Vec<repository::Tag>, rusqlite::Error> {
+    let mut pst = con
+        .prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))
+        .unwrap();
+    let rows = pst.query_map(rusqlite::params![file_id], |row| Ok(tag_mapper(&row)))?;
+    let mut tags: Vec<repository::Tag> = Vec::new();
+    for tag_res in rows {
+        // I know it's probably bad style, but I'm laughing too hard at the double question mark.
+        // no I don't know what my code is doing and I'm glad my code reflects that
+        tags.push(tag_res??);
+    }
+    Ok(tags)
 }
 
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
