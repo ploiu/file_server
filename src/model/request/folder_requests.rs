@@ -1,4 +1,4 @@
-use crate::model::response::Tag;
+use crate::model::response::TagApi;
 use rocket::serde::{Deserialize, Serialize};
 
 #[derive(Deserialize, Serialize)]
@@ -16,5 +16,5 @@ pub struct UpdateFolderRequest {
     pub name: String,
     #[serde(rename = "parentId")]
     pub parent_id: Option<u32>,
-    pub tags: Vec<Tag>,
+    pub tags: Vec<TagApi>,
 }

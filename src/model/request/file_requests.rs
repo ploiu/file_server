@@ -1,6 +1,6 @@
 use core::option::Option;
 
-use crate::model::response::Tag;
+use crate::model::response::TagApi;
 use regex::Regex;
 use rocket::fs::TempFile;
 use rocket::serde::{Deserialize, Serialize};
@@ -40,7 +40,7 @@ pub struct UpdateFileRequest {
     pub folder_id: Option<u32>,
     /// this value may be unsafe, see [`UpdateFileRequest::name`]
     name: String,
-    tags: Vec<Tag>,
+    tags: Vec<TagApi>,
 }
 
 impl UpdateFileRequest {
