@@ -20,4 +20,4 @@ jobs:
         run: cargo build --verbose
       - name: Run tests
         # test-threads must be 1 because we interact with the same database file...this might change in the future
-        run: cargo test --verbose -- --test-threads=1
+        run: cargo test --verbose

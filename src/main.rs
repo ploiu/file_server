@@ -40,6 +40,7 @@ fn rocket() -> Rocket<Build> {
         .or(Ok::<(), ()>(()))
         .unwrap();
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
+    fs::write("./.file_server_temp/.gitkeep", "").unwrap();
     rocket::build()
         .mount("/api", routes![api_version, set_password])
         .mount(
