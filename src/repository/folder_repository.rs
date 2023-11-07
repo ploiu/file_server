@@ -214,7 +214,7 @@ mod get_all_parent_folders_tests {
     use crate::model::repository::Folder;
     use crate::repository::folder_repository::get_all_parent_folders;
     use crate::repository::open_connection;
-    use crate::test::{create_folder_db_entry, refresh_db};
+    use crate::test::*;
 
     #[test]
     fn returns_empty_when_no_parent() {
@@ -224,8 +224,8 @@ mod get_all_parent_folders_tests {
         let result = get_all_parent_folders(1, &connection);
         connection.close().unwrap();
         assert_eq!(Ok(vec![]), result);
+        cleanup();
     }
-
     #[test]
     fn returns_parent_when_only_one() {
         refresh_db();
@@ -240,8 +240,8 @@ mod get_all_parent_folders_tests {
         let result = get_all_parent_folders(2, &connection);
         connection.close().unwrap();
         assert_eq!(Ok(vec![expected_parent]), result);
+        cleanup();
     }
-
     #[test]
     fn returns_all_parents_when_multiple() {
         refresh_db();
@@ -264,5 +264,6 @@ mod get_all_parent_folders_tests {
         let result = get_all_parent_folders(3, &connection);
         connection.close().unwrap();
         assert_eq!(Ok(expected), result);
+        cleanup();
     }
 }

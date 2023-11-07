@@ -34,7 +34,6 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
 }
 
 /// will return the tag with the passed id
-// TODO test
 pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
     let con = open_connection();
     let tag: repository::Tag = match tag_repository::get_tag(id, &con) {
@@ -82,4 +81,28 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
 /// This will always be empty if requesting with the root folder id (0 or None)
 pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
     panic!("unimplemented");
+}
+
+#[cfg(test)]
+mod get_tag_tests {
+    use crate::model::error::tag_errors::GetTagError;
+    use crate::service::tag_service::{create_tag, get_tag};
+    use crate::test::*;
+
+    #[test]
+    fn test_get_tag() {
+        refresh_db();
+        let expected = create_tag("test".to_string()).unwrap();
+        let actual = get_tag(1).unwrap();
+        assert_eq!(actual, expected);
+        cleanup();
+    }
+
+    #[test]
+    fn test_get_tag_non_existent() {
+        refresh_db();
+        let res = get_tag(1).expect_err("Retrieving a nonexistent tag should return an error");
+        assert_eq!(GetTagError::TagNotFound, res);
+        cleanup();
+    }
 }

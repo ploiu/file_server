@@ -1,10 +1,10 @@
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum CreateTagError {
     /// an error with the database
     DbError,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum GetTagError {
     /// an error with the database
     DbError,
@@ -12,7 +12,7 @@ pub enum GetTagError {
     TagNotFound,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum UpdateTagError {
     /// an error with the database
     DbError,
@@ -22,13 +22,13 @@ pub enum UpdateTagError {
     NewNameAlreadyExists,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum DeleteTagError {
     /// an error with the database
     DbError,
 }
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Debug)]
 pub enum TagRelationError {
     /// an error with the database
     DbError,

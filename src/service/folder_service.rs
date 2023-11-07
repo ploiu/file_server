@@ -15,7 +15,7 @@ use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRe
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
 use crate::service::file_service;
-use crate::service::file_service::{check_root_dir, FILE_DIR};
+use crate::service::file_service::{check_root_dir, file_dir};
 use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
@@ -24,7 +24,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
     } else {
         id
     };
-    check_root_dir(FILE_DIR).await;
+    check_root_dir(file_dir()).await;
     let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse::from(&folder);
     let con = repository::open_connection();
@@ -44,7 +44,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
 pub async fn create_folder(
     folder: &CreateFolderRequest,
 ) -> Result<FolderResponse, CreateFolderError> {
-    check_root_dir(FILE_DIR).await;
+    check_root_dir(file_dir()).await;
     // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
     let db_folder = if let Some(0) = folder.parent_id {
         None
@@ -58,7 +58,7 @@ pub async fn create_folder(
     };
     match create_folder_internal(&db_folder) {
         Ok(f) => {
-            let folder_path = format!("{}/{}", FILE_DIR, f.name);
+            let folder_path = format!("{}/{}", file_dir(), f.name);
             let fs_path = Path::new(folder_path.as_str());
             match fs::create_dir(fs_path) {
                 Ok(_) => Ok(FolderResponse::from(&f)),
@@ -89,7 +89,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     let updated_folder = update_folder_internal(&db_folder)?;
     // if we can't rename the folder, then we have problems
     if let Err(e) = fs::rename(
-        format!("{}/{}", FILE_DIR, original_folder.name),
+        format!("{}/{}", file_dir(), original_folder.name),
         &updated_folder.name,
     ) {
         eprintln!("Failed to move folder! Nested exception is: \n {:?}", e);
@@ -104,7 +104,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         folders: Vec::new(),
         files: Vec::new(),
         parent_id: updated_folder.parent_id,
-        path: Regex::new(format!("^{}/", FILE_DIR).as_str())
+        path: Regex::new(format!("^{}/", file_dir()).as_str())
             .unwrap()
             .replace(&updated_folder.name, "")
             .to_string(),
@@ -121,7 +121,7 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
     con.close().unwrap();
     let deleted_folder = deleted_folder?;
     // delete went well, now time to actually remove the folder
-    let path = format!("{}/{}", FILE_DIR, deleted_folder.name);
+    let path = format!("{}/{}", file_dir(), deleted_folder.name);
     if let Err(e) = fs::remove_dir_all(path) {
         eprintln!(
             "Failed to recursively delete folder from disk! Nested exception is: \n {:?}",
@@ -178,7 +178,7 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
                 return Err(CreateFolderError::ParentNotFound);
             }
         };
-    } else if Path::new(format!("{}/{}", FILE_DIR, folder_path).as_str()).exists() {
+    } else if Path::new(format!("{}/{}", file_dir(), folder_path).as_str()).exists() {
         con.close().unwrap();
         return Err(CreateFolderError::AlreadyExists);
     }
@@ -245,7 +245,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
                 let check =
                     is_attempt_move_to_sub_child(&folder.id.unwrap(), &parent.id.unwrap(), &con);
                 if check == Ok(true) {
-                    new_path = format!("{}/{}/{}", FILE_DIR, parent.name, new_path);
+                    new_path = format!("{}/{}/{}", file_dir(), parent.name, new_path);
                 } else if check == Ok(false) {
                     con.close().unwrap();
                     return Err(UpdateFolderError::NotAllowed);
@@ -282,7 +282,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             if file_already_exists {
                 return Err(UpdateFolderError::FileAlreadyExists);
             }
-            new_path = format!("{}/{}", FILE_DIR, new_path);
+            new_path = format!("{}/{}", file_dir(), new_path);
         }
     };
     let update = folder_repository::update_folder(

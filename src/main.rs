@@ -22,15 +22,24 @@ mod service;
 #[cfg(test)]
 mod test;
 
-static TEMP_DIR: &str = "./.file_server_temp";
+#[cfg(not(test))]
+fn temp_dir() -> String {
+    return "./.file_server_temp".to_string();
+}
+
+#[cfg(test)]
+fn temp_dir() -> String {
+    let thread_name = test::current_thread_name();
+    format!("./.{}_temp", thread_name)
+}
 
 #[launch]
 fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
-    fs::remove_dir_all(Path::new(TEMP_DIR))
+    fs::remove_dir_all(Path::new(temp_dir().as_str()))
         .or(Ok::<(), ()>(()))
         .unwrap();
-    fs::create_dir(Path::new(TEMP_DIR)).unwrap();
+    fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     rocket::build()
         .mount("/api", routes![api_version, set_password])
         .mount(
@@ -59,9 +68,22 @@ mod api_tests {
     use rocket::http::Status;
     use rocket::local::blocking::Client;
 
-    use crate::test::refresh_db;
+    use crate::test::*;
 
     use super::rocket;
+    fn client() -> Client {
+        Client::tracked(rocket()).unwrap()
+    }
+
+    fn set_password() {
+        refresh_db();
+        let client = client();
+        let uri = uri!("/api/password");
+        client
+            .post(uri)
+            .body(r#"{"username":"username","password":"password"}"#)
+            .dispatch();
+    }
 
     #[test]
     fn version() {
@@ -69,6 +91,7 @@ mod api_tests {
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
         assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.0"}"#);
+        cleanup();
     }
 
     #[test]
@@ -77,10 +100,11 @@ mod api_tests {
         let uri = uri!("/api/password");
         let res = client.post(uri).dispatch();
         assert_eq!(res.status(), Status::BadRequest);
+        cleanup();
     }
 
     #[test]
-    fn set_password() {
+    fn set_password_works() {
         refresh_db();
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let uri = uri!("/api/password");
@@ -89,10 +113,12 @@ mod api_tests {
             .body(r#"{"username":"user","password":"password"}"#)
             .dispatch();
         assert_eq!(res.status(), Status::Created);
+        cleanup();
     }
 
     #[test]
     fn set_password_if_pass_exists() {
+        set_password();
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let uri = uri!("/api/password");
         let res = client
@@ -100,6 +126,7 @@ mod api_tests {
             .body(r#"{"username":"user","password":"password"}"#)
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
+        cleanup();
     }
 }
 
@@ -117,8 +144,8 @@ mod folder_tests {
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
-    use crate::service::file_service::FILE_DIR;
-    use crate::test::{refresh_db, remove_files, AUTH};
+    use crate::service::file_service::file_dir;
+    use crate::test::*;
 
     use super::rocket;
 
@@ -134,52 +161,6 @@ mod folder_tests {
             .post(uri)
             .body(r#"{"username":"username","password":"password"}"#)
             .dispatch();
-    }
-
-    fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
-        let connection = open_connection();
-        let file_id = file_repository::create_file(
-            &FileRecord {
-                id: folder_id,
-                name: String::from(name),
-            },
-            &connection,
-        )
-        .unwrap();
-        if let Some(id) = folder_id {
-            folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
-        }
-        connection.close().unwrap();
-    }
-
-    fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
-        let connection = open_connection();
-        folder_repository::create_folder(
-            &Folder {
-                id: None,
-                name: String::from(name),
-                parent_id,
-            },
-            &connection,
-        )
-        .unwrap();
-        connection.close().unwrap();
-    }
-
-    fn create_file_disk(file_name: &str, contents: &str) {
-        // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
-        fs::create_dir(Path::new("files"))
-            .or(Ok::<(), ()>(()))
-            .unwrap();
-        fs::write(
-            Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
-            contents,
-        )
-        .unwrap();
-    }
-
-    fn create_folder_disk(folder_name: &str) {
-        fs::create_dir_all(Path::new(format!("{}/{}", FILE_DIR, folder_name).as_str())).unwrap();
     }
 
     #[test]
@@ -204,8 +185,8 @@ mod folder_tests {
         let res_json: FolderResponse = res.into_json().unwrap();
         assert_eq!(status, Status::Ok);
         assert_eq!(res_json, expected);
+        cleanup();
     }
-
     #[test]
     fn get_root_folder_with_0_id() {
         set_password();
@@ -228,8 +209,8 @@ mod folder_tests {
         let res_json: FolderResponse = res.into_json().unwrap();
         assert_eq!(status, Status::Ok);
         assert_eq!(res_json, expected);
+        cleanup();
     }
-
     #[test]
     fn get_non_existent_folder() {
         set_password();
@@ -246,8 +227,8 @@ mod folder_tests {
         let res_json: BasicMessage = res.into_json().unwrap();
         assert_eq!(status, Status::NotFound);
         assert_eq!(res_json, expected);
+        cleanup();
     }
-
     #[test]
     fn get_folder_without_creds() {
         initialize_db().unwrap();
@@ -260,8 +241,8 @@ mod folder_tests {
         set_password();
         let res = client.get(uri!("/folders/1234")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn create_folder_without_creds() {
         initialize_db().unwrap();
@@ -274,8 +255,8 @@ mod folder_tests {
         set_password();
         let res = client.post(uri!("/folders")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn create_folder_non_existent() {
         set_password();
@@ -291,8 +272,8 @@ mod folder_tests {
             .body(serde::to_string(&req_body).unwrap())
             .dispatch();
         assert_eq!(res.status(), Status::Created);
+        cleanup();
     }
-
     #[test]
     fn create_folder_parent_0_id() {
         set_password();
@@ -308,8 +289,8 @@ mod folder_tests {
             .body(serde::to_string(&req_body).unwrap())
             .dispatch();
         assert_eq!(res.status(), Status::Created);
+        cleanup();
     }
-
     #[test]
     fn create_folder_already_exists() {
         set_password();
@@ -337,8 +318,8 @@ mod folder_tests {
                 message: String::from("That folder already exists.")
             }
         );
+        cleanup();
     }
-
     #[test]
     fn create_folder_parent_not_found() {
         set_password();
@@ -359,8 +340,8 @@ mod folder_tests {
             message: String::from("No folder with the passed parentId was found."),
         };
         assert_eq!(body, expected);
+        cleanup();
     }
-
     #[test]
     fn update_folder_without_creds() {
         initialize_db().unwrap();
@@ -373,8 +354,8 @@ mod folder_tests {
         set_password();
         let res = client.put(uri!("/folders")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn update_folder() {
         set_password();
@@ -414,8 +395,8 @@ mod folder_tests {
             files: Vec::new(),
         };
         assert_eq!(body, expected);
+        cleanup();
     }
-
     #[test]
     fn update_folder_new_folder_0_id() {
         set_password();
@@ -465,8 +446,8 @@ mod folder_tests {
             files: Vec::new(),
         };
         assert_eq!(body, expected);
+        cleanup();
     }
-
     #[test]
     fn update_folder_not_found() {
         set_password();
@@ -502,8 +483,8 @@ mod folder_tests {
                 message: String::from("The folder with the passed id could not be found.")
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_folder_parent_not_found() {
         set_password();
@@ -539,8 +520,8 @@ mod folder_tests {
                 message: String::from("The parent folder with the passed id could not be found.")
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_folder_already_exists() {
         set_password();
@@ -592,8 +573,8 @@ mod folder_tests {
                 )
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_folder_folder_already_exists_root() {
         set_password();
@@ -642,8 +623,8 @@ mod folder_tests {
                 message: String::from("Cannot move parent folder into its own child.")
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_folder_folder_already_exists_target_folder() {
         set_password();
@@ -705,8 +686,8 @@ mod folder_tests {
                 )
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_folder_root_not_found() {
         set_password();
@@ -725,8 +706,8 @@ mod folder_tests {
             .body(body)
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn delete_folder_without_creds() {
         initialize_db().unwrap();
@@ -739,8 +720,8 @@ mod folder_tests {
         set_password();
         let res = client.delete(uri!("/folders/1")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn delete_folder() {
         set_password();
@@ -770,13 +751,13 @@ mod folder_tests {
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(get_folder_response.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn delete_folder_should_not_delete_root() {
         set_password();
         remove_files();
-        std::fs::create_dir(Path::new(FILE_DIR)).unwrap();
+        std::fs::create_dir(Path::new(file_dir().as_str())).unwrap();
         let client = client();
         // make sure /null and /0 don't remove the files folder
         for id in ["null", "0"] {
@@ -785,10 +766,11 @@ mod folder_tests {
                 .header(Header::new("Authorization", AUTH))
                 .dispatch();
             assert_eq!(res.status(), Status::NotFound);
-            assert!(Path::new("files").exists());
+            let thread_name = current_thread_name();
+            assert!(Path::new(thread_name.as_str()).exists());
         }
+        cleanup();
     }
-
     #[test]
     fn delete_folder_not_found() {
         set_password();
@@ -799,8 +781,8 @@ mod folder_tests {
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(response.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn update_folder_to_file_with_same_name_root() {
         set_password();
@@ -849,16 +831,16 @@ mod folder_tests {
         );
         con.close().unwrap();
         // verify the file system hasn't changed either
-        let files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect::<Vec<_>>();
         assert_eq!(2, files.len());
-        assert!(files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
-        assert!(files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        assert!(files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        cleanup();
     }
-
     #[test]
     fn update_folder_to_file_with_same_name_same_folder() {
         set_password();
@@ -916,23 +898,23 @@ mod folder_tests {
                 -> a
             -> file
          */
-        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", file_dir(), "test"))
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
-        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let root_files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
         assert_eq!(1, folder_1_files.len());
         assert_eq!(2, root_files.len());
-        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        cleanup();
     }
-
     #[test]
     fn update_folder_to_file_with_same_name_different_folder() {
         set_password();
@@ -985,21 +967,22 @@ mod folder_tests {
                 -> a
             -> file
          */
-        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", file_dir(), "test"))
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect::<Vec<_>>();
-        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let root_files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
         assert_eq!(1, folder_1_files.len());
         assert_eq!(2, root_files.len());
-        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        cleanup();
     }
 }
 
@@ -1018,8 +1001,8 @@ mod file_tests {
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
-    use crate::service::file_service::FILE_DIR;
-    use crate::test::{refresh_db, remove_files, AUTH};
+    use crate::service::file_service::file_dir;
+    use crate::test::*;
 
     use super::{rocket, test};
 
@@ -1031,22 +1014,6 @@ mod file_tests {
         assert!(false);
     }
 
-    fn create_file_disk(file_name: &str, contents: &str) {
-        // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
-        fs::create_dir(Path::new("files"))
-            .or(Ok::<(), ()>(()))
-            .unwrap();
-        fs::write(
-            Path::new(format!("{}/{}", FILE_DIR, file_name).as_str()),
-            contents,
-        )
-        .unwrap();
-    }
-
-    fn create_folder_disk(folder_name: &str) {
-        fs::create_dir_all(Path::new(format!("{}/{}", FILE_DIR, folder_name).as_str())).unwrap();
-    }
-
     fn set_password() {
         refresh_db();
         let client = client();
@@ -1056,7 +1023,6 @@ mod file_tests {
             .body(r#"{"username":"username","password":"password"}"#)
             .dispatch();
     }
-
     #[test]
     fn upload_file_without_creds() {
         initialize_db().unwrap();
@@ -1069,8 +1035,8 @@ mod file_tests {
         set_password();
         let res = client.post(uri!("/files")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn upload_file_already_exists_no_query_param_root() {
         set_password();
@@ -1106,10 +1072,10 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         let res_body: BasicMessage = res.into_json().unwrap();
         assert_eq!("That file already exists", res_body.message);
         // ensure we didn't overwrite the file on the disk
-        let disk_file = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
+        let disk_file = fs::read_to_string(format!("{}/{}", file_dir(), "test.txt")).unwrap();
         assert_eq!("test", disk_file);
+        cleanup();
     }
-
     #[test]
     fn upload_file_already_exists_no_query_param_sub_folder() {
         set_password();
@@ -1147,10 +1113,10 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         let res_body: BasicMessage = res.into_json().unwrap();
         assert_eq!("That file already exists", res_body.message);
         // ensure we didn't overwrite the file on the disk
-        let disk_file = fs::read_to_string(format!("{}/test/{}", FILE_DIR, "test.txt")).unwrap();
+        let disk_file = fs::read_to_string(format!("{}/test/{}", file_dir(), "test.txt")).unwrap();
         assert_eq!("test", disk_file);
+        cleanup();
     }
-
     #[test]
     fn upload_file_already_exists_with_query_param_root() {
         set_password();
@@ -1183,10 +1149,10 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::Created);
         // ensure the file was overwritten
-        let disk_file = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
+        let disk_file = fs::read_to_string(format!("{}/{}", file_dir(), "test.txt")).unwrap();
         assert_eq!("aGk=", disk_file);
+        cleanup();
     }
-
     #[test]
     fn upload_file_already_exists_with_query_param_sub_folder() {
         set_password();
@@ -1221,8 +1187,9 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::Created);
         // ensure the file was overwritten
-        let disk_file = fs::read_to_string(format!("{}/test/{}", FILE_DIR, "test.txt")).unwrap();
+        let disk_file = fs::read_to_string(format!("{}/test/{}", file_dir(), "test.txt")).unwrap();
         assert_eq!("aGk=", disk_file);
+        cleanup();
     }
 
     #[test]
@@ -1264,8 +1231,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
                 name: String::from("test.txt"),
             }
         );
+        cleanup();
     }
-
     #[test]
     fn upload_file_parent_not_found() {
         set_password();
@@ -1297,8 +1264,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .body(body)
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn upload_file_without_extension() {
         set_password();
@@ -1348,8 +1315,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
                 name: String::from("test"),
             }
         );
+        cleanup();
     }
-
     #[test]
     fn get_file_without_creds() {
         initialize_db().unwrap();
@@ -1362,8 +1329,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         let res = client.get(uri!("/files/metadata/1234")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn get_file_not_found() {
         set_password();
@@ -1374,8 +1341,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(res.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn get_file() {
         set_password();
@@ -1401,8 +1368,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(status, Status::Ok);
         assert_eq!(body.name, String::from("file_name.txt"));
         assert_eq!(body.id, 1);
+        cleanup();
     }
-
     #[test]
     fn search_files_without_creds() {
         refresh_db();
@@ -1415,8 +1382,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         let res = client.get(uri!("/files/metadata?search=test")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn search_files_bad_search_query() {
         set_password();
@@ -1429,8 +1396,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::BadRequest);
         let body: BasicMessage = res.into_json().unwrap();
         assert_eq!(body.message, String::from("Search string is required."));
+        cleanup();
     }
-
     #[test]
     fn search_files() {
         set_password();
@@ -1449,8 +1416,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         let file = &body[0];
         assert_eq!(file.id, 1);
         assert_eq!(file.name, String::from("should_return.txt"));
+        cleanup();
     }
-
     #[test]
     fn download_file_without_creds() {
         refresh_db();
@@ -1463,8 +1430,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         let res = client.get(uri!("/files/1")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn download_file_not_found() {
         set_password();
@@ -1480,8 +1447,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             body.message,
             String::from("The file with the passed id could not be found.")
         );
+        cleanup();
     }
-
     #[test]
     fn download_file() {
         set_password();
@@ -1497,8 +1464,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         // TODO res content type test
         let body: String = res.into_string().unwrap();
         assert_eq!(body, String::from("hello"));
+        cleanup();
     }
-
     #[test]
     fn delete_file_without_creds() {
         refresh_db();
@@ -1511,8 +1478,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         let res = client.delete(uri!("/files/1")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn delete_file_not_found() {
         set_password();
@@ -1528,10 +1495,11 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             body.message,
             String::from("The file with the passed id could not be found.")
         );
+        cleanup();
     }
-
     #[test]
     fn delete_file() {
+        refresh_db();
         set_password();
         test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "hi");
@@ -1542,7 +1510,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::NoContent);
         // make sure the file was removed from the disk and db
-        match fs::read(format!("{}/{}", FILE_DIR, "test.txt")) {
+        match fs::read(format!("{}/{}", file_dir(), "test.txt")) {
             Ok(_) => fail(), // file still exists on disk
             Err(_) => { /* passed - no op */ }
         };
@@ -1551,8 +1519,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(get_res.status(), Status::NotFound);
+        cleanup();
     }
-
     #[test]
     fn update_file_without_creds() {
         refresh_db();
@@ -1565,8 +1533,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         set_password();
         let res = client.put(uri!("/files")).dispatch();
         assert_eq!(res.status(), Status::Unauthorized);
+        cleanup();
     }
-
     #[test]
     fn update_file_file_not_found() {
         set_password();
@@ -1584,8 +1552,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             body.message,
             String::from("The file with the passed id could not be found.")
         );
+        cleanup();
     }
-
     #[test]
     fn update_file_target_folder_not_found() {
         set_password();
@@ -1605,8 +1573,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             body.message,
             String::from("The folder with the passed id could not be found.")
         );
+        cleanup();
     }
-
     #[test]
     fn update_file_file_already_exists_root() {
         set_password();
@@ -1629,12 +1597,12 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             String::from("A file with the same name already exists in the specified folder")
         );
         // now make sure that the files weren't changed on the disk
-        let first = fs::read_to_string(format!("{}/{}", FILE_DIR, "test.txt")).unwrap();
-        let second = fs::read_to_string(format!("{}/{}", FILE_DIR, "test2.txt")).unwrap();
+        let first = fs::read_to_string(format!("{}/{}", file_dir(), "test.txt")).unwrap();
+        let second = fs::read_to_string(format!("{}/{}", file_dir(), "test2.txt")).unwrap();
         assert_eq!(first, String::from("test"));
         assert_eq!(second, String::from("test2"));
+        cleanup();
     }
-
     #[test]
     fn update_file_file_already_exists_target_folder() {
         set_password();
@@ -1677,8 +1645,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .unwrap();
         assert_eq!(get_first_res, "test");
         assert_eq!(get_second_res, "target");
+        cleanup();
     }
-
     #[test]
     fn update_file_no_extension() {
         set_password();
@@ -1704,8 +1672,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
                 name: String::from("test"),
             }
         );
+        cleanup();
     }
-
     #[test]
     fn update_file() {
         set_password();
@@ -1734,8 +1702,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .into_json()
             .unwrap();
         assert_eq!(folder_res.files.len(), 2);
+        cleanup();
     }
-
     #[test]
     fn update_file_to_folder_with_same_name_root() {
         set_password();
@@ -1769,16 +1737,16 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             }
         );
         // verify the file system hasn't changed either
-        let files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect::<Vec<_>>();
         assert_eq!(2, files.len());
-        assert!(files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
-        assert!(files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
+        assert!(files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        assert!(files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        cleanup();
     }
-
     #[test]
     fn update_file_to_folder_with_same_name_same_folder() {
         set_password();
@@ -1807,23 +1775,23 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(folder_1_db_files.len(), 0);
         con.close().unwrap();
         // verify the file system hasn't changed either
-        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", file_dir(), "test"))
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
-        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let root_files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
         assert_eq!(1, folder_1_files.len());
         assert_eq!(2, root_files.len());
-        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        cleanup();
     }
-
     #[test]
     fn update_file_to_folder_with_same_name_different_folder() {
         set_password();
@@ -1859,22 +1827,24 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             }
         );
         // verify the file system hasn't changed either
-        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", FILE_DIR, "test"))
+        let folder_1_files: Vec<PathBuf> = fs::read_dir(format!("{}/{}", file_dir(), "test"))
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect::<Vec<_>>();
-        let root_files: Vec<PathBuf> = fs::read_dir(FILE_DIR)
+        let root_files: Vec<PathBuf> = fs::read_dir(file_dir())
             .unwrap()
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .collect();
         assert_eq!(1, folder_1_files.len());
         assert_eq!(2, root_files.len());
-        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/file", FILE_DIR))));
-        assert!(root_files.contains(&PathBuf::from(format!("{}/test", FILE_DIR))));
+        assert!(folder_1_files.contains(&PathBuf::from(format!("{}/test/a", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
+        assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
+        cleanup();
     }
+
     #[test]
     fn test_update_file_trailing_name_fix() {
         set_password();
@@ -1905,5 +1875,6 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .into_json()
             .unwrap();
         assert_eq!(folder_res.files.len(), 2);
+        cleanup();
     }
 }

@@ -1,6 +1,7 @@
 use std::fs;
 use std::fs::File;
 use std::path::Path;
+use std::string::ToString;
 
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
@@ -18,11 +19,23 @@ use crate::repository;
 use crate::repository::{file_repository, folder_repository};
 use crate::service::folder_service;
 
-pub static FILE_DIR: &str = "./files";
+// TODO maybe turn into a macro so it gets inlined. I'm worried about performance for every single file system operation
+#[inline]
+#[cfg(not(test))]
+pub fn file_dir() -> String {
+    return "./files".to_string();
+}
+
+#[cfg(test)]
+pub fn file_dir() -> String {
+    let thread_name = crate::test::current_thread_name();
+    let dir_name = format!("./{}", thread_name);
+    dir_name
+}
 
 /// ensures that the passed directory exists on the file system
-pub async fn check_root_dir(dir: &str) {
-    let path = Path::new(dir);
+pub async fn check_root_dir(dir: String) {
+    let path = Path::new(dir.as_str());
     if !path.exists() {
         if let Err(e) = create_dir(path).await {
             panic!("Failed to create file directory: \n {:?}", e)
@@ -37,12 +50,12 @@ pub async fn save_file(
 ) -> Result<FileMetadataResponse, CreateFileError> {
     println!("{}", file_input.file.raw_name().unwrap().as_str().unwrap());
     let file_name = String::from(file_input.file.name().unwrap());
-    check_root_dir(FILE_DIR).await;
+    check_root_dir(file_dir()).await;
     if !force {
         check_file_in_dir(file_input, &file_name)?;
     }
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
-    let root_regex = Regex::new(format!("^{}/", FILE_DIR).as_str()).unwrap();
+    let root_regex = Regex::new(format!("^{}/", file_dir()).as_str()).unwrap();
     let parent_id = file_input.folder_id();
     return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
@@ -72,7 +85,7 @@ pub async fn save_file(
         } else {
             String::from("")
         };
-        let file_name = format!("{}/{}{}", &FILE_DIR, file_name, file_extension);
+        let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
         let file_id = persist_save_file(file_input).await?;
         Ok(FileMetadataResponse {
             id: file_id,
@@ -103,7 +116,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileRecord, GetFileError> {
 pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
     let res = get_file_path(id);
     return if let Ok(path) = res {
-        let path = format!("{}/{}", FILE_DIR, path);
+        let path = format!("{}/{}", file_dir(), path);
         File::open(path).map_err(|_| GetFileError::NotFound)
     } else {
         Err(res.unwrap_err())
@@ -112,7 +125,7 @@ pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
 
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     let file_path = match get_file_path(id) {
-        Ok(path) => format!("{}/{}", FILE_DIR, path),
+        Ok(path) => format!("{}/{}", file_dir(), path),
         Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
         Err(_) => return Err(DeleteFileError::DbError),
     };
@@ -176,7 +189,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     // we have to create this before we update the file
     let old_path = format!(
         "{}/{}",
-        FILE_DIR,
+        file_dir(),
         file_repository::get_file_path(file.id, &con).unwrap()
     );
     // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
@@ -198,7 +211,7 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
     // now that we've updated the file in the database, it's time to update the file system
     let new_path = format!(
         "{}/{}/{}",
-        FILE_DIR,
+        file_dir(),
         parent_folder.path,
         file.name().unwrap()
     );
@@ -250,7 +263,7 @@ async fn persist_save_file_to_folder(
     file_name: String,
 ) -> Result<u32, CreateFileError> {
     let file_name = determine_file_name(&file_name, &file_input.extension);
-    let formatted_name = format!("{}/{}/{}", FILE_DIR, folder.path, file_name);
+    let formatted_name = format!("{}/{}/{}", file_dir(), folder.path, file_name);
     match file_input.file.persist_to(&formatted_name).await {
         Ok(_) => {
             let id = save_file_record(&formatted_name)?;
@@ -273,7 +286,7 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
         &String::from(file_input.file.name().unwrap()),
         &file_input.extension,
     );
-    let file_name = format!("{}/{}", &FILE_DIR, file_name);
+    let file_name = format!("{}/{}", &file_dir(), file_name);
     match file_input.file.persist_to(&file_name).await {
         Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {

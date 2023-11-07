@@ -133,7 +133,7 @@ fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
 mod create_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::{open_connection, tag_repository};
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn create_tag() {
@@ -148,6 +148,7 @@ mod create_tag_tests {
             },
             tag
         );
+        cleanup();
     }
 }
 
@@ -156,7 +157,7 @@ mod get_tag_by_title_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tag_by_title};
-    use crate::test::refresh_db;
+    use crate::test::*;
 
     #[test]
     fn get_tag_by_title_found() {
@@ -172,8 +173,8 @@ mod get_tag_by_title_tests {
             }),
             found
         );
+        cleanup();
     }
-
     #[test]
     fn get_tag_by_title_not_found() {
         refresh_db();
@@ -181,6 +182,7 @@ mod get_tag_by_title_tests {
         let not_found = get_tag_by_title("test".to_string(), &con).unwrap();
         con.close().unwrap();
         assert_eq!(None, not_found);
+        cleanup();
     }
 }
 
@@ -189,7 +191,7 @@ mod get_tag_by_id_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tag};
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn get_tag_success() {
@@ -205,6 +207,7 @@ mod get_tag_by_id_tests {
             },
             tag
         );
+        cleanup();
     }
 }
 
@@ -213,7 +216,7 @@ mod update_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tag, update_tag};
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn update_tag_success() {
@@ -237,6 +240,7 @@ mod update_tag_tests {
             },
             res
         );
+        cleanup();
     }
 }
 
@@ -244,7 +248,7 @@ mod update_tag_tests {
 mod delete_tag_tests {
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, delete_tag, get_tag};
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn delete_tag_success() {
@@ -255,6 +259,7 @@ mod delete_tag_tests {
         let not_found = get_tag(1, &con);
         con.close().unwrap();
         assert_eq!(Err(rusqlite::Error::QueryReturnedNoRows), not_found);
+        cleanup();
     }
 }
 
@@ -264,7 +269,7 @@ mod get_tag_on_file_tests {
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{add_tag_to_file, create_tag, get_tags_on_file};
-    use crate::test::refresh_db;
+    use crate::test::*;
 
     #[test]
     fn get_tags_on_file_returns_tags() {
@@ -297,8 +302,8 @@ mod get_tag_on_file_tests {
             ],
             res
         );
+        cleanup();
     }
-
     #[test]
     fn get_tags_on_file_returns_nothing_if_no_tags() {
         refresh_db();
@@ -314,6 +319,7 @@ mod get_tag_on_file_tests {
         let res = get_tags_on_file(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), res);
+        cleanup();
     }
 }
 
@@ -323,7 +329,7 @@ mod remove_tag_from_file_tests {
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tags_on_file, remove_tag_from_file};
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn remove_tag_from_file_works() {
@@ -342,6 +348,7 @@ mod remove_tag_from_file_tests {
         let tags = get_tags_on_file(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), tags);
+        cleanup();
     }
 }
 
@@ -351,7 +358,7 @@ mod get_tag_on_folder_tests {
     use crate::repository::folder_repository::create_folder;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{add_tag_to_folder, create_tag, get_tags_on_folder};
-    use crate::test::refresh_db;
+    use crate::test::*;
 
     #[test]
     fn get_tags_on_folder_returns_tags() {
@@ -385,8 +392,8 @@ mod get_tag_on_folder_tests {
             ],
             res
         );
+        cleanup();
     }
-
     #[test]
     fn get_tags_on_folder_returns_nothing_if_no_tags() {
         refresh_db();
@@ -403,6 +410,7 @@ mod get_tag_on_folder_tests {
         let res = get_tags_on_folder(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), res);
+        cleanup();
     }
 }
 
@@ -414,7 +422,7 @@ mod remove_tag_from_folder_tests {
     use crate::repository::tag_repository::{
         create_tag, get_tags_on_folder, remove_tag_from_folder,
     };
-    use crate::test::refresh_db;
+    use crate::test::{cleanup, refresh_db};
 
     #[test]
     fn remove_tag_from_folder_works() {
@@ -434,5 +442,6 @@ mod remove_tag_from_folder_tests {
         let tags = get_tags_on_folder(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), tags);
+        cleanup();
     }
 }

@@ -7,11 +7,25 @@ pub mod folder_repository;
 pub mod metadata_repository;
 pub mod tag_repository;
 
+#[cfg(not(test))]
 static DB_LOCATION: &str = "./db.sqlite";
 
 /// creates a new connection and returns it, but panics if the connection could not be created
+#[cfg(not(test))]
 pub fn open_connection() -> Connection {
     return match Connection::open_with_flags(Path::new(DB_LOCATION), OpenFlags::default()) {
+        Ok(con) => con,
+        Err(error) => panic!("Failed to get a connection to the database!: {}", error),
+    };
+}
+
+#[cfg(test)]
+pub fn open_connection() -> Connection {
+    let db_name = format!("{}.sqlite", crate::test::current_thread_name());
+    return match Connection::open_with_flags(
+        Path::new(db_name.as_str()),
+        rusqlite::OpenFlags::default(),
+    ) {
         Ok(con) => con,
         Err(error) => panic!("Failed to get a connection to the database!: {}", error),
     };

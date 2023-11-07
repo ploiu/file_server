@@ -1,9 +1,11 @@
-use crate::model::repository::{FileRecord, Folder};
+use std::fs;
 use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
+use crate::model::repository::{FileRecord, Folder};
 use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
-use crate::service::file_service::FILE_DIR;
+use crate::service::file_service::file_dir;
+use crate::temp_dir;
 
 /// username:password
 #[cfg(test)]
@@ -11,7 +13,8 @@ pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 
 #[cfg(test)]
 pub fn refresh_db() {
-    remove_file(Path::new("db.sqlite"))
+    let thread_name = current_thread_name();
+    remove_file(Path::new(format!("{}.sqlite", thread_name).as_str()))
         .or(Ok::<(), ()>(()))
         .unwrap();
     initialize_db().unwrap();
@@ -19,13 +22,14 @@ pub fn refresh_db() {
 
 #[cfg(test)]
 pub fn remove_files() {
-    if Path::new(FILE_DIR).exists() {
-        remove_dir_all(Path::new("files"))
-            .or(Ok::<(), ()>(()))
-            .unwrap();
+    let thread_name = current_thread_name();
+    let file_path = Path::new(thread_name.as_str());
+    if file_path.exists() {
+        remove_dir_all(file_path).or(Ok::<(), ()>(())).unwrap();
     }
 }
 
+#[cfg(test)]
 pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
     let connection = open_connection();
     let file_id = file_repository::create_file(
@@ -42,6 +46,7 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
     connection.close().unwrap();
 }
 
+#[cfg(test)]
 pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
     let connection = open_connection();
     folder_repository::create_folder(
@@ -56,6 +61,48 @@ pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
     connection.close().unwrap();
 }
 
+#[cfg(test)]
 pub fn fail() {
     panic!("unimplemented test");
+}
+
+#[cfg(test)]
+pub fn current_thread_name() -> String {
+    let current_thread = std::thread::current();
+    current_thread.name().unwrap().to_string()
+}
+
+#[cfg(test)]
+pub fn create_file_disk(file_name: &str, contents: &str) {
+    // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
+    let thread_name = current_thread_name();
+    fs::create_dir(Path::new(file_dir().as_str()))
+        .or(Ok::<(), ()>(()))
+        .unwrap();
+    fs::write(
+        Path::new(format!("{}/{}", file_dir(), file_name).as_str()),
+        contents,
+    )
+    .unwrap();
+}
+
+#[cfg(test)]
+pub fn create_folder_disk(folder_name: &str) {
+    fs::create_dir_all(Path::new(
+        format!("{}/{}", file_dir(), folder_name).as_str(),
+    ))
+    .unwrap();
+}
+
+#[cfg(test)]
+pub fn cleanup() {
+    let thread_name = current_thread_name();
+    let temp_dir_name = temp_dir();
+    remove_files();
+    remove_file(Path::new(format!("{}.sqlite", thread_name).as_str()))
+        .or(Ok::<(), ()>(()))
+        .unwrap();
+    remove_dir_all(Path::new(temp_dir_name.as_str()))
+        .or(Ok::<(), ()>(()))
+        .unwrap();
 }
