@@ -7,3 +7,4 @@
 *.key
 cert_options.conf
 .file_server_temp/**
+!.file_server_temp/.gitkeep
