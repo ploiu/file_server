@@ -8,7 +8,6 @@ use crate::repository::{open_connection, tag_repository};
 
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
-// TODO test
 pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
     let con = open_connection();
     let copied_name = name.clone();
@@ -103,7 +102,16 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
 
 /// deletes the tag with the passed id. Does nothing if that tag doesn't exist
 pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
-    panic!("unimplemented");
+    let con: rusqlite::Connection = open_connection();
+    match tag_repository::delete_tag(id, &con) {
+        Ok(()) => {}
+        Err(_) => {
+            con.close().unwrap();
+            return Err(DeleteTagError::DbError);
+        }
+    };
+    con.close().unwrap();
+    Ok(())
 }
 
 /// removes all the tags on the file with the passed id and sets them all to be the passed list
@@ -196,6 +204,23 @@ mod update_tag_tests {
             title: "FiRsT".to_string(),
         });
         assert_eq!(UpdateTagError::NewNameAlreadyExists, res.unwrap_err());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod delete_tag_tests {
+    use crate::model::error::tag_errors::GetTagError;
+    use crate::service::tag_service::{create_tag, delete_tag, get_tag};
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn delete_tag_works() {
+        refresh_db();
+        create_tag("test".to_string()).unwrap();
+        delete_tag(1).unwrap();
+        let res = get_tag(1).unwrap_err();
+        assert_eq!(GetTagError::TagNotFound, res);
         cleanup();
     }
 }
