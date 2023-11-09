@@ -40,6 +40,8 @@ fn rocket() -> Rocket<Build> {
         .or(Ok::<(), ()>(()))
         .unwrap();
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
+    // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
+    // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
     rocket::build()
         .mount("/api", routes![api_version, set_password])

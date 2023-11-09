@@ -19,8 +19,8 @@ pub struct BasicMessage {
 #[serde(crate = "rocket::serde")]
 pub struct TagApi {
     /// will be None if new
-    id: Option<u32>,
-    title: String,
+    pub id: Option<u32>,
+    pub title: String,
 }
 
 // ----------------------------------
