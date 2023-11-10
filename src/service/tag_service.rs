@@ -126,12 +126,9 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
     let con: rusqlite::Connection = open_connection();
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        match tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con) {
-            Ok(()) => {}
-            Err(_) => {
-                con.close().unwrap();
-                return Err(TagRelationError::DbError);
-            }
+        if tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
         }
     }
     // for all the new tags, create them first
@@ -144,22 +141,16 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
                 return Err(TagRelationError::DbError);
             }
         };
-        match tag_repository::add_tag_to_file(file_id, created_tag.id, &con) {
-            Ok(()) => {}
-            Err(_) => {
-                con.close().unwrap();
-                return Err(TagRelationError::DbError);
-            }
+        if tag_repository::add_tag_to_file(file_id, created_tag.id, &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
         }
     }
     let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
     for tag in existing_tags {
-        match tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con) {
-            Ok(()) => {}
-            Err(_) => {
-                con.close().unwrap();
-                return Err(TagRelationError::DbError);
-            }
+        if tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
         }
     }
     con.close().unwrap();
