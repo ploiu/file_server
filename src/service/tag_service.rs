@@ -1,3 +1,4 @@
+use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
@@ -5,6 +6,7 @@ use crate::model::repository;
 use crate::model::repository::Tag;
 use crate::model::response::TagApi;
 use crate::repository::{open_connection, tag_repository};
+use crate::service::file_service;
 
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
@@ -116,7 +118,52 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 
 /// removes all the tags on the file with the passed id and sets them all to be the passed list
 pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
-    panic!("unimplemented");
+    // make sure the file exists
+    if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
+        return Err(TagRelationError::FileNotFound);
+    }
+    let existing_tags = get_tags_on_file(file_id)?;
+    let con: rusqlite::Connection = open_connection();
+    for tag in existing_tags.iter() {
+        // tags from the db will always have a non-None tag id
+        match tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con) {
+            Ok(()) => {}
+            Err(_) => {
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        }
+    }
+    // for all the new tags, create them first
+    let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
+    for tag in new_tags {
+        let created_tag = match tag_repository::create_tag(tag.title.clone(), &con) {
+            Ok(t) => t,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        };
+        match tag_repository::add_tag_to_file(file_id, created_tag.id, &con) {
+            Ok(()) => {}
+            Err(_) => {
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        }
+    }
+    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    for tag in existing_tags {
+        match tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con) {
+            Ok(()) => {}
+            Err(_) => {
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        }
+    }
+    con.close().unwrap();
+    Ok(())
 }
 
 /// removes all the tags on the folder with the passed id and sets them all to be the passed list
@@ -126,7 +173,21 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
 
 /// retrieves all the tags on the file with the passed id
 pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
-    panic!("unimplemented");
+    // make sure the file exists
+    if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
+        return Err(TagRelationError::FileNotFound);
+    }
+    let con: rusqlite::Connection = open_connection();
+    let db_tags = match tag_repository::get_tags_on_file(file_id, &con) {
+        Ok(tags) => tags,
+        Err(_) => {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    };
+    con.close().unwrap();
+    let api_tags: Vec<TagApi> = db_tags.into_iter().map(TagApi::from).collect();
+    Ok(api_tags)
 }
 
 /// retrieves all the tags on the folder with the passed id.
@@ -221,6 +282,108 @@ mod delete_tag_tests {
         delete_tag(1).unwrap();
         let res = get_tag(1).unwrap_err();
         assert_eq!(GetTagError::TagNotFound, res);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod update_file_tag_test {
+    use crate::model::error::tag_errors::TagRelationError;
+    use crate::model::repository::FileRecord;
+    use crate::model::response::TagApi;
+    use crate::repository::{file_repository, open_connection};
+    use crate::service::tag_service::{create_tag, get_tags_on_file, update_file_tags};
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn update_file_tags_works() {
+        refresh_db();
+        let con = open_connection();
+        create_tag("test".to_string()).unwrap();
+        file_repository::create_file(
+            &FileRecord {
+                id: None,
+                name: "test_file".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+        update_file_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "new tag".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+        let expected = vec![
+            TagApi {
+                id: Some(1),
+                title: "test".to_string(),
+            },
+            TagApi {
+                id: Some(2),
+                title: "new tag".to_string(),
+            },
+        ];
+        let actual = get_tags_on_file(1).unwrap();
+        assert_eq!(actual, expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_tags_removes_tags() {
+        refresh_db();
+        let con = open_connection();
+        file_repository::create_file(
+            &FileRecord {
+                id: None,
+                name: "test".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+        update_file_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "test".to_string(),
+            }],
+        )
+        .unwrap();
+        update_file_tags(1, vec![]).unwrap();
+        assert_eq!(get_tags_on_file(1).unwrap(), vec![]);
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_tags_throws_error_if_file_not_found() {
+        refresh_db();
+        let res = update_file_tags(1, vec![]).unwrap_err();
+        assert_eq!(TagRelationError::FileNotFound, res);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_tags_on_file_tests {
+    use crate::model::error::tag_errors::TagRelationError;
+    use crate::service::tag_service::get_tags_on_file;
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn throws_error_if_file_not_found() {
+        refresh_db();
+        let err = get_tags_on_file(1).unwrap_err();
+        assert_eq!(TagRelationError::FileNotFound, err);
         cleanup();
     }
 }

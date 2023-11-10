@@ -74,6 +74,7 @@ mod api_tests {
     use crate::test::*;
 
     use super::rocket;
+
     fn client() -> Client {
         Client::tracked(rocket()).unwrap()
     }
@@ -146,7 +147,7 @@ mod folder_tests {
     use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::BasicMessage;
-    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
+    use crate::repository::{folder_repository, initialize_db, open_connection};
     use crate::service::file_service::file_dir;
     use crate::test::*;
 
@@ -992,7 +993,7 @@ mod folder_tests {
 #[cfg(test)]
 mod file_tests {
     use std::fs;
-    use std::path::{Path, PathBuf};
+    use std::path::PathBuf;
 
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
