@@ -1,12 +1,12 @@
 use crate::model::error::file_errors::GetFileError;
+use crate::model::error::folder_errors::GetFolderError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
 use crate::model::repository;
-use crate::model::repository::Tag;
 use crate::model::response::TagApi;
 use crate::repository::{open_connection, tag_repository};
-use crate::service::file_service;
+use crate::service::{file_service, folder_service};
 
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
@@ -84,7 +84,7 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
         }
     };
     // no match, and tag already exists so we're good to go
-    let db_tag = Tag {
+    let db_tag = repository::Tag {
         id: request.id.unwrap(),
         title: new_title.clone(),
     };
@@ -158,8 +158,44 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
 }
 
 /// removes all the tags on the folder with the passed id and sets them all to be the passed list
-pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
-    panic!("unimplemented");
+pub async fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
+    // make sure the file exists
+    if Err(GetFolderError::NotFound) == folder_service::get_folder(Some(folder_id)).await {
+        return Err(TagRelationError::FileNotFound);
+    }
+    let existing_tags = get_tags_on_folder(folder_id).await?;
+    let con: rusqlite::Connection = open_connection();
+    for tag in existing_tags.iter() {
+        // tags from the db will always have a non-None tag id
+        if tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    }
+    // for all the new tags, create them first
+    let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
+    for tag in new_tags {
+        let created_tag = match tag_repository::create_tag(tag.title.clone(), &con) {
+            Ok(t) => t,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        };
+        if tag_repository::add_tag_to_folder(folder_id, created_tag.id, &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    }
+    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    for tag in existing_tags {
+        if tag_repository::add_tag_to_folder(folder_id, tag.id.unwrap(), &con).is_err() {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    }
+    con.close().unwrap();
+    Ok(())
 }
 
 /// retrieves all the tags on the file with the passed id
@@ -183,8 +219,22 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
 
 /// retrieves all the tags on the folder with the passed id.
 /// This will always be empty if requesting with the root folder id (0 or None)
-pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
-    panic!("unimplemented");
+pub async fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
+    // make sure the folder exists
+    if Err(GetFolderError::NotFound) == folder_service::get_folder(Some(folder_id)).await {
+        return Err(TagRelationError::FileNotFound);
+    }
+    let con: rusqlite::Connection = open_connection();
+    let db_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
+        Ok(tags) => tags,
+        Err(_) => {
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    };
+    con.close().unwrap();
+    let api_tags: Vec<TagApi> = db_tags.into_iter().map(TagApi::from).collect();
+    Ok(api_tags)
 }
 
 #[cfg(test)]
@@ -359,6 +409,99 @@ mod update_file_tag_test {
     fn update_file_tags_throws_error_if_file_not_found() {
         refresh_db();
         let res = update_file_tags(1, vec![]).unwrap_err();
+        assert_eq!(TagRelationError::FileNotFound, res);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod update_folder_tag_test {
+    use rocket::tokio;
+
+    use crate::model::error::tag_errors::TagRelationError;
+    use crate::model::repository::Folder;
+    use crate::model::response::TagApi;
+    use crate::repository::{folder_repository, open_connection};
+    use crate::service::tag_service::{create_tag, get_tags_on_folder, update_folder_tags};
+    use crate::test::{cleanup, refresh_db};
+
+    #[tokio::test]
+    async fn update_folder_tags_works() {
+        refresh_db();
+        let con = open_connection();
+        create_tag("test".to_string()).unwrap();
+        folder_repository::create_folder(
+            &Folder {
+                parent_id: None,
+                id: None,
+                name: "test_file".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "new tag".to_string(),
+                },
+            ],
+        )
+        .await
+        .unwrap();
+        let expected = vec![
+            TagApi {
+                id: Some(1),
+                title: "test".to_string(),
+            },
+            TagApi {
+                id: Some(2),
+                title: "new tag".to_string(),
+            },
+        ];
+        let actual = get_tags_on_folder(1).await.unwrap();
+        assert_eq!(actual, expected);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_folder_tags_removes_tags() {
+        refresh_db();
+        let con = open_connection();
+        folder_repository::create_folder(
+            &Folder {
+                parent_id: None,
+                id: None,
+                name: "test".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "test".to_string(),
+            }],
+        )
+        .await
+        .unwrap();
+        update_folder_tags(1, vec![]).await.unwrap();
+        assert_eq!(get_tags_on_folder(1).await.unwrap(), vec![]);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_folder_tags_throws_error_if_file_not_found() {
+        refresh_db();
+        let res = update_folder_tags(1, vec![]).await.unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, res);
         cleanup();
     }

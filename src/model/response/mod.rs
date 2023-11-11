@@ -6,6 +6,7 @@ use crate::model::repository;
 pub mod api_responses;
 pub mod file_responses;
 pub mod folder_responses;
+pub mod tag_responses;
 
 /// represents a basic json message
 #[derive(Responder, Serialize, Deserialize, Debug, PartialEq)]

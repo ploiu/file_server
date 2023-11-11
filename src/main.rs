@@ -10,6 +10,7 @@ use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
     folder_handler::{create_folder, delete_folder, get_folder, update_folder},
+    tag_handler::{create_tag, delete_tag, get_tag, update_tag},
 };
 
 use crate::repository::initialize_db;
@@ -59,6 +60,10 @@ fn rocket() -> Rocket<Build> {
         .mount(
             "/folders",
             routes![get_folder, create_folder, update_folder, delete_folder],
+        )
+        .mount(
+            "/tags",
+            routes![get_tag, create_tag, update_tag, delete_tag],
         )
 }
 
