@@ -6,6 +6,7 @@ use rusqlite::Connection;
 
 use model::repository::Folder;
 
+use crate::model::api::FileApi;
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
@@ -14,8 +15,8 @@ use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::folder_repository;
-use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, file_dir};
+use crate::service::{file_service, tag_service};
 use crate::{model, repository};
 
 pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
@@ -361,8 +362,8 @@ fn is_attempt_move_to_sub_child(
 }
 
 /// returns the top-level files for the passed folder
-fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFilesError> {
-    let con = repository::open_connection();
+fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileApi>, GetChildFilesError> {
+    let con: Connection = repository::open_connection();
     // first we need to check the folder exists
     if let Err(e) = folder_repository::get_by_id(id, &con) {
         con.close().unwrap();
@@ -377,7 +378,7 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
         };
     }
     // now we can retrieve all the file records in this folder
-    let result = match folder_repository::get_child_files(id, &con) {
+    let child_files = match folder_repository::get_child_files(id, &con) {
         Ok(files) => files,
         Err(e) => {
             con.close().unwrap();
@@ -388,6 +389,17 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
             return Err(GetChildFilesError::DbFailure);
         }
     };
+    let mut result: Vec<FileApi> = Vec::new();
+    for file in child_files {
+        let tags = match tag_service::get_tags_on_file(file.id.unwrap()) {
+            Ok(t) => t,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(GetChildFilesError::TagError);
+            }
+        };
+        result.push(FileApi::from(file, tags))
+    }
     con.close().unwrap();
     Ok(result)
 }

@@ -196,6 +196,7 @@ mod folder_tests {
         assert_eq!(res_json, expected);
         cleanup();
     }
+
     #[test]
     fn get_root_folder_with_0_id() {
         set_password();
@@ -220,6 +221,7 @@ mod folder_tests {
         assert_eq!(res_json, expected);
         cleanup();
     }
+
     #[test]
     fn get_non_existent_folder() {
         set_password();
@@ -238,6 +240,7 @@ mod folder_tests {
         assert_eq!(res_json, expected);
         cleanup();
     }
+
     #[test]
     fn get_folder_without_creds() {
         initialize_db().unwrap();
@@ -252,6 +255,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn create_folder_without_creds() {
         initialize_db().unwrap();
@@ -266,6 +270,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn create_folder_non_existent() {
         set_password();
@@ -283,6 +288,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Created);
         cleanup();
     }
+
     #[test]
     fn create_folder_parent_0_id() {
         set_password();
@@ -300,6 +306,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Created);
         cleanup();
     }
+
     #[test]
     fn create_folder_already_exists() {
         set_password();
@@ -329,6 +336,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn create_folder_parent_not_found() {
         set_password();
@@ -351,6 +359,7 @@ mod folder_tests {
         assert_eq!(body, expected);
         cleanup();
     }
+
     #[test]
     fn update_folder_without_creds() {
         initialize_db().unwrap();
@@ -365,6 +374,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn update_folder() {
         set_password();
@@ -406,6 +416,7 @@ mod folder_tests {
         assert_eq!(body, expected);
         cleanup();
     }
+
     #[test]
     fn update_folder_new_folder_0_id() {
         set_password();
@@ -457,6 +468,7 @@ mod folder_tests {
         assert_eq!(body, expected);
         cleanup();
     }
+
     #[test]
     fn update_folder_not_found() {
         set_password();
@@ -494,6 +506,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn update_folder_parent_not_found() {
         set_password();
@@ -531,6 +544,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn update_folder_already_exists() {
         set_password();
@@ -584,6 +598,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn update_folder_folder_already_exists_root() {
         set_password();
@@ -634,6 +649,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn update_folder_folder_already_exists_target_folder() {
         set_password();
@@ -697,6 +713,7 @@ mod folder_tests {
         );
         cleanup();
     }
+
     #[test]
     fn update_folder_root_not_found() {
         set_password();
@@ -717,6 +734,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn delete_folder_without_creds() {
         initialize_db().unwrap();
@@ -731,6 +749,7 @@ mod folder_tests {
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn delete_folder() {
         set_password();
@@ -762,6 +781,7 @@ mod folder_tests {
         assert_eq!(get_folder_response.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn delete_folder_should_not_delete_root() {
         set_password();
@@ -780,6 +800,7 @@ mod folder_tests {
         }
         cleanup();
     }
+
     #[test]
     fn delete_folder_not_found() {
         set_password();
@@ -792,6 +813,7 @@ mod folder_tests {
         assert_eq!(response.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn update_folder_to_file_with_same_name_root() {
         set_password();
@@ -850,6 +872,7 @@ mod folder_tests {
         assert!(files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
         cleanup();
     }
+
     #[test]
     fn update_folder_to_file_with_same_name_same_folder() {
         set_password();
@@ -924,6 +947,7 @@ mod folder_tests {
         assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
         cleanup();
     }
+
     #[test]
     fn update_folder_to_file_with_same_name_different_folder() {
         set_password();
@@ -1000,15 +1024,15 @@ mod file_tests {
     use std::fs;
     use std::path::PathBuf;
 
+    use crate::model::api::FileApi;
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
+    use rusqlite::Connection;
 
     use crate::model::repository::{FileRecord, Folder};
-    use crate::model::request::file_requests::UpdateFileRequest;
-    use crate::model::response::file_responses::FileMetadataResponse;
     use crate::model::response::folder_responses::FolderResponse;
-    use crate::model::response::BasicMessage;
+    use crate::model::response::{BasicMessage, TagApi};
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::file_dir;
     use crate::test::*;
@@ -1032,6 +1056,7 @@ mod file_tests {
             .body(r#"{"username":"username","password":"password"}"#)
             .dispatch();
     }
+
     #[test]
     fn upload_file_without_creds() {
         initialize_db().unwrap();
@@ -1046,6 +1071,7 @@ mod file_tests {
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn upload_file_already_exists_no_query_param_root() {
         set_password();
@@ -1085,6 +1111,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!("test", disk_file);
         cleanup();
     }
+
     #[test]
     fn upload_file_already_exists_no_query_param_sub_folder() {
         set_password();
@@ -1126,6 +1153,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!("test", disk_file);
         cleanup();
     }
+
     #[test]
     fn upload_file_already_exists_with_query_param_root() {
         set_password();
@@ -1162,6 +1190,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!("aGk=", disk_file);
         cleanup();
     }
+
     #[test]
     fn upload_file_already_exists_with_query_param_sub_folder() {
         set_password();
@@ -1232,16 +1261,19 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .body(body)
             .dispatch();
         assert_eq!(res.status(), Status::Created);
-        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        let res_body: FileApi = res.into_json().unwrap();
         assert_eq!(
             res_body,
-            FileMetadataResponse {
+            FileApi {
                 id: 1,
                 name: String::from("test.txt"),
+                folder_id: None,
+                tags: Vec::new(),
             }
         );
         cleanup();
     }
+
     #[test]
     fn upload_file_parent_not_found() {
         set_password();
@@ -1275,6 +1307,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn upload_file_without_extension() {
         set_password();
@@ -1302,16 +1335,18 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         let status = res.status();
         assert_eq!(status, Status::Created);
-        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        let res_body: FileApi = res.into_json().unwrap();
         assert_eq!(
             res_body,
-            FileMetadataResponse {
+            FileApi {
                 id: 1,
                 name: String::from("test"),
+                folder_id: None,
+                tags: Vec::new(),
             }
         );
         // make sure that the file comes back with the right name
-        let res: FileMetadataResponse = client
+        let res: FileApi = client
             .get(uri!("/files/metadata/1"))
             .header(Header::new("Authorization", AUTH))
             .dispatch()
@@ -1319,13 +1354,16 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .unwrap();
         assert_eq!(
             res,
-            FileMetadataResponse {
+            FileApi {
                 id: 1,
                 name: String::from("test"),
+                folder_id: None,
+                tags: Vec::new(),
             }
         );
         cleanup();
     }
+
     #[test]
     fn get_file_without_creds() {
         initialize_db().unwrap();
@@ -1340,6 +1378,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn get_file_not_found() {
         set_password();
@@ -1352,33 +1391,25 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn get_file() {
         set_password();
         remove_files();
-        // need to add to the database
-        let connection = open_connection();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: String::from("file_name.txt"),
-            },
-            &connection,
-        )
-        .unwrap();
-        connection.close().unwrap();
+        create_file_db_entry("file_name.txt", None);
         let client = client();
         let res = client
             .get(uri!("/files/metadata/1"))
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         let status = res.status();
-        let body: FileMetadataResponse = res.into_json().unwrap();
+        let body: FileApi = res.into_json().unwrap();
         assert_eq!(status, Status::Ok);
         assert_eq!(body.name, String::from("file_name.txt"));
         assert_eq!(body.id, 1);
         cleanup();
     }
+
     #[test]
     fn search_files_without_creds() {
         refresh_db();
@@ -1393,6 +1424,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn search_files_bad_search_query() {
         set_password();
@@ -1407,6 +1439,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(body.message, String::from("Search string is required."));
         cleanup();
     }
+
     #[test]
     fn search_files() {
         set_password();
@@ -1420,13 +1453,14 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .header(Header::new("Authorization", AUTH))
             .dispatch();
         assert_eq!(res.status(), Status::Ok);
-        let body: Vec<FileMetadataResponse> = res.into_json().unwrap();
+        let body: Vec<FileApi> = res.into_json().unwrap();
         assert_eq!(body.len(), 1);
         let file = &body[0];
         assert_eq!(file.id, 1);
         assert_eq!(file.name, String::from("should_return.txt"));
         cleanup();
     }
+
     #[test]
     fn download_file_without_creds() {
         refresh_db();
@@ -1441,6 +1475,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn download_file_not_found() {
         set_password();
@@ -1458,6 +1493,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         );
         cleanup();
     }
+
     #[test]
     fn download_file() {
         set_password();
@@ -1475,6 +1511,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(body, String::from("hello"));
         cleanup();
     }
+
     #[test]
     fn delete_file_without_creds() {
         refresh_db();
@@ -1489,6 +1526,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn delete_file_not_found() {
         set_password();
@@ -1506,6 +1544,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         );
         cleanup();
     }
+
     #[test]
     fn delete_file() {
         refresh_db();
@@ -1530,6 +1569,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(get_res.status(), Status::NotFound);
         cleanup();
     }
+
     #[test]
     fn update_file_without_creds() {
         refresh_db();
@@ -1544,6 +1584,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(res.status(), Status::Unauthorized);
         cleanup();
     }
+
     #[test]
     fn update_file_file_not_found() {
         set_password();
@@ -1563,6 +1604,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         );
         cleanup();
     }
+
     #[test]
     fn update_file_target_folder_not_found() {
         set_password();
@@ -1584,6 +1626,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         );
         cleanup();
     }
+
     #[test]
     fn update_file_file_already_exists_root() {
         set_password();
@@ -1612,6 +1655,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(second, String::from("test2"));
         cleanup();
     }
+
     #[test]
     fn update_file_file_already_exists_target_folder() {
         set_password();
@@ -1656,6 +1700,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(get_second_res, "target");
         cleanup();
     }
+
     #[test]
     fn update_file_no_extension() {
         set_password();
@@ -1663,8 +1708,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         test::create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         let client = client();
-        let body =
-            serde::to_string(&UpdateFileRequest::new(1, Some(0), "test".to_string())).unwrap();
+        let body = serde::to_string(&FileApi::new(1, Some(0), "test".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1673,23 +1717,26 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         let status = res.status();
         assert_eq!(status, Status::Ok);
-        let res_body: FileMetadataResponse = res.into_json().unwrap();
+        let res_body: FileApi = res.into_json().unwrap();
         assert_eq!(
             res_body,
-            FileMetadataResponse {
+            FileApi {
                 id: 1,
                 name: String::from("test"),
+                folder_id: None,
+                tags: Vec::new()
             }
         );
         cleanup();
     }
+
     #[test]
     fn update_file() {
         set_password();
         remove_files();
-        test::create_folder_db_entry("target_folder", None); // id 1
-        test::create_file_db_entry("test.txt", None); // id 1
-        test::create_file_db_entry("other.txt", Some(1)); // id 2
+        create_folder_db_entry("target_folder", None); // id 1
+        create_file_db_entry("test.txt", None); // id 1
+        create_file_db_entry("other.txt", Some(1)); // id 2
         create_file_disk("test.txt", "test"); // (1)
         create_folder_disk("target_folder"); // (1)
         create_file_disk("target_folder/other.txt", "other"); // (2)
@@ -1701,7 +1748,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .body(r#"{"id": 1, "name": "new_name.txt", "folderId": 1, "tags":  []}"#)
             .dispatch();
         assert_eq!(res.status(), Status::Ok);
-        let body: FileMetadataResponse = res.into_json().unwrap();
+        let body: FileApi = res.into_json().unwrap();
         assert_eq!(body.id, 1);
         assert_eq!(body.name, String::from("new_name.txt"));
         let folder_res: FolderResponse = client
@@ -1713,17 +1760,17 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert_eq!(folder_res.files.len(), 2);
         cleanup();
     }
+
     #[test]
     fn update_file_to_folder_with_same_name_root() {
         set_password();
         remove_files();
-        test::create_folder_db_entry("test", None); // id 1
+        create_folder_db_entry("test", None); // id 1
         create_folder_disk("test");
-        test::create_file_db_entry("file", None); // id 1
+        create_file_db_entry("file", None); // id 1
         create_file_disk("file", "test");
         let client = client();
-        let req =
-            serde::to_string(&UpdateFileRequest::new(1, Some(0), "test".to_string())).unwrap();
+        let req = serde::to_string(&FileApi::new(1, Some(0), "test".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1756,6 +1803,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert!(files.contains(&PathBuf::from(format!("{}/file", file_dir()))));
         cleanup();
     }
+
     #[test]
     fn update_file_to_folder_with_same_name_same_folder() {
         set_password();
@@ -1767,7 +1815,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         test::create_file_db_entry("file", None); // file id 1
         create_file_disk("file", "test");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
+        let req = serde::to_string(&FileApi::new(1, Some(1), "a".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1801,18 +1849,19 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
         cleanup();
     }
+
     #[test]
     fn update_file_to_folder_with_same_name_different_folder() {
         set_password();
         remove_files();
-        test::create_folder_db_entry("test", None); // folder id 1
+        create_folder_db_entry("test", None); // folder id 1
         create_folder_disk("test");
-        test::create_folder_db_entry("a", Some(1)); // folder id 2
+        create_folder_db_entry("a", Some(1)); // folder id 2
         create_folder_disk("test/a");
-        test::create_file_db_entry("file", None); // file id 1; from root to folder id 1
+        create_file_db_entry("file", None); // file id 1; from root to folder id 1
         create_file_disk("file", "test");
         let client = client();
-        let req = serde::to_string(&UpdateFileRequest::new(1, Some(1), "a".to_string())).unwrap();
+        let req = serde::to_string(&FileApi::new(1, Some(1), "a".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1820,8 +1869,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .body(req)
             .dispatch();
         let status = res.status();
-        let res_body: BasicMessage = res.into_json().unwrap();
         assert_eq!(status, Status::BadRequest);
+        let res_body: BasicMessage = res.into_json().unwrap();
         assert_eq!(res_body.message, "A folder with that name already exists.");
         // verify the database hasn't changed (file id 1 should be named file in test folder)
         let con = open_connection();
@@ -1865,8 +1914,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         test::create_file_db_entry("thing.txt", Some(1));
         create_file_disk("inner/thing.txt", "thing");
         let client = client();
-        let req =
-            serde::to_string(&UpdateFileRequest::new(2, None, "thing.txt".to_string())).unwrap();
+        let req = serde::to_string(&FileApi::new(2, None, "thing.txt".to_string())).unwrap();
         let res = client
             .put(uri!("/files"))
             .header(Header::new("Authorization", AUTH))
@@ -1874,7 +1922,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .body(req)
             .dispatch();
         assert_eq!(res.status(), Status::Ok);
-        let body: FileMetadataResponse = res.into_json().unwrap();
+        let body: FileApi = res.into_json().unwrap();
         assert_eq!(body.id, 2);
         assert_eq!(body.name, String::from("thing.txt"));
         let folder_res: FolderResponse = client

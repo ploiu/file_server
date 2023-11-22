@@ -3,6 +3,7 @@ use std::fs::File;
 use std::path::Path;
 use std::string::ToString;
 
+use crate::model::api::FileApi;
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
@@ -12,12 +13,11 @@ use crate::model::error::file_errors::{
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
-use crate::model::request::file_requests::{CreateFileRequest, UpdateFileRequest};
-use crate::model::response::file_responses::FileMetadataResponse;
+use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository;
-use crate::repository::{file_repository, folder_repository};
-use crate::service::folder_service;
+use crate::repository::{file_repository, folder_repository, open_connection};
+use crate::service::{folder_service, tag_service};
 
 // TODO maybe turn into a macro so it gets inlined. I'm worried about performance for every single file system operation
 #[inline]
@@ -47,7 +47,7 @@ pub async fn check_root_dir(dir: String) {
 pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
     force: bool,
-) -> Result<FileMetadataResponse, CreateFileError> {
+) -> Result<FileApi, CreateFileError> {
     println!("{}", file_input.file.raw_name().unwrap().as_str().unwrap());
     let file_name = String::from(file_input.file.name().unwrap());
     check_root_dir(file_dir()).await;
@@ -75,9 +75,11 @@ pub async fn save_file(
         // folder exists, now try to create the file
         let file_id =
             persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
-        Ok(FileMetadataResponse {
+        Ok(FileApi {
             id: file_id,
+            folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
+            tags: Vec::new(),
         })
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
@@ -87,29 +89,52 @@ pub async fn save_file(
         };
         let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
         let file_id = persist_save_file(file_input).await?;
-        Ok(FileMetadataResponse {
+        Ok(FileApi {
             id: file_id,
+            folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
+            tags: Vec::new(),
         })
     };
 }
 
 /// retrieves the file from the database with the passed id
-pub fn get_file_metadata(id: u32) -> Result<FileRecord, GetFileError> {
-    let con = repository::open_connection();
-    let result = file_repository::get_file(id, &con).or_else(|e| {
-        eprintln!(
-            "Failed to pull file info from database. Nested exception is {:?}",
-            e
-        );
-        return if e == rusqlite::Error::QueryReturnedNoRows {
-            Err(GetFileError::NotFound)
-        } else {
-            Err(GetFileError::DbFailure)
-        };
-    });
+pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
+    let con: Connection = repository::open_connection();
+    let file = match file_repository::get_file(id, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            con.close().unwrap();
+            eprintln!(
+                "Failed to pull file info from database. Nested exception is {:?}",
+                e
+            );
+            return if e == rusqlite::Error::QueryReturnedNoRows {
+                Err(GetFileError::NotFound)
+            } else {
+                Err(GetFileError::DbFailure)
+            };
+        }
+    };
+    let tags = match tag_service::get_tags_on_file(id) {
+        Ok(t) => t,
+        Err(e) => {
+            con.close().unwrap();
+            return Err(GetFileError::TagError);
+        }
+    };
     con.close().unwrap();
-    result
+    Ok(FileApi::from(file, tags))
+}
+
+pub fn check_file_exists(id: u32) -> bool {
+    let con: Connection = open_connection();
+    if file_repository::get_file(id, &con).is_err() {
+        con.close().unwrap();
+        return false;
+    }
+    con.close().unwrap();
+    return true;
 }
 
 /// reads the contents of the file with the passed id from the disk and returns it
@@ -145,12 +170,9 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 }
 
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
-pub fn delete_file_by_id_with_connection(
-    id: u32,
-    con: &Connection,
-) -> Result<FileRecord, DeleteFileError> {
+pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     let result = match file_repository::delete_file(id, con) {
-        Ok(record) => Ok(record),
+        Ok(_) => Ok(()),
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
         Err(e) => {
             eprintln!(
@@ -163,9 +185,9 @@ pub fn delete_file_by_id_with_connection(
     result
 }
 
-pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse, UpdateFileError> {
+pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     // first check if the file exists
-    let con = repository::open_connection();
+    let con: Connection = repository::open_connection();
     if file_repository::get_file(file.id, &con).is_err() {
         con.close().unwrap();
         return Err(UpdateFileError::NotFound);
@@ -215,6 +237,18 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         parent_folder.path,
         file.name().unwrap()
     );
+    // update the file's tags in the db
+    if tag_service::update_file_tags(file.id, file.tags.clone()).is_err() {
+        con.close().unwrap();
+        return Err(UpdateFileError::TagError);
+    }
+    let tags = match tag_service::get_tags_on_file(file.id) {
+        Ok(t) => t,
+        Err(_) => {
+            con.close().unwrap();
+            return Err(UpdateFileError::TagError);
+        }
+    };
     // we're done with the database for now
     con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
@@ -225,14 +259,16 @@ pub async fn update_file(file: UpdateFileRequest) -> Result<FileMetadataResponse
         );
         return Err(UpdateFileError::FileSystemError);
     }
-    Ok(FileMetadataResponse {
+    Ok(FileApi {
         id: file.id,
+        folder_id: new_parent_id,
         name: file.name().unwrap(),
+        tags,
     })
 }
 
-pub fn search_files(criteria: String) -> Result<Vec<FileMetadataResponse>, SearchFileError> {
-    let con = repository::open_connection();
+pub fn search_files(criteria: String) -> Result<Vec<FileApi>, SearchFileError> {
+    let con: Connection = repository::open_connection();
     let files = match file_repository::search_files(criteria, &con) {
         Ok(f) => f,
         Err(e) => {
@@ -244,13 +280,25 @@ pub fn search_files(criteria: String) -> Result<Vec<FileMetadataResponse>, Searc
             return Err(SearchFileError::DbError);
         }
     };
-    let mut converted_files: Vec<FileMetadataResponse> = Vec::new();
+    let mut converted_files: Vec<FileApi> = Vec::new();
     for file in files.iter() {
-        converted_files.push(FileMetadataResponse {
-            id: file.id.unwrap(),
+        let id = file.id.unwrap();
+        let tags = match tag_service::get_tags_on_file(id) {
+            Ok(t) => t,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(SearchFileError::TagError);
+            }
+        };
+        converted_files.push(FileApi {
+            id,
             name: String::from(&file.name),
+            // for this purpose, none is ok because the folder context doesn't matter
+            folder_id: None,
+            tags,
         })
     }
+    con.close().unwrap();
     Ok(converted_files)
 }
 

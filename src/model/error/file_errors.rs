@@ -10,6 +10,8 @@ pub enum CreateFileError {
 pub enum GetFileError {
     NotFound,
     DbFailure,
+    /// failed to retrieve tags for file
+    TagError,
 }
 
 #[derive(PartialEq)]
@@ -36,9 +38,13 @@ pub enum UpdateFileError {
     FileAlreadyExists,
     /// folder with the new file name already exists in the target directory
     FolderAlreadyExistsWithSameName,
+    /// an issue occurred updating or retrieving tags
+    TagError,
 }
 
 #[derive(PartialEq)]
 pub enum SearchFileError {
     DbError,
+    /// an issue occurred retrieving tags
+    TagError,
 }

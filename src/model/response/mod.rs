@@ -25,6 +25,15 @@ pub struct TagApi {
     pub title: String,
 }
 
+impl Clone for TagApi {
+    fn clone(&self) -> Self {
+        TagApi {
+            id: self.id.clone(),
+            title: self.title.clone(),
+        }
+    }
+}
+
 // ----------------------------------
 
 impl BasicMessage {

@@ -40,6 +40,8 @@ pub enum GetChildFilesError {
     DbFailure,
     /// the folder id could not be found
     FolderNotFound,
+    /// could not retrieve tags from the database
+    TagError,
 }
 
 #[derive(PartialEq, Debug)]

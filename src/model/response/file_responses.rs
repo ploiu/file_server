@@ -1,28 +1,11 @@
 use std::fs::File;
 
+use crate::model::api::FileApi;
 use rocket::serde::json::Json;
-use rocket::serde::{Deserialize, Serialize};
 
-use crate::model::repository::FileRecord;
 use crate::model::response::BasicMessage;
 
 type NoContent = ();
-
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
-#[serde(crate = "rocket::serde")]
-pub struct FileMetadataResponse {
-    pub id: u32,
-    pub name: String,
-}
-
-impl FileMetadataResponse {
-    pub fn from(f: &FileRecord) -> FileMetadataResponse {
-        FileMetadataResponse {
-            id: f.id.unwrap(),
-            name: String::from(&f.name),
-        }
-    }
-}
 
 #[derive(Responder)]
 pub enum GetFileResponse {
@@ -31,7 +14,7 @@ pub enum GetFileResponse {
     #[response(status = 500, content_type = "json")]
     FileDbError(Json<BasicMessage>),
     #[response(status = 200, content_type = "json")]
-    Success(Json<FileMetadataResponse>),
+    Success(Json<FileApi>),
     #[response(status = 401)]
     Unauthorized(String),
 }
@@ -51,7 +34,7 @@ pub enum DownloadFileResponse {
 #[derive(Responder)]
 pub enum CreateFileResponse {
     #[response(status = 201)]
-    Success(Json<FileMetadataResponse>),
+    Success(Json<FileApi>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 500, content_type = "json")]
@@ -77,7 +60,7 @@ pub enum DeleteFileResponse {
 #[derive(Responder)]
 pub enum UpdateFileResponse {
     #[response(status = 200)]
-    Success(Json<FileMetadataResponse>),
+    Success(Json<FileApi>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 400, content_type = "json")]
@@ -91,7 +74,7 @@ pub enum UpdateFileResponse {
 #[derive(Responder)]
 pub enum SearchFileResponse {
     #[response(status = 200)]
-    Success(Json<Vec<FileMetadataResponse>>),
+    Success(Json<Vec<FileApi>>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 400, content_type = "json")]

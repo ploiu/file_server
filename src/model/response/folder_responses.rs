@@ -1,7 +1,7 @@
+use crate::model::api::FileApi;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 
-use crate::model::repository::{FileRecord, Folder};
-use crate::model::response::file_responses::FileMetadataResponse;
+use crate::model::repository::Folder;
 use crate::model::response::BasicMessage;
 
 type NoContent = ();
@@ -15,7 +15,7 @@ pub struct FolderResponse {
     pub path: String,
     pub name: String,
     pub folders: Vec<FolderResponse>,
-    pub files: Vec<FileMetadataResponse>,
+    pub files: Vec<FileApi>,
 }
 
 impl FolderResponse {
@@ -41,11 +41,8 @@ impl FolderResponse {
             .for_each(|f| self.folders.push(f));
     }
 
-    pub fn files(&mut self, files: Vec<FileRecord>) {
-        files
-            .iter()
-            .map(FileMetadataResponse::from)
-            .for_each(|f| self.files.push(f));
+    pub fn files(&mut self, files: Vec<FileApi>) {
+        files.into_iter().for_each(|f| self.files.push(f));
     }
 }
 

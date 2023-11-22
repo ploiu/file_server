@@ -201,7 +201,7 @@ pub async fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(),
 /// retrieves all the tags on the file with the passed id
 pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
     // make sure the file exists
-    if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
+    if !file_service::check_file_exists(file_id) {
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
