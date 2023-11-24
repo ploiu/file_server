@@ -2,7 +2,7 @@ use crate::model::api::FileApi;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 
 use crate::model::repository::Folder;
-use crate::model::response::BasicMessage;
+use crate::model::response::{BasicMessage, TagApi};
 
 type NoContent = ();
 
@@ -16,6 +16,7 @@ pub struct FolderResponse {
     pub name: String,
     pub folders: Vec<FolderResponse>,
     pub files: Vec<FileApi>,
+    pub tags: Vec<TagApi>,
 }
 
 impl FolderResponse {
@@ -31,6 +32,7 @@ impl FolderResponse {
             name,
             folders: Vec::new(),
             files: Vec::new(),
+            tags: Vec::new(),
         }
     }
 

@@ -3,7 +3,9 @@ use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
 use crate::model::repository::{FileRecord, Folder};
-use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
+use crate::repository::{
+    file_repository, folder_repository, initialize_db, open_connection, tag_repository,
+};
 use crate::service::file_service::file_dir;
 use crate::temp_dir;
 
@@ -14,7 +16,7 @@ pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 #[cfg(test)]
 pub fn refresh_db() {
     let thread_name = current_thread_name();
-    remove_file(Path::new(format!("{}.sqlite", thread_name).as_str()))
+    remove_file(Path::new(format!("{thread_name}.sqlite").as_str()))
         .or(Ok::<(), ()>(()))
         .unwrap();
     initialize_db().unwrap();
@@ -62,6 +64,23 @@ pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
 }
 
 #[cfg(test)]
+pub fn create_tag_db_entry(name: &str) {
+    let connection = open_connection();
+    tag_repository::create_tag(name.to_string(), &connection).unwrap();
+    connection.close().unwrap();
+}
+
+#[cfg(test)]
+pub fn create_tag_folder(name: &str, folder_id: u32) {
+    let connection = open_connection();
+    let id = tag_repository::create_tag(name.to_string(), &connection)
+        .unwrap()
+        .id;
+    tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+    connection.close().unwrap();
+}
+
+#[cfg(test)]
 pub fn fail() {
     panic!("unimplemented test");
 }
@@ -75,12 +94,11 @@ pub fn current_thread_name() -> String {
 #[cfg(test)]
 pub fn create_file_disk(file_name: &str, contents: &str) {
     // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
-    let thread_name = current_thread_name();
     fs::create_dir(Path::new(file_dir().as_str()))
         .or(Ok::<(), ()>(()))
         .unwrap();
     fs::write(
-        Path::new(format!("{}/{}", file_dir(), file_name).as_str()),
+        Path::new(format!("{}/{file_name}", file_dir()).as_str()),
         contents,
     )
     .unwrap();
@@ -88,10 +106,7 @@ pub fn create_file_disk(file_name: &str, contents: &str) {
 
 #[cfg(test)]
 pub fn create_folder_disk(folder_name: &str) {
-    fs::create_dir_all(Path::new(
-        format!("{}/{}", file_dir(), folder_name).as_str(),
-    ))
-    .unwrap();
+    fs::create_dir_all(Path::new(format!("{}/{folder_name}", file_dir()).as_str())).unwrap();
 }
 
 #[cfg(test)]
@@ -99,7 +114,7 @@ pub fn cleanup() {
     let thread_name = current_thread_name();
     let temp_dir_name = temp_dir();
     remove_files();
-    remove_file(Path::new(format!("{}.sqlite", thread_name).as_str()))
+    remove_file(Path::new(format!("{thread_name}.sqlite").as_str()))
         .or(Ok::<(), ()>(()))
         .unwrap();
     remove_dir_all(Path::new(temp_dir_name.as_str()))

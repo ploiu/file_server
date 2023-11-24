@@ -14,7 +14,7 @@ use crate::model::error::folder_errors::{
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::folder_repository;
+use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
@@ -28,7 +28,7 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
     check_root_dir(file_dir()).await;
     let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse::from(&folder);
-    let con = repository::open_connection();
+    let con: Connection = repository::open_connection();
     let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
         eprintln!(
             "Failed to pull child folder info from database! Nested exception is: \n {:?}",
@@ -36,9 +36,20 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
         );
         GetFolderError::DbFailure
     });
+    let tag_db_id = if id.is_none() { 0 } else { id.unwrap() };
+    let tags = match tag_service::get_tags_on_folder(tag_db_id) {
+        Ok(t) => t,
+        Err(_) => {
+            con.close().unwrap();
+            return Err(GetFolderError::TagError);
+        }
+    };
     con.close().unwrap();
     folder.folders(child_folders?);
     folder.files(get_files_for_folder(db_id).unwrap());
+    for tag in tags {
+        folder.tags.push(tag);
+    }
     Ok(folder)
 }
 
@@ -110,7 +121,20 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .replace(&updated_folder.name, "")
             .to_string(),
         name,
+        tags: Vec::new(),
     })
+}
+
+pub fn folder_exists(id: Option<u32>) -> bool {
+    let con: Connection = open_connection();
+    let db_id = if Some(0) == id || id.is_none() {
+        None
+    } else {
+        id
+    };
+    let res = folder_repository::get_by_id(db_id, &con);
+    con.close().unwrap();
+    return !res.is_err();
 }
 
 pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
@@ -221,13 +245,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
                 // make sure a folder with our name doesn't exist
-                let folder_already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
-                    Ok(exists) => exists,
-                    Err(_e) => {
-                        con.close().unwrap();
-                        return Err(UpdateFolderError::DbFailure);
-                    }
-                };
+                let folder_already_exists =
+                    match does_folder_exist_within(&folder.name, parent.id, &con) {
+                        Ok(exists) => exists,
+                        Err(_e) => {
+                            con.close().unwrap();
+                            return Err(UpdateFolderError::DbFailure);
+                        }
+                    };
                 if folder_already_exists {
                     return Err(UpdateFolderError::AlreadyExists);
                 }
@@ -262,7 +287,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         },
         None => {
             // make sure a folder with our name doesn't exist
-            let folder_already_exists = match does_folder_exist(&folder.name, None, &con) {
+            let folder_already_exists = match does_folder_exist_within(&folder.name, None, &con) {
                 Ok(exists) => exists,
                 Err(_e) => {
                     con.close().unwrap();
@@ -311,7 +336,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
 }
 
 /// checks if a folder with the passed name exists within the folder with the passed id
-fn does_folder_exist(
+fn does_folder_exist_within(
     name: &String,
     id: Option<u32>,
     con: &Connection,
@@ -442,4 +467,142 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         return Err(DeleteFolderError::DbFailure);
     };
     Ok(folder)
+}
+
+#[cfg(test)]
+mod get_folder_tests {
+    use crate::model::error::folder_errors::GetFolderError;
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::folder_service::get_folder;
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
+    use rocket::tokio;
+
+    #[tokio::test]
+    async fn get_folder_works() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        let folder = get_folder(Some(1)).await.unwrap();
+        assert_eq!(
+            FolderResponse {
+                id: 1,
+                parent_id: None,
+                path: "test".to_string(),
+                name: "test".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![],
+            },
+            folder
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn get_folder_not_found() {
+        refresh_db();
+        let err = get_folder(Some(1)).await.unwrap_err();
+        assert_eq!(GetFolderError::NotFound, err);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn get_folder_retrieves_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_tag_folder("tag1", 1);
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![TagApi {
+                id: Some(1),
+                title: "tag1".to_string(),
+            }],
+        };
+        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod update_folder_tests {
+    use crate::model::request::folder_requests::UpdateFolderRequest;
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::folder_service::{get_folder, update_folder};
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, fail, refresh_db};
+    use rocket::tokio;
+
+    #[tokio::test]
+    async fn update_folder_adds_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test".to_string(),
+            parent_id: None,
+            tags: vec![TagApi {
+                id: None,
+                title: "tag1".to_string(),
+            }],
+        })
+        .unwrap();
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![TagApi {
+                id: Some(1),
+                title: "tag1".to_string(),
+            }],
+        };
+        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_already_exists() {
+        refresh_db();
+        cleanup();
+        fail();
+    }
+
+    #[test]
+    fn update_folder_no_name_change_success() {
+        refresh_db();
+        cleanup();
+        fail();
+    }
+
+    #[tokio::test]
+    async fn update_folder_removes_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_tag_folder("tag1", 1);
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![],
+        };
+        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        cleanup();
+    }
 }

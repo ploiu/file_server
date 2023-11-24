@@ -118,7 +118,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
     };
     let tags = match tag_service::get_tags_on_file(id) {
         Ok(t) => t,
-        Err(e) => {
+        Err(_) => {
             con.close().unwrap();
             return Err(GetFileError::TagError);
         }

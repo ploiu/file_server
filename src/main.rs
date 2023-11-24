@@ -189,6 +189,7 @@ mod folder_tests {
             name: String::from("root"),
             folders: Vec::new(),
             files: Vec::new(),
+            tags: Vec::new(),
         };
         let status = res.status();
         let res_json: FolderResponse = res.into_json().unwrap();
@@ -214,6 +215,7 @@ mod folder_tests {
             name: String::from("root"),
             folders: Vec::new(),
             files: Vec::new(),
+            tags: Vec::new(),
         };
         let status = res.status();
         let res_json: FolderResponse = res.into_json().unwrap();
@@ -412,6 +414,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             folders: Vec::new(),
             files: Vec::new(),
+            tags: Vec::new(),
         };
         assert_eq!(body, expected);
         cleanup();
@@ -464,6 +467,7 @@ mod folder_tests {
             name: String::from("testRenamed"),
             folders: Vec::new(),
             files: Vec::new(),
+            tags: Vec::new(),
         };
         assert_eq!(body, expected);
         cleanup();
