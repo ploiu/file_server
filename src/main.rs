@@ -554,28 +554,8 @@ mod folder_tests {
         set_password();
         remove_files();
         let client = client();
-        client
-            .post("/folders")
-            .header(Header::new("Authorization", AUTH))
-            .body(
-                serde::to_string(&CreateFolderRequest {
-                    name: String::from("test"),
-                    parent_id: Some(0),
-                })
-                .unwrap(),
-            )
-            .dispatch();
-        client
-            .post("/folders")
-            .header(Header::new("Authorization", AUTH))
-            .body(
-                serde::to_string(&CreateFolderRequest {
-                    name: String::from("test2"),
-                    parent_id: Some(0),
-                })
-                .unwrap(),
-            )
-            .dispatch();
+        create_folder_db_entry("test", None);
+        create_folder_db_entry("test2", None);
         // rename to the second created folder
         let update_request = serde::to_string(&UpdateFolderRequest {
             parent_id: Some(0),
@@ -1026,18 +1006,14 @@ mod folder_tests {
 #[cfg(test)]
 mod file_tests {
     use std::fs;
-    use std::path::PathBuf;
 
-    use crate::model::api::FileApi;
     use rocket::http::{Header, Status};
     use rocket::local::blocking::Client;
     use rocket::serde::json::serde_json as serde;
-    use rusqlite::Connection;
 
-    use crate::model::repository::{FileRecord, Folder};
-    use crate::model::response::folder_responses::FolderResponse;
-    use crate::model::response::{BasicMessage, TagApi};
-    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
+    use crate::model::api::FileApi;
+    use crate::model::response::BasicMessage;
+    use crate::repository::initialize_db;
     use crate::service::file_service::file_dir;
     use crate::test::*;
 

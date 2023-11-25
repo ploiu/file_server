@@ -36,6 +36,4 @@ pub enum TagRelationError {
     FileNotFound,
     /// no folder with the passed id was found
     FolderNotFound,
-    /// no tag with the passed id was found
-    TagNotFound,
 }

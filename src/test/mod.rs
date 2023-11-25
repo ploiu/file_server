@@ -66,7 +66,7 @@ pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
 #[cfg(test)]
 pub fn create_tag_db_entry(name: &str) -> u32 {
     let connection = open_connection();
-    let id = tag_repository::create_tag(name.to_string(), &connection)
+    let id = tag_repository::create_tag(&name.to_string(), &connection)
         .unwrap()
         .id;
     connection.close().unwrap();

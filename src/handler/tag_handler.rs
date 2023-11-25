@@ -1,3 +1,5 @@
+use rocket::serde::json::Json;
+
 use crate::guard::Auth;
 use crate::model::error::tag_errors::{GetTagError, UpdateTagError};
 use crate::model::guard::auth::ValidateResult;
@@ -6,7 +8,6 @@ use crate::model::response::tag_responses::{
 };
 use crate::model::response::{BasicMessage, TagApi};
 use crate::service::tag_service;
-use rocket::serde::json::Json;
 
 #[get("/<id>")]
 pub fn get_tag(id: u32, auth: Auth) -> GetTagResponse {

@@ -1,8 +1,8 @@
 use std::fs::File;
 
-use crate::model::api::FileApi;
 use rocket::serde::json::Json;
 
+use crate::model::api::FileApi;
 use crate::model::response::BasicMessage;
 
 type NoContent = ();

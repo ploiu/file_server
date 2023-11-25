@@ -1,6 +1,6 @@
-use crate::model::api::FileApi;
 use rocket::serde::{json::Json, Deserialize, Serialize};
 
+use crate::model::api::FileApi;
 use crate::model::repository::Folder;
 use crate::model::response::{BasicMessage, TagApi};
 
@@ -84,6 +84,8 @@ pub enum UpdateFolderResponse {
     FolderDbError(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
     FileSystemError(Json<BasicMessage>),
+    #[response(status = 500, content_type = "json")]
+    TagError(Json<BasicMessage>),
     #[response(status = 200)]
     Success(Json<FolderResponse>),
     #[response(status = 401)]

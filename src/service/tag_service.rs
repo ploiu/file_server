@@ -11,18 +11,22 @@ use crate::service::{file_service, folder_service};
 /// returns the created/existing tag
 pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
     let con = open_connection();
-    let copied_name = name.clone();
-    let existing_tag: Option<repository::Tag> = match tag_repository::get_tag_by_title(name, &con) {
+    let existing_tag: Option<repository::Tag> = match tag_repository::get_tag_by_title(&name, &con)
+    {
         Ok(tags) => tags,
-        Err(_) => {
+        Err(e) => {
+            eprintln!(
+                "Failed to check if any tags with the name {name} already exist! Error is {e}"
+            );
             con.close().unwrap();
             return Err(CreateTagError::DbError);
         }
     };
     let tag: repository::Tag = if None == existing_tag {
-        match tag_repository::create_tag(copied_name, &con) {
+        match tag_repository::create_tag(&name, &con) {
             Ok(t) => t,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("Failed to create a new tag with the name {name}! Error is {e}");
                 con.close().unwrap();
                 return Err(CreateTagError::DbError);
             }
@@ -40,10 +44,12 @@ pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
     let tag: repository::Tag = match tag_repository::get_tag(id, &con) {
         Ok(t) => t,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
+            eprintln!("No tag with id {id} exists!");
             con.close().unwrap();
             return Err(GetTagError::TagNotFound);
         }
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Could not retrieve tag with id {id}! Error is {e}");
             con.close().unwrap();
             return Err(GetTagError::DbError);
         }
@@ -56,28 +62,38 @@ pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
 /// Will fail if a tag already exists with that name
 pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
     let con: rusqlite::Connection = open_connection();
-    // make sure the tag exists first
+    // make sure the tag exists first TODO cleanup - use if let Err pattern since Ok branch is empty
     match tag_repository::get_tag(request.id.unwrap(), &con) {
         Ok(_) => { /* no op */ }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
+            eprintln!(
+                "Could not update tag with id {:?}, because it does not exist!",
+                request.id
+            );
             con.close().unwrap();
             return Err(UpdateTagError::TagNotFound);
         }
-        Err(_) => {
+        Err(e) => {
+            eprintln!(
+                "Could not update tag with id {:?}! Error is {e}",
+                request.id
+            );
             con.close().unwrap();
             return Err(UpdateTagError::DbError);
         }
     };
     let new_title = request.title;
-    // now make sure the database doesn't already have a tag with the new name
-    match tag_repository::get_tag_by_title(new_title.clone(), &con) {
+    // now make sure the database doesn't already have a tag with the new name TODO maybe see if can clean up, 2 empty branches is a smell
+    match tag_repository::get_tag_by_title(&new_title, &con) {
         Ok(Some(_)) => {
+            eprintln!("Could not update tag with id {:?} to name {new_title}, because a tag with that name already exists!", request.id);
             con.close().unwrap();
             return Err(UpdateTagError::NewNameAlreadyExists);
         }
         Ok(None) => {}
         Err(rusqlite::Error::QueryReturnedNoRows) => { /* this is the good route - no op */ }
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Could not search tags by name with value {new_title}! Error is {e}");
             con.close().unwrap();
             return Err(UpdateTagError::DbError);
         }
@@ -89,7 +105,11 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
     };
     match tag_repository::update_tag(db_tag, &con) {
         Ok(()) => {}
-        Err(_) => {
+        Err(e) => {
+            eprintln!(
+                "Could not update tag with id {:?}! Error is {e}",
+                request.id
+            );
             con.close().unwrap();
             return Err(UpdateTagError::DbError);
         }
@@ -104,9 +124,11 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
 /// deletes the tag with the passed id. Does nothing if that tag doesn't exist
 pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
     let con: rusqlite::Connection = open_connection();
+    // TODO change to if let Err pattern, Ok branch is empty
     match tag_repository::delete_tag(id, &con) {
         Ok(()) => {}
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Could not delete tag with id {id}! Error is {e}");
             con.close().unwrap();
             return Err(DeleteTagError::DbError);
         }
@@ -119,13 +141,15 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
+        eprintln!("Cannot update tag for file {file_id}, because that file does not exist!");
         return Err(TagRelationError::FileNotFound);
     }
     let existing_tags = get_tags_on_file(file_id)?;
     let con: rusqlite::Connection = open_connection();
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        if tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con).is_err() {
+        if let Err(e) = tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con) {
+            eprintln!("Failed to remove tag from file with id {file_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
@@ -133,21 +157,23 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
     // for all the new tags, create them first
     let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
     for tag in new_tags {
-        let created_tag = match tag_repository::create_tag(tag.title.clone(), &con) {
+        let created_tag = match create_tag(tag.title.clone()) {
             Ok(t) => t,
             Err(_) => {
                 con.close().unwrap();
                 return Err(TagRelationError::DbError);
             }
         };
-        if tag_repository::add_tag_to_file(file_id, created_tag.id, &con).is_err() {
+        if let Err(e) = tag_repository::add_tag_to_file(file_id, created_tag.id.unwrap(), &con) {
+            eprintln!("Failed to add tag to file with id {file_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
     }
     let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
     for tag in existing_tags {
-        if tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con).is_err() {
+        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con) {
+            eprintln!("Failed to add tag to file with id {file_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
@@ -160,13 +186,15 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
 pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
+        eprintln!("Cannot update tags for a folder that does not exist (id {folder_id}!");
         return Err(TagRelationError::FolderNotFound);
     }
     let existing_tags = get_tags_on_folder(folder_id)?;
     let con: rusqlite::Connection = open_connection();
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        if tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con).is_err() {
+        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con) {
+            eprintln!("Failed to remove tags from folder with id {folder_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
@@ -174,21 +202,25 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     // for all the new tags, create them first
     let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
     for tag in new_tags {
-        let created_tag = match tag_repository::create_tag(tag.title.clone(), &con) {
+        let created_tag = match create_tag(tag.title.clone()) {
             Ok(t) => t,
-            Err(_) => {
+            Err(e) => {
+                eprintln!("Failed to create tag! Error is {:?}", e);
                 con.close().unwrap();
                 return Err(TagRelationError::DbError);
             }
         };
-        if tag_repository::add_tag_to_folder(folder_id, created_tag.id, &con).is_err() {
+        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, created_tag.id.unwrap(), &con)
+        {
+            eprintln!("Failed to add tags to folder with id {folder_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
     }
     let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
     for tag in existing_tags {
-        if tag_repository::add_tag_to_folder(folder_id, tag.id.unwrap(), &con).is_err() {
+        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag.id.unwrap(), &con) {
+            eprintln!("Failed to add tags to folder with id {folder_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
@@ -201,18 +233,20 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
 pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
     // make sure the file exists
     if !file_service::check_file_exists(file_id) {
+        eprintln!("Cannot get tags on file with id {file_id}, because that file does not exist!");
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let db_tags = match tag_repository::get_tags_on_file(file_id, &con) {
+    let file_tags = match tag_repository::get_tags_on_file(file_id, &con) {
         Ok(tags) => tags,
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Failed to retrieve tags on file with id {file_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
     };
     con.close().unwrap();
-    let api_tags: Vec<TagApi> = db_tags.into_iter().map(TagApi::from).collect();
+    let api_tags: Vec<TagApi> = file_tags.into_iter().map(TagApi::from).collect();
     Ok(api_tags)
 }
 
@@ -221,12 +255,16 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
 pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
     // make sure the folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
+        eprintln!(
+            "Cannot get tags on folder with id {folder_id}, because that folder does not exist!"
+        );
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
     let db_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
         Ok(tags) => tags,
-        Err(_) => {
+        Err(e) => {
+            eprintln!("Failed to retrieve tags on folder with id {folder_id}! Error is {e}");
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
@@ -494,7 +532,7 @@ mod update_folder_tag_test {
     }
 
     #[test]
-    fn update_folder_tags_throws_error_if_file_not_found() {
+    fn update_folder_tags_throws_error_if_folder_not_found() {
         refresh_db();
         let res = update_folder_tags(1, vec![]).unwrap_err();
         assert_eq!(TagRelationError::FolderNotFound, res);
@@ -512,6 +550,21 @@ mod get_tags_on_file_tests {
     fn throws_error_if_file_not_found() {
         refresh_db();
         let err = get_tags_on_file(1).unwrap_err();
+        assert_eq!(TagRelationError::FileNotFound, err);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_tags_on_folder_tests {
+    use crate::model::error::tag_errors::TagRelationError;
+    use crate::service::tag_service::get_tags_on_folder;
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn throws_error_if_file_not_found() {
+        refresh_db();
+        let err = get_tags_on_folder(1).unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, err);
         cleanup();
     }

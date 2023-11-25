@@ -461,7 +461,7 @@ mod update_file_tests {
     use crate::service::folder_service;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, fail, refresh_db,
+        create_folder_disk, create_tag_file, refresh_db,
     };
 
     #[tokio::test]

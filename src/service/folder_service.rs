@@ -111,6 +111,12 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     let split_name = String::from(&updated_folder.name);
     let split_name = split_name.split("/");
     let name = String::from(split_name.last().unwrap_or(updated_folder.name.as_str()));
+    match tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone()) {
+        Ok(()) => { /*no op*/ }
+        Err(_) => {
+            return Err(UpdateFolderError::TagError);
+        }
+    };
     Ok(FolderResponse {
         id: updated_folder.id.unwrap(),
         folders: Vec::new(),
@@ -121,7 +127,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .replace(&updated_folder.name, "")
             .to_string(),
         name,
-        tags: Vec::new(),
+        tags: folder.tags.clone(),
     })
 }
 
@@ -245,15 +251,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
                 // make sure a folder with our name doesn't exist
-                let folder_already_exists =
-                    match does_folder_exist_within(&folder.name, parent.id, &con) {
-                        Ok(exists) => exists,
-                        Err(_e) => {
-                            con.close().unwrap();
-                            return Err(UpdateFolderError::DbFailure);
-                        }
-                    };
-                if folder_already_exists {
+                let existing_folder = match search_folder_within(&folder.name, parent.id, &con) {
+                    Ok(f) => f,
+                    Err(_) => {
+                        con.close().unwrap();
+                        return Err(UpdateFolderError::DbFailure);
+                    }
+                };
+                if existing_folder.is_some() && existing_folder.unwrap().id != folder.id {
                     return Err(UpdateFolderError::AlreadyExists);
                 }
                 // make sure we're not renaming to a file that already exists in the target parent directory
@@ -287,14 +292,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         },
         None => {
             // make sure a folder with our name doesn't exist
-            let folder_already_exists = match does_folder_exist_within(&folder.name, None, &con) {
-                Ok(exists) => exists,
-                Err(_e) => {
+            let existing_folder = match search_folder_within(&folder.name, None, &con) {
+                Ok(f) => f,
+                Err(_) => {
                     con.close().unwrap();
                     return Err(UpdateFolderError::DbFailure);
                 }
             };
-            if folder_already_exists {
+            if existing_folder.is_some() && existing_folder.unwrap().id != folder.id {
                 return Err(UpdateFolderError::AlreadyExists);
             }
             // make sure we're not renaming to a file that already exists in the target parent directory
@@ -335,13 +340,12 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
     })
 }
 
-/// checks if a folder with the passed name exists within the folder with the passed id
-fn does_folder_exist_within(
+fn search_folder_within(
     name: &String,
-    id: Option<u32>,
+    parent_id: Option<u32>,
     con: &Connection,
-) -> Result<bool, rusqlite::Error> {
-    let matching_folder = folder_repository::get_child_folders(id, con)?
+) -> Result<Option<Folder>, rusqlite::Error> {
+    let matching_folder = folder_repository::get_child_folders(parent_id, con)?
         .iter()
         .map(|folder| Folder {
             id: folder.id,
@@ -349,7 +353,7 @@ fn does_folder_exist_within(
             name: String::from(folder.name.to_lowercase().split('/').last().unwrap()),
         })
         .find(|folder| folder.name == name.to_lowercase().split('/').last().unwrap());
-    Ok(matching_folder.is_some())
+    Ok(matching_folder)
 }
 
 fn does_file_exist(
@@ -471,12 +475,13 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
 
 #[cfg(test)]
 mod get_folder_tests {
+    use rocket::tokio;
+
     use crate::model::error::folder_errors::GetFolderError;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
-    use rocket::tokio;
 
     #[tokio::test]
     async fn get_folder_works() {
@@ -530,17 +535,22 @@ mod get_folder_tests {
 
 #[cfg(test)]
 mod update_folder_tests {
+    use rocket::tokio;
+
+    use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::folder_service::{get_folder, update_folder};
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, fail, refresh_db};
-    use rocket::tokio;
+    use crate::test::{
+        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
+    };
 
     #[tokio::test]
     async fn update_folder_adds_tags() {
         refresh_db();
         create_folder_db_entry("test", None);
+        create_folder_disk("test");
         update_folder(&UpdateFolderRequest {
             id: 1,
             name: "test".to_string(),
@@ -567,24 +577,29 @@ mod update_folder_tests {
         cleanup();
     }
 
-    #[test]
-    fn update_folder_already_exists() {
+    #[tokio::test]
+    async fn update_folder_already_exists() {
         refresh_db();
+        create_folder_db_entry("test", None);
+        create_folder_db_entry("test2", None);
+        let res = update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test2".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap_err();
+        assert_eq!(UpdateFolderError::AlreadyExists, res);
+        let db_folder = get_folder(Some(1)).await.unwrap().name;
+        assert_eq!("test", db_folder);
         cleanup();
-        fail();
-    }
-
-    #[test]
-    fn update_folder_no_name_change_success() {
-        refresh_db();
-        cleanup();
-        fail();
     }
 
     #[tokio::test]
     async fn update_folder_removes_tags() {
         refresh_db();
         create_folder_db_entry("test", None);
+        create_folder_disk("test");
         create_tag_folder("tag1", 1);
         update_folder(&UpdateFolderRequest {
             id: 1,

@@ -1,10 +1,6 @@
 use core::option::Option;
 
-use regex::Regex;
 use rocket::fs::TempFile;
-use rocket::serde::{Deserialize, Serialize};
-
-use crate::model::response::TagApi;
 
 #[derive(FromForm)]
 #[allow(non_snake_case)] // cannot serde rename the field, and it's better to have camel case for the api

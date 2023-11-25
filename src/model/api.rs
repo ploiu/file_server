@@ -1,7 +1,8 @@
-use crate::model::repository::FileRecord;
-use crate::model::response::TagApi;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
+
+use crate::model::repository::FileRecord;
+use crate::model::response::TagApi;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq)]
 #[serde(crate = "rocket::serde")]
