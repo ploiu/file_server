@@ -64,19 +64,28 @@ pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
 }
 
 #[cfg(test)]
-pub fn create_tag_db_entry(name: &str) {
+pub fn create_tag_db_entry(name: &str) -> u32 {
     let connection = open_connection();
-    tag_repository::create_tag(name.to_string(), &connection).unwrap();
+    let id = tag_repository::create_tag(name.to_string(), &connection)
+        .unwrap()
+        .id;
     connection.close().unwrap();
+    return id;
 }
 
 #[cfg(test)]
 pub fn create_tag_folder(name: &str, folder_id: u32) {
     let connection = open_connection();
-    let id = tag_repository::create_tag(name.to_string(), &connection)
-        .unwrap()
-        .id;
+    let id = create_tag_db_entry(name);
     tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+    connection.close().unwrap();
+}
+
+#[cfg(test)]
+pub fn create_tag_file(name: &str, file_id: u32) {
+    let connection = open_connection();
+    let id = create_tag_db_entry(name);
+    tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
     connection.close().unwrap();
 }
 

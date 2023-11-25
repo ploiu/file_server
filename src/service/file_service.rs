@@ -3,11 +3,11 @@ use std::fs::File;
 use std::path::Path;
 use std::string::ToString;
 
-use crate::model::api::FileApi;
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
+use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
 };
@@ -199,7 +199,8 @@ pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
     for f in parent_folder.files.iter() {
-        if name_regex.is_match(f.name.as_str()) {
+        // make sure to ignore name collision if the file with the same name is the exact same file
+        if f.id != file.id && name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
@@ -443,5 +444,317 @@ mod tests {
         let extension = None;
         let file_name = determine_file_name(&root_name, &extension);
         assert_eq!(file_name, String::from("test"));
+    }
+}
+
+#[cfg(test)]
+mod update_file_tests {
+    use std::fs;
+
+    use rocket::tokio;
+
+    use crate::model::api::FileApi;
+    use crate::model::error::file_errors::UpdateFileError;
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::file_service::{file_dir, get_file_metadata, update_file};
+    use crate::service::folder_service;
+    use crate::test::{
+        cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
+        create_folder_disk, create_tag_file, fail, refresh_db,
+    };
+
+    #[tokio::test]
+    async fn update_file_adds_tags() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        update_file(FileApi {
+            id: 1,
+            folder_id: Some(0),
+            name: "test.txt".to_string(),
+            tags: vec![TagApi {
+                id: None,
+                title: "tag1".to_string(),
+            }],
+        })
+        .await
+        .unwrap();
+        let res = get_file_metadata(1).unwrap();
+        assert_eq!(
+            FileApi {
+                id: 1,
+                folder_id: None,
+                name: "test.txt".to_string(),
+                tags: vec![TagApi {
+                    id: Some(1),
+                    title: "tag1".to_string()
+                }]
+            },
+            res
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_removes_tags() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        create_tag_file("tag1", 1);
+        update_file(FileApi {
+            id: 1,
+            folder_id: Some(0),
+            name: "test.txt".to_string(),
+            tags: vec![],
+        })
+        .await
+        .unwrap();
+        let res = get_file_metadata(1).unwrap();
+        assert_eq!(
+            FileApi {
+                id: 1,
+                folder_id: None,
+                name: "test.txt".to_string(),
+                tags: vec![]
+            },
+            res
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_not_found() {
+        refresh_db();
+        let res = update_file(FileApi {
+            id: 1,
+            folder_id: None,
+            name: "test".to_string(),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::NotFound, res);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_target_folder_not_found() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        let res = update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(1),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FolderNotFound, res);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_file_already_exists_root() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        create_file_db_entry("test2.txt", None);
+        create_file_disk("test.txt", "test");
+        create_file_disk("test2.txt", "test2");
+        let res = update_file(FileApi {
+            id: 1,
+            name: "test2.txt".to_string(),
+            folder_id: None,
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FileAlreadyExists, res);
+        // now make sure that the files weren't changed on the disk
+        let first = fs::read_to_string(format!("{}/{}", file_dir(), "test.txt")).unwrap();
+        let second = fs::read_to_string(format!("{}/{}", file_dir(), "test2.txt")).unwrap();
+        assert_eq!(first, String::from("test"));
+        assert_eq!(second, String::from("test2"));
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_file_already_exists_target_folder() {
+        refresh_db();
+        create_folder_db_entry("test", None); // id 1
+        create_folder_db_entry("target", None); // id 2
+                                                // put the files in the folders
+        create_file_db_entry("test.txt", Some(1)); // id 1
+        create_file_db_entry("test.txt", Some(2)); // id 2
+        let res = update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(2),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FileAlreadyExists, res);
+        // make sure the file wasn't moved in the db
+        let db_test_folder = folder_service::get_folder(Some(1)).await.unwrap();
+        assert_eq!(db_test_folder.files[0].id, 1);
+        let db_target_folder = folder_service::get_folder(Some(2)).await.unwrap();
+        assert_eq!(db_target_folder.files[0].id, 2);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_no_extension() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        create_file_disk("test.txt", "test");
+        update_file(FileApi {
+            id: 1,
+            name: "test".to_string(),
+            folder_id: None,
+            tags: vec![],
+        })
+        .await
+        .unwrap();
+        let res = get_file_metadata(1).unwrap();
+        assert_eq!("test".to_string(), res.name);
+        // make sure the file is properly renamed on disk
+        let file_contents = fs::read_to_string(format!("{}/test", file_dir())).unwrap();
+        assert_eq!("test", file_contents);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_works() {
+        refresh_db();
+        create_folder_db_entry("target_folder", None); // id 1
+        create_file_db_entry("test.txt", None); // id 1
+        create_file_db_entry("other.txt", Some(1)); // id 2
+        create_file_disk("test.txt", "test"); // (1)
+        create_folder_disk("target_folder"); // (1)
+        create_file_disk("target_folder/other.txt", "other"); // (2)
+        let res = update_file(FileApi {
+            id: 1,
+            name: "new_name.txt".to_string(),
+            folder_id: Some(1),
+            tags: vec![],
+        })
+        .await
+        .unwrap();
+        assert_eq!(1, res.id);
+        assert_eq!("new_name.txt", res.name);
+        let containing_folder = folder_service::get_folder(Some(1)).await.unwrap();
+        assert_eq!(2, containing_folder.files.len());
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_to_folder_with_same_name_root() {
+        refresh_db();
+        create_folder_db_entry("test", None); // id 1
+        create_file_db_entry("file", None); // id 1
+        let res = update_file(FileApi {
+            id: 1,
+            folder_id: Some(0),
+            name: "test".to_string(),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
+        // verify the database hasn't changed (file id 1 should be named file in root folder)
+        let root_files = folder_service::get_folder(None).await.unwrap().files;
+        assert_eq!(
+            root_files[0],
+            FileApi {
+                id: 1,
+                name: String::from("file"),
+                folder_id: None,
+                tags: vec![]
+            }
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_to_folder_with_same_name_same_folder() {
+        refresh_db();
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_file_db_entry("file", None); // file id 1
+        let res = update_file(FileApi {
+            id: 1,
+            name: "a".to_string(),
+            folder_id: Some(1),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
+        // verify the db hasn't changed
+        let folder_1_db_files = folder_service::get_folder(Some(1)).await.unwrap().files;
+        assert_eq!(folder_1_db_files.len(), 0);
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_to_folder_with_same_name_different_folder() {
+        refresh_db();
+        create_folder_db_entry("test", None); // folder id 1
+        create_folder_db_entry("a", Some(1)); // folder id 2
+        create_file_db_entry("file", None); // file id 1; from root to folder id 1
+        let res = update_file(FileApi {
+            id: 1,
+            name: "a".to_string(),
+            folder_id: Some(1),
+            tags: vec![],
+        })
+        .await
+        .unwrap_err();
+        assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
+        // verify the database hasn't changed (file id 1 should be named file in test folder)
+        let root_folder = folder_service::get_folder(Some(1)).await.unwrap().folders;
+        assert_eq!(
+            root_folder[0],
+            FolderResponse {
+                id: 2,
+                name: String::from("a"),
+                folders: vec![],
+                parent_id: Some(1),
+                tags: vec![],
+                path: "test/a".to_string(),
+                files: vec![],
+            }
+        );
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn update_file_trailing_name_fix() {
+        refresh_db();
+        create_file_db_entry("test_thing.txt", None);
+        create_file_disk("test_thing.txt", "test_thing");
+        create_folder_db_entry("inner", None);
+        create_folder_disk("inner");
+        create_file_db_entry("thing.txt", Some(1));
+        create_file_disk("inner/thing.txt", "thing");
+        update_file(FileApi {
+            id: 2,
+            name: "thing.txt".to_string(),
+            folder_id: None,
+            tags: vec![],
+        })
+        .await
+        .unwrap();
+        let folder_files = folder_service::get_folder(Some(0)).await.unwrap().files;
+        assert_eq!(2, folder_files.len());
+        let mut file_names: Vec<String> = fs::read_dir(file_dir())
+            .unwrap()
+            .into_iter()
+            .map(|d| d.unwrap().file_name().into_string().unwrap())
+            .collect();
+        file_names.sort();
+        assert_eq!(vec!["inner", "test_thing.txt", "thing.txt",], file_names);
+        cleanup();
     }
 }

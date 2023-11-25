@@ -1,5 +1,4 @@
 use crate::model::error::file_errors::GetFileError;
-use crate::model::error::folder_errors::GetFolderError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
@@ -161,7 +160,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
 pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
-        return Err(TagRelationError::FileNotFound);
+        return Err(TagRelationError::FolderNotFound);
     }
     let existing_tags = get_tags_on_folder(folder_id)?;
     let con: rusqlite::Connection = open_connection();
@@ -416,8 +415,6 @@ mod update_file_tag_test {
 
 #[cfg(test)]
 mod update_folder_tag_test {
-    use rocket::tokio;
-
     use crate::model::error::tag_errors::TagRelationError;
     use crate::model::repository::Folder;
     use crate::model::response::TagApi;
@@ -500,7 +497,7 @@ mod update_folder_tag_test {
     fn update_folder_tags_throws_error_if_file_not_found() {
         refresh_db();
         let res = update_folder_tags(1, vec![]).unwrap_err();
-        assert_eq!(TagRelationError::FileNotFound, res);
+        assert_eq!(TagRelationError::FolderNotFound, res);
         cleanup();
     }
 }
