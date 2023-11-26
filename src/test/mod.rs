@@ -82,10 +82,30 @@ pub fn create_tag_folder(name: &str, folder_id: u32) {
 }
 
 #[cfg(test)]
+pub fn create_tag_folders(name: &str, folder_ids: Vec<u32>) {
+    let connection = open_connection();
+    let id = create_tag_db_entry(name);
+    for folder_id in folder_ids {
+        tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+    }
+    connection.close().unwrap();
+}
+
+#[cfg(test)]
 pub fn create_tag_file(name: &str, file_id: u32) {
     let connection = open_connection();
     let id = create_tag_db_entry(name);
     tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+    connection.close().unwrap();
+}
+
+#[cfg(test)]
+pub fn create_tag_files(name: &str, file_ids: Vec<u32>) {
+    let connection = open_connection();
+    let id = create_tag_db_entry(name);
+    for file_id in file_ids {
+        tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+    }
     connection.close().unwrap();
 }
 

@@ -60,3 +60,4 @@ values
     (3, 3);
 
 -- file 4 should return folders 3 and 1
+select * from Files_Tags

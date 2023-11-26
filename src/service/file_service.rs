@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -268,9 +269,12 @@ pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     })
 }
 
-pub fn search_files(criteria: String) -> Result<Vec<FileApi>, SearchFileError> {
+pub fn search_files(
+    file_title: String,
+    tags: Vec<String>,
+) -> Result<Vec<FileApi>, SearchFileError> {
     let con: Connection = repository::open_connection();
-    let files = match file_repository::search_files(criteria, &con) {
+    let files = match file_repository::search_files(file_title, &con) {
         Ok(f) => f,
         Err(e) => {
             con.close().unwrap();
@@ -488,8 +492,8 @@ mod update_file_tests {
                 name: "test.txt".to_string(),
                 tags: vec![TagApi {
                     id: Some(1),
-                    title: "tag1".to_string()
-                }]
+                    title: "tag1".to_string(),
+                }],
             },
             res
         );
@@ -516,7 +520,7 @@ mod update_file_tests {
                 id: 1,
                 folder_id: None,
                 name: "test.txt".to_string(),
-                tags: vec![]
+                tags: vec![],
             },
             res
         );
@@ -670,7 +674,7 @@ mod update_file_tests {
                 id: 1,
                 name: String::from("file"),
                 folder_id: None,
-                tags: vec![]
+                tags: vec![],
             }
         );
         cleanup();
@@ -754,7 +758,131 @@ mod update_file_tests {
             .map(|d| d.unwrap().file_name().into_string().unwrap())
             .collect();
         file_names.sort();
-        assert_eq!(vec!["inner", "test_thing.txt", "thing.txt",], file_names);
+        assert_eq!(vec!["inner", "test_thing.txt", "thing.txt"], file_names);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod search_files_tests {
+    use crate::model::api::FileApi;
+    use crate::model::response::TagApi;
+    use crate::service::file_service::search_files;
+    use crate::test::{
+        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
+        create_tag_folder, create_tag_folders, fail, refresh_db,
+    };
+
+    #[test]
+    fn search_files_works() {
+        refresh_db();
+        create_file_db_entry("test", None);
+        create_file_db_entry("test2", None);
+        let res = search_files("test2".to_string(), vec![]).unwrap();
+        assert_eq!(
+            vec![FileApi {
+                id: 2,
+                name: "test2".to_string(),
+                folder_id: None,
+                tags: vec![],
+            }],
+            res
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn search_files_includes_file_tags() {
+        refresh_db();
+        create_file_db_entry("first", None);
+        create_file_db_entry("second", None);
+        create_tag_file("tag1", 1);
+        create_tag_files("tag", vec![1, 2]);
+        let res =
+            search_files("".to_string(), vec!["tag1".to_string(), "tag".to_string()]).unwrap();
+        // should only return the first one since it has both tags
+        assert_eq!(
+            vec![FileApi {
+                id: 1,
+                name: "first".to_string(),
+                folder_id: None,
+                tags: vec![
+                    TagApi {
+                        id: Some(1),
+                        title: "tag1".to_string()
+                    },
+                    TagApi {
+                        id: Some(2),
+                        title: "tag".to_string()
+                    }
+                ],
+            }],
+            res
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn search_files_tags_and_title() {
+        refresh_db();
+        create_file_db_entry("first", None);
+        create_file_db_entry("second", None);
+        create_tag_files("tag", vec![1, 2]);
+        let res = search_files("first".to_string(), vec!["tag".to_string()]).unwrap();
+        assert_eq!(
+            vec![FileApi {
+                id: 1,
+                name: "first".to_string(),
+                folder_id: None,
+                tags: vec![TagApi {
+                    id: Some(1),
+                    title: "tag".to_string()
+                }],
+            }],
+            res
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn search_files_includes_parent_folder_tags() {
+        refresh_db();
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_folder_db_entry("bottom", Some(2)); // 3
+        create_file_db_entry("top file", Some(1));
+        create_file_db_entry("bottom file", Some(3));
+        create_tag_folders("tag1", vec![1, 3]);
+        create_tag_folder("tag2", 3);
+        // tag1 should retrieve all files
+        let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
+        assert_eq!(
+            vec![
+                FileApi {
+                    id: 1,
+                    name: "top file".to_string(),
+                    folder_id: None,
+                    tags: vec![]
+                },
+                FileApi {
+                    id: 2,
+                    name: "bottom file".to_string(),
+                    folder_id: None,
+                    tags: vec![]
+                }
+            ],
+            res
+        );
+        let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
+        assert_eq!(
+            vec![FileApi {
+                id: 2,
+                name: "bottom file".to_string(),
+                folder_id: None,
+                tags: vec![]
+            }],
+            res
+        );
         cleanup();
     }
 }

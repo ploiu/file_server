@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
 
@@ -66,8 +68,8 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
     }
 }
 
-#[get("/metadata?<search>")]
-pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
+#[get("/metadata?<search>&<tags>")]
+pub fn search_files(search: String, tags: Vec<String>, auth: Auth) -> SearchFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -76,7 +78,7 @@ pub fn search_files(search: String, auth: Auth) -> SearchFileResponse {
     if search.trim().is_empty() {
         return SearchFileResponse::BadRequest(BasicMessage::new("Search string is required."));
     }
-    match file_service::search_files(search) {
+    match file_service::search_files(search, tags) {
         Ok(files) => SearchFileResponse::Success(Json::from(files)),
         Err(SearchFileError::DbError) => SearchFileResponse::GenericError(BasicMessage::new(
             "Failed to search files. Check server logs for details",
