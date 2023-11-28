@@ -1,3 +1,4 @@
+use std::fmt;
 use std::io::Write;
 
 use base64::{engine::general_purpose, Engine as _};
@@ -54,13 +55,15 @@ impl Auth {
             }
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl fmt::Display for Auth {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut hasher = Sha256::new();
         // hash username and password combined
         let combined = format!("{}:{}", self.username.trim(), self.password.trim());
         hasher.write_all(combined.as_bytes()).unwrap();
-        format!("{:x}", hasher.finalize())
+        write!(f, "{:x}", hasher.finalize())
     }
 }
 

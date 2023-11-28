@@ -10,7 +10,6 @@ create table Metadata
 insert into Metadata(name, value)
 values ('version', '1');
 
-
 create table Folders
 (
     id       integer primary key autoincrement,

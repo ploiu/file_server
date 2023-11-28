@@ -13,13 +13,13 @@ use crate::model::response::BasicMessage;
 use crate::service::folder_service;
 
 #[get("/<id>")]
-pub async fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
+pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    match folder_service::get_folder(id).await {
+    match folder_service::get_folder(id) {
         Ok(folder) => GetFolderResponse::Success(Json::from(folder)),
         Err(message) if message == GetFolderError::NotFound => GetFolderResponse::FolderNotFound(
             BasicMessage::new("The folder with the passed id could not be found."),
@@ -75,7 +75,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         ValidateResult::NoPasswordSet => return UpdateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return UpdateFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    let result = match folder_service::update_folder(&folder) {
+    match folder_service::update_folder(&folder) {
         Ok(updated_folder) => UpdateFolderResponse::Success(Json::from(updated_folder)),
         Err(e) if e == UpdateFolderError::NotFound => UpdateFolderResponse::FolderNotFound(BasicMessage::new("The folder with the passed id could not be found.")),
         Err(e) if e == UpdateFolderError::ParentNotFound => UpdateFolderResponse::ParentNotFound(BasicMessage::new("The parent folder with the passed id could not be found.")),
@@ -84,9 +84,9 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         Err(e) if e == UpdateFolderError::DbFailure => UpdateFolderResponse::FolderDbError(BasicMessage::new("Could not update the folder in the database. Please check the server logs for more details.")),
         Err(e) if e == UpdateFolderError::FileSystemFailure => UpdateFolderResponse::FileSystemError(BasicMessage::new("Could not move the folder! Please see server logs for details.")),
         Err(e) if e == UpdateFolderError::NotAllowed => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot move parent folder into its own child.")),
+        Err(e) if e == UpdateFolderError::TagError => UpdateFolderResponse::TagError(BasicMessage::new("Failed to update tags. Check server logs for details.")),
         Err(e) => panic!("Update Folder: non-listed error {:?}", e)
-    };
-    result
+    }
 }
 
 #[delete("/<id>")]

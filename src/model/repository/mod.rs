@@ -7,6 +7,8 @@ pub struct FileRecord {
     pub id: Option<u32>,
     /// the name of the file to save in the repository and disk
     pub name: String,
+    /// will be None if in the root folder
+    pub parent_id: Option<u32>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -29,8 +31,21 @@ pub struct FolderFiles {
     pub file_id: u32,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct Tag {
+    /// the id of the tag
+    pub id: u32,
+    /// the display name of the tag
+    pub title: String,
+}
+
+// ----------------------------
 impl FileRecord {
     pub fn from(name: String) -> FileRecord {
-        FileRecord { id: None, name }
+        FileRecord {
+            id: None,
+            name,
+            parent_id: None,
+        }
     }
 }

@@ -11,7 +11,7 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -21,12 +21,7 @@ pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
 
-    pst.query_row([id], |row| {
-        Ok(FileRecord {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })
+    pst.query_row([id], map_file)
 }
 
 /// returns the full path (excluding root name) of the specified file in the database
@@ -36,8 +31,7 @@ pub fn get_file_path(id: u32, con: &Connection) -> Result<String, rusqlite::Erro
             "../assets/queries/file/get_file_path_by_id.sql"
         ))
         .unwrap();
-    let result = pst.query_row([id], |row| row.get(0));
-    result
+    pst.query_row([id], |row| row.get(0))
 }
 
 /// removes the file with the passed id from the database
@@ -98,14 +92,20 @@ pub fn search_files(
         .prepare(include_str!("../assets/queries/file/search_files.sql"))
         .unwrap();
     let mut results: Vec<FileRecord> = Vec::new();
-    let rows = pst.query_map([&criteria], |row| {
-        Ok(FileRecord {
-            id: row.get(0)?,
-            name: row.get(1)?,
-        })
-    })?;
+    let rows = pst.query_map([&criteria], map_file)?;
     for file in rows.into_iter() {
         results.push(file?);
     }
     Ok(results)
+}
+
+pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
+    let id = row.get(0)?;
+    let name = row.get(1)?;
+    let parent_id = row.get(2)?;
+    Ok(FileRecord {
+        id,
+        name,
+        parent_id,
+    })
 }

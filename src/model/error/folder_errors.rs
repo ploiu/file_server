@@ -2,6 +2,8 @@
 pub enum GetFolderError {
     NotFound,
     DbFailure,
+    /// error retrieving tags
+    TagError,
 }
 
 #[derive(PartialEq, Debug)]
@@ -32,6 +34,8 @@ pub enum UpdateFolderError {
     NotFound,
     /// The user attempted to do an illegal action, such as moving a parent folder into its own child
     NotAllowed,
+    /// error retrieving tags
+    TagError,
 }
 
 #[derive(PartialEq, Debug)]
@@ -40,6 +44,8 @@ pub enum GetChildFilesError {
     DbFailure,
     /// the folder id could not be found
     FolderNotFound,
+    /// could not retrieve tags from the database
+    TagError,
 }
 
 #[derive(PartialEq, Debug)]

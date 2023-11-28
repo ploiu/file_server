@@ -1,6 +1,7 @@
-use rusqlite::{params, Connection, Row, Rows};
+use rusqlite::{params, Connection, Rows};
 
 use crate::model::repository;
+use crate::repository::file_repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
     // if id is none, we're talking about the root folder
@@ -17,17 +18,9 @@ pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder
         ))
         .unwrap();
 
-    let row_mapper = |row: &Row| {
-        Ok(repository::Folder {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-            parent_id: row.get(2).ok().or(None),
-        })
-    };
-
     match id {
-        Some(id) => Ok(pst.query_row([id], row_mapper)?),
-        None => Ok(pst.query_row([rusqlite::types::Null], row_mapper)?),
+        Some(id) => Ok(pst.query_row([id], map_folder)?),
+        None => Ok(pst.query_row([rusqlite::types::Null], map_folder)?),
     }
 }
 
@@ -54,12 +47,7 @@ pub fn get_child_folders(
         rows = pst.query([])?;
     }
     while let Some(row) = rows.next()? {
-        // these folders are guaranteed to have a parent folder id
-        folders.push(repository::Folder {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-            parent_id: row.get(2)?,
-        })
+        folders.push(map_folder(row)?)
     }
     Ok(folders)
 }
@@ -110,7 +98,26 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
     Ok(())
 }
 
-/// retrieves all the
+pub fn get_all_parent_folders(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<repository::Folder>, rusqlite::Error> {
+    let mut parents = Vec::<repository::Folder>::new();
+    let mut parent_id_pst = con
+        .prepare(include_str!(
+            "../assets/queries/folder/get_parent_folders_with_id.sql"
+        ))
+        .unwrap();
+    let mut parent_id_rows = parent_id_pst.query([folder_id])?;
+    while let Some(row) = parent_id_rows.next()? {
+        let id: Option<u32> = row.get(0)?;
+        let folder = get_by_id(id, con)?;
+        parents.push(folder);
+    }
+    Ok(parents)
+}
+
+// TODO move to file_repository
 pub fn get_child_files(
     id: Option<u32>,
     con: &Connection,
@@ -126,16 +133,10 @@ pub fn get_child_files(
         ))
         .unwrap()
     };
-    let row_mapper = |row: &Row| {
-        Ok(repository::FileRecord {
-            id: Some(row.get(0)?),
-            name: row.get(1)?,
-        })
-    };
     let mapped = if id.is_some() {
-        pst.query_map([id.unwrap()], row_mapper)?
+        pst.query_map([id.unwrap()], file_repository::map_file)?
     } else {
-        pst.query_map([], row_mapper)?
+        pst.query_map([], file_repository::map_file)?
     };
 
     let mut files: Vec<repository::FileRecord> = Vec::new();
@@ -177,7 +178,7 @@ pub fn link_folder_to_file(
         Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("Failed to link file to folder. Nested exception is {:?}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -195,4 +196,74 @@ pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, r
         ids.push(i.unwrap());
     }
     Ok(ids)
+}
+
+fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
+    let id: Option<u32> = row.get(0)?;
+    let name: String = row.get(1)?;
+    let parent_id: Option<u32> = row.get(2)?;
+    Ok(repository::Folder {
+        id,
+        name,
+        parent_id,
+    })
+}
+
+#[cfg(test)]
+mod get_all_parent_folders_tests {
+    use crate::model::repository::Folder;
+    use crate::repository::folder_repository::get_all_parent_folders;
+    use crate::repository::open_connection;
+    use crate::test::*;
+
+    #[test]
+    fn returns_empty_when_no_parent() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        let connection = open_connection();
+        let result = get_all_parent_folders(1, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(vec![]), result);
+        cleanup();
+    }
+    #[test]
+    fn returns_parent_when_only_one() {
+        refresh_db();
+        create_folder_db_entry("parent", None);
+        create_folder_db_entry("child", Some(1));
+        let connection = open_connection();
+        let expected_parent = Folder {
+            id: Some(1),
+            name: "parent".to_string(),
+            parent_id: None,
+        };
+        let result = get_all_parent_folders(2, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(vec![expected_parent]), result);
+        cleanup();
+    }
+    #[test]
+    fn returns_all_parents_when_multiple() {
+        refresh_db();
+        create_folder_db_entry("top", None);
+        create_folder_db_entry("middle", Some(1));
+        create_folder_db_entry("bottom", Some(2));
+        let expected = vec![
+            Folder {
+                id: Some(1),
+                name: "top".to_string(),
+                parent_id: None,
+            },
+            Folder {
+                id: Some(2),
+                name: "top/middle".to_string(),
+                parent_id: Some(1),
+            },
+        ];
+        let connection = open_connection();
+        let result = get_all_parent_folders(3, &connection);
+        connection.close().unwrap();
+        assert_eq!(Ok(expected), result);
+        cleanup();
+    }
 }

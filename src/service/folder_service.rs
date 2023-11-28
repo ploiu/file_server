@@ -6,6 +6,7 @@ use rusqlite::Connection;
 
 use model::repository::Folder;
 
+use crate::model::api::FileApi;
 use crate::model::error::file_errors::DeleteFileError;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
@@ -13,21 +14,20 @@ use crate::model::error::folder_errors::{
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::folder_repository;
-use crate::service::file_service;
-use crate::service::file_service::{check_root_dir, FILE_DIR};
+use crate::repository::{folder_repository, open_connection};
+use crate::service::file_service::{check_root_dir, file_dir};
+use crate::service::{file_service, tag_service};
 use crate::{model, repository};
 
-pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
         None
     } else {
         id
     };
-    check_root_dir(FILE_DIR).await;
     let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse::from(&folder);
-    let con = repository::open_connection();
+    let con: Connection = repository::open_connection();
     let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
         eprintln!(
             "Failed to pull child folder info from database! Nested exception is: \n {:?}",
@@ -35,16 +35,27 @@ pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderErro
         );
         GetFolderError::DbFailure
     });
+    let tag_db_id = if let Some(id_res) = id { id_res } else { 0 };
+    let tags = match tag_service::get_tags_on_folder(tag_db_id) {
+        Ok(t) => t,
+        Err(_) => {
+            con.close().unwrap();
+            return Err(GetFolderError::TagError);
+        }
+    };
     con.close().unwrap();
     folder.folders(child_folders?);
     folder.files(get_files_for_folder(db_id).unwrap());
+    for tag in tags {
+        folder.tags.push(tag);
+    }
     Ok(folder)
 }
 
 pub async fn create_folder(
     folder: &CreateFolderRequest,
 ) -> Result<FolderResponse, CreateFolderError> {
-    check_root_dir(FILE_DIR).await;
+    check_root_dir(file_dir()).await;
     // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
     let db_folder = if let Some(0) = folder.parent_id {
         None
@@ -58,7 +69,7 @@ pub async fn create_folder(
     };
     match create_folder_internal(&db_folder) {
         Ok(f) => {
-            let folder_path = format!("{}/{}", FILE_DIR, f.name);
+            let folder_path = format!("{}/{}", file_dir(), f.name);
             let fs_path = Path::new(folder_path.as_str());
             match fs::create_dir(fs_path) {
                 Ok(_) => Ok(FolderResponse::from(&f)),
@@ -81,7 +92,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     let db_folder = Folder {
         id: Some(folder.id),
         parent_id: folder.parent_id,
-        name: String::from(&folder.name),
+        name: folder.name.to_string(),
     };
     if db_folder.parent_id == db_folder.id {
         return Err(UpdateFolderError::NotAllowed);
@@ -89,7 +100,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     let updated_folder = update_folder_internal(&db_folder)?;
     // if we can't rename the folder, then we have problems
     if let Err(e) = fs::rename(
-        format!("{}/{}", FILE_DIR, original_folder.name),
+        format!("{}/{}", file_dir(), original_folder.name),
         &updated_folder.name,
     ) {
         eprintln!("Failed to move folder! Nested exception is: \n {:?}", e);
@@ -97,19 +108,38 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     }
     // updated folder name will be a path, so we need to get just the folder name
     let split_name = String::from(&updated_folder.name);
-    let split_name = split_name.split("/");
+    let split_name = split_name.split('/');
     let name = String::from(split_name.last().unwrap_or(updated_folder.name.as_str()));
+    match tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone()) {
+        Ok(()) => { /*no op*/ }
+        Err(_) => {
+            return Err(UpdateFolderError::TagError);
+        }
+    };
     Ok(FolderResponse {
         id: updated_folder.id.unwrap(),
         folders: Vec::new(),
         files: Vec::new(),
         parent_id: updated_folder.parent_id,
-        path: Regex::new(format!("^{}/", FILE_DIR).as_str())
+        path: Regex::new(format!("^{}/", file_dir()).as_str())
             .unwrap()
             .replace(&updated_folder.name, "")
             .to_string(),
         name,
+        tags: folder.tags.clone(),
     })
+}
+
+pub fn folder_exists(id: Option<u32>) -> bool {
+    let con: Connection = open_connection();
+    let db_id = if Some(0) == id || id.is_none() {
+        None
+    } else {
+        id
+    };
+    let res = folder_repository::get_by_id(db_id, &con);
+    con.close().unwrap();
+    res.is_ok()
 }
 
 pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
@@ -121,7 +151,7 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
     con.close().unwrap();
     let deleted_folder = deleted_folder?;
     // delete went well, now time to actually remove the folder
-    let path = format!("{}/{}", FILE_DIR, deleted_folder.name);
+    let path = format!("{}/{}", file_dir(), deleted_folder.name);
     if let Err(e) = fs::remove_dir_all(path) {
         eprintln!(
             "Failed to recursively delete folder from disk! Nested exception is: \n {:?}",
@@ -130,6 +160,41 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
         return Err(DeleteFolderError::FileSystemError);
     };
     Ok(())
+}
+
+pub fn get_all_parent_folders(folder_id: u32) -> Result<Vec<FolderResponse>, GetFolderError> {
+    if folder_id == 0 {
+        return Ok(vec![]);
+    }
+    let con: Connection = open_connection();
+    let folders = match folder_repository::get_all_parent_folders(folder_id, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!(
+                "Failed to retrieve parent folders for folder with id {folder_id}! Error is {e}"
+            );
+            con.close().unwrap();
+            return Err(GetFolderError::DbFailure);
+        }
+    };
+    let mut converted_folders: Vec<FolderResponse> = Vec::new();
+    for folder in folders {
+        let mut converted = FolderResponse::from(&folder);
+        if folder.id.is_some() {
+            let tags = match tag_service::get_tags_on_folder(folder.id.unwrap()) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to retrieve parent folder tags starting from folder with id {folder_id} (current folder id {:?})! Error is {:?}", folder.id, e);
+                    con.close().unwrap();
+                    return Err(GetFolderError::TagError);
+                }
+            };
+            converted.tags = tags;
+        }
+        converted_folders.push(converted);
+    }
+    con.close().unwrap();
+    Ok(converted_folders)
 }
 
 // private functions
@@ -167,7 +232,7 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
                 // parent folder exists, now we need to check if there are any child folders with our folder name
                 let children = folder_repository::get_child_folders(parent.id, &con).unwrap();
                 for child in children.iter() {
-                    if &new_folder_path == &child.name {
+                    if new_folder_path == child.name {
                         con.close().unwrap();
                         return Err(CreateFolderError::AlreadyExists);
                     }
@@ -178,16 +243,16 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
                 return Err(CreateFolderError::ParentNotFound);
             }
         };
-    } else if Path::new(format!("{}/{}", FILE_DIR, folder_path).as_str()).exists() {
+    } else if Path::new(format!("{}/{}", file_dir(), folder_path).as_str()).exists() {
         con.close().unwrap();
         return Err(CreateFolderError::AlreadyExists);
     }
     let created = match folder_repository::create_folder(folder, &con) {
         Ok(f) => {
-            // so that I don't have to make yet another repository query to get parent folder path
             Ok(Folder {
                 id: f.id,
                 parent_id: f.parent_id,
+                // so that I don't have to make yet another repository query to get parent folder path
                 name: folder_path,
             })
         }
@@ -204,7 +269,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
     let con = repository::open_connection();
     let mut new_path: String = String::from(&folder.name);
     // make sure the folder already exists in the repository
-    if let Err(_) = folder_repository::get_by_id(folder.id, &con) {
+    if !folder_exists(folder.id) {
         con.close().unwrap();
         return Err(UpdateFolderError::NotFound);
     }
@@ -220,14 +285,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             // parent folder exists, make sure it's not a child folder
             Ok(parent) => {
                 // make sure a folder with our name doesn't exist
-                let folder_already_exists = match does_folder_exist(&folder.name, parent.id, &con) {
-                    Ok(exists) => exists,
-                    Err(_e) => {
+                let existing_folder = match search_folder_within(&folder.name, parent.id, &con) {
+                    Ok(f) => f,
+                    Err(_) => {
                         con.close().unwrap();
                         return Err(UpdateFolderError::DbFailure);
                     }
                 };
-                if folder_already_exists {
+                if existing_folder.is_some() && existing_folder.unwrap().id != folder.id {
                     return Err(UpdateFolderError::AlreadyExists);
                 }
                 // make sure we're not renaming to a file that already exists in the target parent directory
@@ -245,7 +310,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
                 let check =
                     is_attempt_move_to_sub_child(&folder.id.unwrap(), &parent.id.unwrap(), &con);
                 if check == Ok(true) {
-                    new_path = format!("{}/{}/{}", FILE_DIR, parent.name, new_path);
+                    new_path = format!("{}/{}/{}", file_dir(), parent.name, new_path);
                 } else if check == Ok(false) {
                     con.close().unwrap();
                     return Err(UpdateFolderError::NotAllowed);
@@ -261,14 +326,14 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
         },
         None => {
             // make sure a folder with our name doesn't exist
-            let folder_already_exists = match does_folder_exist(&folder.name, None, &con) {
-                Ok(exists) => exists,
-                Err(_e) => {
+            let existing_folder = match search_folder_within(&folder.name, None, &con) {
+                Ok(f) => f,
+                Err(_) => {
                     con.close().unwrap();
                     return Err(UpdateFolderError::DbFailure);
                 }
             };
-            if folder_already_exists {
+            if existing_folder.is_some() && existing_folder.unwrap().id != folder.id {
                 return Err(UpdateFolderError::AlreadyExists);
             }
             // make sure we're not renaming to a file that already exists in the target parent directory
@@ -282,7 +347,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
             if file_already_exists {
                 return Err(UpdateFolderError::FileAlreadyExists);
             }
-            new_path = format!("{}/{}", FILE_DIR, new_path);
+            new_path = format!("{}/{}", file_dir(), new_path);
         }
     };
     let update = folder_repository::update_folder(
@@ -309,13 +374,12 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
     })
 }
 
-/// checks if a folder with the passed name exists within the folder with the passed id
-fn does_folder_exist(
-    name: &String,
-    id: Option<u32>,
+fn search_folder_within(
+    name: &str,
+    parent_id: Option<u32>,
     con: &Connection,
-) -> Result<bool, rusqlite::Error> {
-    let matching_folder = folder_repository::get_child_folders(id, con)?
+) -> Result<Option<Folder>, rusqlite::Error> {
+    let matching_folder = folder_repository::get_child_folders(parent_id, con)?
         .iter()
         .map(|folder| Folder {
             id: folder.id,
@@ -323,20 +387,21 @@ fn does_folder_exist(
             name: String::from(folder.name.to_lowercase().split('/').last().unwrap()),
         })
         .find(|folder| folder.name == name.to_lowercase().split('/').last().unwrap());
-    Ok(matching_folder.is_some())
+    Ok(matching_folder)
 }
 
 fn does_file_exist(
-    name: &String,
+    name: &str,
     folder_id: Option<u32>,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    let matching_file = folder_repository::get_child_files(folder_id, &con)?
+    let matching_file = folder_repository::get_child_files(folder_id, con)?
         .iter()
         // this is required because apparently the file is dropped immediately when it's used...
         .map(|file| FileRecord {
             id: file.id,
             name: String::from(&file.name),
+            parent_id: folder_id,
         })
         .find(|file| file.name == name.to_lowercase());
     Ok(matching_file.is_some())
@@ -348,7 +413,7 @@ fn is_attempt_move_to_sub_child(
     new_parent_id: &u32,
     con: &Connection,
 ) -> Result<bool, UpdateFolderError> {
-    return match folder_repository::get_all_child_folder_ids(*folder_id, con) {
+    match folder_repository::get_all_child_folder_ids(*folder_id, con) {
         Ok(ids) => {
             if ids.contains(new_parent_id) {
                 Err(UpdateFolderError::NotAllowed)
@@ -357,12 +422,12 @@ fn is_attempt_move_to_sub_child(
             }
         }
         _ => Err(UpdateFolderError::DbFailure),
-    };
+    }
 }
 
 /// returns the top-level files for the passed folder
-fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFilesError> {
-    let con = repository::open_connection();
+fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileApi>, GetChildFilesError> {
+    let con: Connection = repository::open_connection();
     // first we need to check the folder exists
     if let Err(e) = folder_repository::get_by_id(id, &con) {
         con.close().unwrap();
@@ -377,7 +442,7 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
         };
     }
     // now we can retrieve all the file records in this folder
-    let result = match folder_repository::get_child_files(id, &con) {
+    let child_files = match folder_repository::get_child_files(id, &con) {
         Ok(files) => files,
         Err(e) => {
             con.close().unwrap();
@@ -388,26 +453,37 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileRecord>, GetChildFile
             return Err(GetChildFilesError::DbFailure);
         }
     };
+    let mut result: Vec<FileApi> = Vec::new();
+    for file in child_files {
+        let tags = match tag_service::get_tags_on_file(file.id.unwrap()) {
+            Ok(t) => t,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(GetChildFilesError::TagError);
+            }
+        };
+        result.push(FileApi::from(file, tags))
+    }
     con.close().unwrap();
     Ok(result)
 }
 
 /// the main body of `delete_folder`. Takes a connection so that we're not creating a connection on every stack frame
 fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, DeleteFolderError> {
-    let folder = folder_repository::get_by_id(Some(id), &con).or_else(|e| {
+    let folder = folder_repository::get_by_id(Some(id), con).map_err(|e| {
         eprintln!(
             "Failed to recursively delete folder. Nested exception is {:?}",
             e
         );
-        return if e == rusqlite::Error::QueryReturnedNoRows {
-            Err(DeleteFolderError::FolderNotFound)
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            DeleteFolderError::FolderNotFound
         } else {
-            Err(DeleteFolderError::DbFailure)
-        };
+            DeleteFolderError::DbFailure
+        }
     })?;
     // now that we have the folder, we can delete all the files for that folder
     let files = folder_repository::get_child_files(Some(id), con)
-        .or_else(|_| Err(DeleteFolderError::DbFailure))?;
+        .map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(e) if e == DeleteFileError::NotFound => {}
@@ -417,7 +493,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     }
     // now that we've deleted all files, we can try with all folders
     let sub_folders = folder_repository::get_child_folders(Some(id), con)
-        .or_else(|_| Err(DeleteFolderError::DbFailure))?;
+        .map_err(|_| DeleteFolderError::DbFailure)?;
     for sub_folder in sub_folders.iter() {
         delete_folder_recursively(sub_folder.id.unwrap(), con)?;
     }
@@ -430,4 +506,149 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         return Err(DeleteFolderError::DbFailure);
     };
     Ok(folder)
+}
+
+#[cfg(test)]
+mod get_folder_tests {
+    use crate::model::error::folder_errors::GetFolderError;
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::folder_service::get_folder;
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
+
+    #[test]
+    fn get_folder_works() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        let folder = get_folder(Some(1)).unwrap();
+        assert_eq!(
+            FolderResponse {
+                id: 1,
+                parent_id: None,
+                path: "test".to_string(),
+                name: "test".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![],
+            },
+            folder
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn get_folder_not_found() {
+        refresh_db();
+        let err = get_folder(Some(1)).unwrap_err();
+        assert_eq!(GetFolderError::NotFound, err);
+        cleanup();
+    }
+
+    #[test]
+    fn get_folder_retrieves_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_tag_folder("tag1", 1);
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![TagApi {
+                id: Some(1),
+                title: "tag1".to_string(),
+            }],
+        };
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod update_folder_tests {
+    use crate::model::error::folder_errors::UpdateFolderError;
+    use crate::model::request::folder_requests::UpdateFolderRequest;
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::folder_service::{get_folder, update_folder};
+    use crate::test::{
+        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
+    };
+
+    #[test]
+    fn update_folder_adds_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_folder_disk("test");
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test".to_string(),
+            parent_id: None,
+            tags: vec![TagApi {
+                id: None,
+                title: "tag1".to_string(),
+            }],
+        })
+        .unwrap();
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![TagApi {
+                id: Some(1),
+                title: "tag1".to_string(),
+            }],
+        };
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_already_exists() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_folder_db_entry("test2", None);
+        let res = update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test2".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap_err();
+        assert_eq!(UpdateFolderError::AlreadyExists, res);
+        let db_folder = get_folder(Some(1)).unwrap().name;
+        assert_eq!("test", db_folder);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_tags() {
+        refresh_db();
+        create_folder_db_entry("test", None);
+        create_folder_disk("test");
+        create_tag_folder("tag1", 1);
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "test".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+        let expected = FolderResponse {
+            id: 1,
+            parent_id: None,
+            path: "test".to_string(),
+            name: "test".to_string(),
+            folders: vec![],
+            files: vec![],
+            tags: vec![],
+        };
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
+        cleanup();
+    }
 }
