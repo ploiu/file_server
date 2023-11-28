@@ -13,13 +13,13 @@ use crate::model::response::BasicMessage;
 use crate::service::folder_service;
 
 #[get("/<id>")]
-pub async fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
+pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    match folder_service::get_folder(id).await {
+    match folder_service::get_folder(id) {
         Ok(folder) => GetFolderResponse::Success(Json::from(folder)),
         Err(message) if message == GetFolderError::NotFound => GetFolderResponse::FolderNotFound(
             BasicMessage::new("The folder with the passed id could not be found."),

@@ -19,13 +19,12 @@ use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
 
-pub async fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
         None
     } else {
         id
     };
-    check_root_dir(file_dir()).await;
     let folder = get_folder_by_id(db_id)?;
     let mut folder = FolderResponse::from(&folder);
     let con: Connection = repository::open_connection();
@@ -161,6 +160,41 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
         return Err(DeleteFolderError::FileSystemError);
     };
     Ok(())
+}
+
+pub fn get_all_parent_folders(folder_id: u32) -> Result<Vec<FolderResponse>, GetFolderError> {
+    if folder_id == 0 {
+        return Ok(vec![]);
+    }
+    let con: Connection = open_connection();
+    let folders = match folder_repository::get_all_parent_folders(folder_id, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            eprintln!(
+                "Failed to retrieve parent folders for folder with id {folder_id}! Error is {e}"
+            );
+            con.close().unwrap();
+            return Err(GetFolderError::DbFailure);
+        }
+    };
+    let mut converted_folders: Vec<FolderResponse> = Vec::new();
+    for folder in folders {
+        let mut converted = FolderResponse::from(&folder);
+        if folder.id.is_some() {
+            let tags = match tag_service::get_tags_on_folder(folder.id.unwrap()) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("Failed to retrieve parent folder tags starting from folder with id {folder_id} (current folder id {:?})! Error is {:?}", folder.id, e);
+                    con.close().unwrap();
+                    return Err(GetFolderError::TagError);
+                }
+            };
+            converted.tags = tags;
+        }
+        converted_folders.push(converted);
+    }
+    con.close().unwrap();
+    Ok(converted_folders)
 }
 
 // private functions
@@ -367,6 +401,7 @@ fn does_file_exist(
         .map(|file| FileRecord {
             id: file.id,
             name: String::from(&file.name),
+            parent_id: folder_id,
         })
         .find(|file| file.name == name.to_lowercase());
     Ok(matching_file.is_some())
@@ -475,19 +510,17 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
 
 #[cfg(test)]
 mod get_folder_tests {
-    use rocket::tokio;
-
     use crate::model::error::folder_errors::GetFolderError;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
 
-    #[tokio::test]
-    async fn get_folder_works() {
+    #[test]
+    fn get_folder_works() {
         refresh_db();
         create_folder_db_entry("test", None);
-        let folder = get_folder(Some(1)).await.unwrap();
+        let folder = get_folder(Some(1)).unwrap();
         assert_eq!(
             FolderResponse {
                 id: 1,
@@ -503,16 +536,16 @@ mod get_folder_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn get_folder_not_found() {
+    #[test]
+    fn get_folder_not_found() {
         refresh_db();
-        let err = get_folder(Some(1)).await.unwrap_err();
+        let err = get_folder(Some(1)).unwrap_err();
         assert_eq!(GetFolderError::NotFound, err);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn get_folder_retrieves_tags() {
+    #[test]
+    fn get_folder_retrieves_tags() {
         refresh_db();
         create_folder_db_entry("test", None);
         create_tag_folder("tag1", 1);
@@ -528,15 +561,13 @@ mod get_folder_tests {
                 title: "tag1".to_string(),
             }],
         };
-        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
         cleanup();
     }
 }
 
 #[cfg(test)]
 mod update_folder_tests {
-    use rocket::tokio;
-
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
     use crate::model::response::folder_responses::FolderResponse;
@@ -546,8 +577,8 @@ mod update_folder_tests {
         cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
     };
 
-    #[tokio::test]
-    async fn update_folder_adds_tags() {
+    #[test]
+    fn update_folder_adds_tags() {
         refresh_db();
         create_folder_db_entry("test", None);
         create_folder_disk("test");
@@ -573,12 +604,12 @@ mod update_folder_tests {
                 title: "tag1".to_string(),
             }],
         };
-        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_folder_already_exists() {
+    #[test]
+    fn update_folder_already_exists() {
         refresh_db();
         create_folder_db_entry("test", None);
         create_folder_db_entry("test2", None);
@@ -590,13 +621,13 @@ mod update_folder_tests {
         })
         .unwrap_err();
         assert_eq!(UpdateFolderError::AlreadyExists, res);
-        let db_folder = get_folder(Some(1)).await.unwrap().name;
+        let db_folder = get_folder(Some(1)).unwrap().name;
         assert_eq!("test", db_folder);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_folder_removes_tags() {
+    #[test]
+    fn update_folder_removes_tags() {
         refresh_db();
         create_folder_db_entry("test", None);
         create_folder_disk("test");
@@ -617,7 +648,7 @@ mod update_folder_tests {
             files: vec![],
             tags: vec![],
         };
-        assert_eq!(expected, get_folder(Some(1)).await.unwrap());
+        assert_eq!(expected, get_folder(Some(1)).unwrap());
         cleanup();
     }
 }

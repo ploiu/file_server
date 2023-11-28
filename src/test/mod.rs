@@ -38,6 +38,7 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
         &FileRecord {
             id: folder_id,
             name: String::from(name),
+            parent_id: None,
         },
         &connection,
     )

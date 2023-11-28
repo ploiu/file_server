@@ -49,7 +49,6 @@ pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
     force: bool,
 ) -> Result<FileApi, CreateFileError> {
-    println!("{}", file_input.file.raw_name().unwrap().as_str().unwrap());
     let file_name = String::from(file_input.file.name().unwrap());
     check_root_dir(file_dir()).await;
     if !force {
@@ -60,19 +59,17 @@ pub async fn save_file(
     let parent_id = file_input.folder_id();
     return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = folder_service::get_folder(Some(parent_id))
-            .await
-            .or_else(|e| {
-                eprintln!(
-                    "Save file - failed to retrieve parent folder. Nested exception is {:?}",
-                    e
-                );
-                return if e == GetFolderError::NotFound {
-                    Err(CreateFileError::ParentFolderNotFound)
-                } else {
-                    Err(CreateFileError::FailWriteDb)
-                };
-            })?;
+        let folder = folder_service::get_folder(Some(parent_id)).or_else(|e| {
+            eprintln!(
+                "Save file - failed to retrieve parent folder. Nested exception is {:?}",
+                e
+            );
+            return if e == GetFolderError::NotFound {
+                Err(CreateFileError::ParentFolderNotFound)
+            } else {
+                Err(CreateFileError::FailWriteDb)
+            };
+        })?;
         // folder exists, now try to create the file
         let file_id =
             persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
@@ -186,7 +183,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
     result
 }
 
-pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
+pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     // first check if the file exists
     let con: Connection = repository::open_connection();
     if file_repository::get_file(file.id, &con).is_err() {
@@ -194,9 +191,8 @@ pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         return Err(UpdateFileError::NotFound);
     }
     // now check if the folder exists
-    let parent_folder = folder_service::get_folder(file.folder_id)
-        .await
-        .map_err(|_| UpdateFileError::FolderNotFound)?;
+    let parent_folder =
+        folder_service::get_folder(file.folder_id).map_err(|_| UpdateFileError::FolderNotFound)?;
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
     for f in parent_folder.files.iter() {
@@ -270,11 +266,12 @@ pub async fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
 }
 
 pub fn search_files(
-    file_title: String,
-    tags: Vec<String>,
+    search_title: String,
+    search_tags: Vec<String>,
 ) -> Result<Vec<FileApi>, SearchFileError> {
+    let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
     let con: Connection = repository::open_connection();
-    let files = match file_repository::search_files(file_title, &con) {
+    let files = match file_repository::search_files(search_title, &con) {
         Ok(f) => f,
         Err(e) => {
             con.close().unwrap();
@@ -295,13 +292,46 @@ pub fn search_files(
                 return Err(SearchFileError::TagError);
             }
         };
-        converted_files.push(FileApi {
-            id,
-            name: String::from(&file.name),
-            // for this purpose, none is ok because the folder context doesn't matter
-            folder_id: None,
-            tags,
-        })
+        let mut tag_titles: HashSet<String> = HashSet::new();
+        // retrieve all the parent tags, but only if this file has non-root parent folders
+        if file.parent_id.is_some() {
+            let mut parent_folders =
+                match folder_service::get_all_parent_folders(file.parent_id.unwrap()) {
+                    Ok(f) => f,
+                    Err(_) => {
+                        con.close().unwrap();
+                        return Err(SearchFileError::TagError);
+                    }
+                };
+            let immediate_parent = match folder_service::get_folder(file.parent_id) {
+                Ok(f) => f,
+                Err(_) => {
+                    con.close().unwrap();
+                    return Err(SearchFileError::DbError);
+                }
+            };
+            parent_folders.push(immediate_parent);
+            let parent_tags: HashSet<String> = parent_folders
+                .into_iter()
+                .flat_map(|f| f.tags)
+                .map(|t| t.title)
+                .collect();
+            for tag in parent_tags {
+                tag_titles.insert(tag);
+            }
+        }
+        for tag in &tags {
+            tag_titles.insert(tag.title.clone());
+        }
+        if search_tags.intersection(&tag_titles).count() == search_tags.len() {
+            converted_files.push(FileApi {
+                id,
+                name: String::from(&file.name),
+                // for this purpose, none is ok because the folder context doesn't matter
+                folder_id: None,
+                tags,
+            })
+        }
     }
     con.close().unwrap();
     Ok(converted_files)
@@ -455,8 +485,6 @@ mod tests {
 mod update_file_tests {
     use std::fs;
 
-    use rocket::tokio;
-
     use crate::model::api::FileApi;
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::response::folder_responses::FolderResponse;
@@ -468,8 +496,8 @@ mod update_file_tests {
         create_folder_disk, create_tag_file, refresh_db,
     };
 
-    #[tokio::test]
-    async fn update_file_adds_tags() {
+    #[test]
+    fn update_file_adds_tags() {
         refresh_db();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
@@ -482,7 +510,6 @@ mod update_file_tests {
                 title: "tag1".to_string(),
             }],
         })
-        .await
         .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!(
@@ -500,8 +527,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_removes_tags() {
+    #[test]
+    fn update_file_removes_tags() {
         refresh_db();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
@@ -512,7 +539,6 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             tags: vec![],
         })
-        .await
         .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!(
@@ -527,8 +553,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_not_found() {
+    #[test]
+    fn update_file_not_found() {
         refresh_db();
         let res = update_file(FileApi {
             id: 1,
@@ -536,14 +562,13 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::NotFound, res);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_target_folder_not_found() {
+    #[test]
+    fn update_file_target_folder_not_found() {
         refresh_db();
         create_file_db_entry("test.txt", None);
         let res = update_file(FileApi {
@@ -552,14 +577,13 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderNotFound, res);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_file_already_exists_root() {
+    #[test]
+    fn update_file_file_already_exists_root() {
         refresh_db();
         create_file_db_entry("test.txt", None);
         create_file_db_entry("test2.txt", None);
@@ -571,7 +595,6 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
         // now make sure that the files weren't changed on the disk
@@ -582,8 +605,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_file_already_exists_target_folder() {
+    #[test]
+    fn update_file_file_already_exists_target_folder() {
         refresh_db();
         create_folder_db_entry("test", None); // id 1
         create_folder_db_entry("target", None); // id 2
@@ -596,19 +619,18 @@ mod update_file_tests {
             folder_id: Some(2),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
         // make sure the file wasn't moved in the db
-        let db_test_folder = folder_service::get_folder(Some(1)).await.unwrap();
+        let db_test_folder = folder_service::get_folder(Some(1)).unwrap();
         assert_eq!(db_test_folder.files[0].id, 1);
-        let db_target_folder = folder_service::get_folder(Some(2)).await.unwrap();
+        let db_target_folder = folder_service::get_folder(Some(2)).unwrap();
         assert_eq!(db_target_folder.files[0].id, 2);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_no_extension() {
+    #[test]
+    fn update_file_no_extension() {
         refresh_db();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
@@ -618,7 +640,6 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-        .await
         .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!("test".to_string(), res.name);
@@ -628,8 +649,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_works() {
+    #[test]
+    fn update_file_works() {
         refresh_db();
         create_folder_db_entry("target_folder", None); // id 1
         create_file_db_entry("test.txt", None); // id 1
@@ -643,17 +664,16 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-        .await
         .unwrap();
         assert_eq!(1, res.id);
         assert_eq!("new_name.txt", res.name);
-        let containing_folder = folder_service::get_folder(Some(1)).await.unwrap();
+        let containing_folder = folder_service::get_folder(Some(1)).unwrap();
         assert_eq!(2, containing_folder.files.len());
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_to_folder_with_same_name_root() {
+    #[test]
+    fn update_file_to_folder_with_same_name_root() {
         refresh_db();
         create_folder_db_entry("test", None); // id 1
         create_file_db_entry("file", None); // id 1
@@ -663,11 +683,10 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the database hasn't changed (file id 1 should be named file in root folder)
-        let root_files = folder_service::get_folder(None).await.unwrap().files;
+        let root_files = folder_service::get_folder(None).unwrap().files;
         assert_eq!(
             root_files[0],
             FileApi {
@@ -680,8 +699,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_to_folder_with_same_name_same_folder() {
+    #[test]
+    fn update_file_to_folder_with_same_name_same_folder() {
         refresh_db();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
@@ -692,17 +711,16 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the db hasn't changed
-        let folder_1_db_files = folder_service::get_folder(Some(1)).await.unwrap().files;
+        let folder_1_db_files = folder_service::get_folder(Some(1)).unwrap().files;
         assert_eq!(folder_1_db_files.len(), 0);
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_to_folder_with_same_name_different_folder() {
+    #[test]
+    fn update_file_to_folder_with_same_name_different_folder() {
         refresh_db();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
@@ -713,11 +731,10 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-        .await
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the database hasn't changed (file id 1 should be named file in test folder)
-        let root_folder = folder_service::get_folder(Some(1)).await.unwrap().folders;
+        let root_folder = folder_service::get_folder(Some(1)).unwrap().folders;
         assert_eq!(
             root_folder[0],
             FolderResponse {
@@ -733,8 +750,8 @@ mod update_file_tests {
         cleanup();
     }
 
-    #[tokio::test]
-    async fn update_file_trailing_name_fix() {
+    #[test]
+    fn update_file_trailing_name_fix() {
         refresh_db();
         create_file_db_entry("test_thing.txt", None);
         create_file_disk("test_thing.txt", "test_thing");
@@ -748,9 +765,8 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-        .await
         .unwrap();
-        let folder_files = folder_service::get_folder(Some(0)).await.unwrap().files;
+        let folder_files = folder_service::get_folder(Some(0)).unwrap().files;
         assert_eq!(2, folder_files.len());
         let mut file_names: Vec<String> = fs::read_dir(file_dir())
             .unwrap()
@@ -770,7 +786,7 @@ mod search_files_tests {
     use crate::service::file_service::search_files;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
-        create_tag_folder, create_tag_folders, fail, refresh_db,
+        create_tag_folder, create_tag_folders, refresh_db,
     };
 
     #[test]
@@ -809,12 +825,12 @@ mod search_files_tests {
                 tags: vec![
                     TagApi {
                         id: Some(1),
-                        title: "tag1".to_string()
+                        title: "tag1".to_string(),
                     },
                     TagApi {
                         id: Some(2),
-                        title: "tag".to_string()
-                    }
+                        title: "tag".to_string(),
+                    },
                 ],
             }],
             res
@@ -836,7 +852,7 @@ mod search_files_tests {
                 folder_id: None,
                 tags: vec![TagApi {
                     id: Some(1),
-                    title: "tag".to_string()
+                    title: "tag".to_string(),
                 }],
             }],
             res
@@ -852,9 +868,9 @@ mod search_files_tests {
         create_folder_db_entry("bottom", Some(2)); // 3
         create_file_db_entry("top file", Some(1));
         create_file_db_entry("bottom file", Some(3));
-        create_tag_folders("tag1", vec![1, 3]);
-        create_tag_folder("tag2", 3);
-        // tag1 should retrieve all files
+        create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
+        create_tag_folder("tag2", 3); // tag2 only on bottom folder
+                                      // tag1 should retrieve all files
         let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
         assert_eq!(
             vec![
@@ -862,14 +878,14 @@ mod search_files_tests {
                     id: 1,
                     name: "top file".to_string(),
                     folder_id: None,
-                    tags: vec![]
+                    tags: vec![],
                 },
                 FileApi {
                     id: 2,
                     name: "bottom file".to_string(),
                     folder_id: None,
-                    tags: vec![]
-                }
+                    tags: vec![],
+                },
             ],
             res
         );
@@ -879,7 +895,7 @@ mod search_files_tests {
                 id: 2,
                 name: "bottom file".to_string(),
                 folder_id: None,
-                tags: vec![]
+                tags: vec![],
             }],
             res
         );

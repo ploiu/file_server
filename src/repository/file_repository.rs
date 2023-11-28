@@ -103,5 +103,10 @@ pub fn search_files(
 pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
     let id = row.get(0)?;
     let name = row.get(1)?;
-    Ok(FileRecord { id, name })
+    let parent_id = row.get(2)?;
+    Ok(FileRecord {
+        id,
+        name,
+        parent_id,
+    })
 }

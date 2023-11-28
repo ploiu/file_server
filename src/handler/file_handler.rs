@@ -1,5 +1,3 @@
-use std::collections::HashSet;
-
 use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
 
@@ -75,8 +73,10 @@ pub fn search_files(search: String, tags: Vec<String>, auth: Auth) -> SearchFile
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    if search.trim().is_empty() {
-        return SearchFileResponse::BadRequest(BasicMessage::new("Search string is required."));
+    if search.trim().is_empty() && tags.len() == 0 {
+        return SearchFileResponse::BadRequest(BasicMessage::new(
+            "Search string or tags are required.",
+        ));
     }
     match file_service::search_files(search, tags) {
         Ok(files) => SearchFileResponse::Success(Json::from(files)),
@@ -127,14 +127,14 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
 }
 
 #[put("/", data = "<data>")]
-pub async fn update_file(data: Json<FileApi>, auth: Auth) -> UpdateFileResponse {
+pub fn update_file(data: Json<FileApi>, auth: Auth) -> UpdateFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return UpdateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return UpdateFileResponse::Unauthorized("Bad Credentials".to_string())
     };
 
-    match file_service::update_file(data.into_inner()).await {
+    match file_service::update_file(data.into_inner()) {
         Ok(f) => UpdateFileResponse::Success(Json::from(f)),
         Err(e) if e == UpdateFileError::NotFound => UpdateFileResponse::NotFound(
             BasicMessage::new("The file with the passed id could not be found."),

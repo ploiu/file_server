@@ -382,6 +382,7 @@ mod update_file_tag_test {
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
+                parent_id: None,
             },
             &con,
         )
@@ -424,6 +425,7 @@ mod update_file_tag_test {
             &FileRecord {
                 id: None,
                 name: "test".to_string(),
+                parent_id: None,
             },
             &con,
         )

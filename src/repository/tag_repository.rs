@@ -284,6 +284,7 @@ mod get_tag_on_file_tests {
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
+                parent_id: None,
             },
             &con,
         )
@@ -315,6 +316,7 @@ mod get_tag_on_file_tests {
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
+                parent_id: None,
             },
             &con,
         )
@@ -343,6 +345,7 @@ mod remove_tag_from_file_tests {
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
+                parent_id: None,
             },
             &con,
         )

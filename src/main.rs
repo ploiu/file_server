@@ -96,6 +96,7 @@ mod api_tests {
 
     #[test]
     fn version() {
+        refresh_db();
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
@@ -105,6 +106,7 @@ mod api_tests {
 
     #[test]
     fn set_password_missing_fields() {
+        refresh_db();
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let uri = uri!("/api/password");
         let res = client.post(uri).dispatch();
@@ -832,6 +834,7 @@ mod folder_tests {
             FileRecord {
                 id: Some(1),
                 name: String::from("file"),
+                parent_id: None
             }
         );
         let root_folders = folder_repository::get_child_folders(None, &con).unwrap();
@@ -1416,7 +1419,10 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::BadRequest);
         let body: BasicMessage = res.into_json().unwrap();
-        assert_eq!(body.message, String::from("Search string is required."));
+        assert_eq!(
+            body.message,
+            String::from("Search string or tags are required.")
+        );
         cleanup();
     }
 
