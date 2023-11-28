@@ -21,23 +21,23 @@ pub fn get_tag_by_title(
     con: &Connection,
 ) -> Result<Option<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_title.sql"))?;
-    return match pst.query_row(rusqlite::params![title], tag_mapper) {
+    match pst.query_row(rusqlite::params![title], tag_mapper) {
         Ok(tag) => Ok(Some(tag)),
         Err(e) => {
             // no tag found
-            return if e == rusqlite::Error::QueryReturnedNoRows {
+            if e == rusqlite::Error::QueryReturnedNoRows {
                 Ok(None)
             } else {
                 eprintln!("Failed to get tag by name, error is {:?}", e);
                 Err(e)
-            };
+            }
         }
-    };
+    }
 }
 
 pub fn get_tag(id: u32, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_id.sql"))?;
-    return Ok(pst.query_row(rusqlite::params![id], tag_mapper)?);
+    pst.query_row(rusqlite::params![id], tag_mapper)
 }
 
 /// updates the past tag. Checking to make sure the tag exists needs to be done on the caller's end
@@ -65,7 +65,7 @@ pub fn get_tags_on_file(
     con: &Connection,
 ) -> Result<Vec<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
-    let rows = pst.query_map(rusqlite::params![file_id], |row| Ok(tag_mapper(&row)))?;
+    let rows = pst.query_map(rusqlite::params![file_id], |row| Ok(tag_mapper(row)))?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
         // I know it's probably bad style, but I'm laughing too hard at the double question mark.
@@ -104,7 +104,7 @@ pub fn get_tags_on_folder(
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/get_tags_for_folder.sql"
     ))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| Ok(tag_mapper(&row)))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| Ok(tag_mapper(row)))?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
         // I know it's probably bad style, but I'm laughing too hard at the double question mark.

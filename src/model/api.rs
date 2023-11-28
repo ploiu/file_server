@@ -27,16 +27,16 @@ impl FileApi {
         //language=RegExp
         let banned_chars = Regex::new("(^\\.\\.|^\\./)|[/\\\\<>|:&;#?*]").unwrap();
         if reserved_name_regex.is_match(&self.name.to_uppercase())
-            || *&self.name.starts_with("..")
-            || *&self.name.contains("./")
+            || self.name.starts_with("..")
+            || self.name.contains("./")
         {
             return None;
         }
         let replaced = banned_chars.replace_all(&self.name, "");
         let replaced = replaced
             .to_string()
-            .replace("(", "leftParenthese")
-            .replace(")", "rightParenthese");
+            .replace('(', "leftParenthese")
+            .replace(')', "rightParenthese");
         Some(replaced)
     }
 

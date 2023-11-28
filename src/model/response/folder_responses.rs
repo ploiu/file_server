@@ -22,7 +22,7 @@ pub struct FolderResponse {
 impl FolderResponse {
     pub fn from(base: &Folder) -> FolderResponse {
         let split_name = String::from(&base.name);
-        let split_name = split_name.split("/");
+        let split_name = split_name.split('/');
         let name = String::from(split_name.last().unwrap_or(base.name.as_str()));
         FolderResponse {
             // should always have an id when coming from the database

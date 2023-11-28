@@ -25,7 +25,7 @@ mod test;
 
 #[cfg(not(test))]
 fn temp_dir() -> String {
-    return "./.file_server_temp".to_string();
+    "./.file_server_temp".to_string()
 }
 
 #[cfg(test)]
@@ -37,9 +37,7 @@ fn temp_dir() -> String {
 #[launch]
 fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
-    fs::remove_dir_all(Path::new(temp_dir().as_str()))
-        .or(Ok::<(), ()>(()))
-        .unwrap();
+    fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
@@ -1026,10 +1024,6 @@ mod file_tests {
         Client::tracked(rocket()).unwrap()
     }
 
-    fn fail() {
-        assert!(false);
-    }
-
     fn set_password() {
         refresh_db();
         let client = client();
@@ -1544,9 +1538,8 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::NoContent);
         // make sure the file was removed from the disk and db
-        match fs::read(format!("{}/{}", file_dir(), "test.txt")) {
-            Ok(_) => fail(), // file still exists on disk
-            Err(_) => { /* passed - no op */ }
+        if let Ok(_) = fs::read(format!("{}/{}", file_dir(), "test.txt")) {
+            fail()
         };
         let get_res = client
             .get(uri!("/files/1"))

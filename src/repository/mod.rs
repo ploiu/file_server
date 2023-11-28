@@ -61,12 +61,12 @@ pub fn initialize_db() -> Result<()> {
 fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
     if table_version < 2 {
         println!("Migrating database to v2...");
-        migrate_v2(&con)?;
+        migrate_v2(con)?;
     }
     Ok(())
 }
 
 fn migrate_v2(con: &Connection) -> Result<()> {
     let migration_script = include_str!("../assets/migration/v2.sql");
-    Ok(con.execute_batch(migration_script)?)
+    con.execute_batch(migration_script)
 }

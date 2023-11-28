@@ -16,9 +16,7 @@ pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 #[cfg(test)]
 pub fn refresh_db() {
     let thread_name = current_thread_name();
-    remove_file(Path::new(format!("{thread_name}.sqlite").as_str()))
-        .or(Ok::<(), ()>(()))
-        .unwrap();
+    remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
     initialize_db().unwrap();
 }
 
@@ -27,7 +25,7 @@ pub fn remove_files() {
     let thread_name = current_thread_name();
     let file_path = Path::new(thread_name.as_str());
     if file_path.exists() {
-        remove_dir_all(file_path).or(Ok::<(), ()>(())).unwrap();
+        remove_dir_all(file_path).unwrap_or(());
     }
 }
 
@@ -71,7 +69,7 @@ pub fn create_tag_db_entry(name: &str) -> u32 {
         .unwrap()
         .id;
     connection.close().unwrap();
-    return id;
+    id
 }
 
 #[cfg(test)]
@@ -124,9 +122,7 @@ pub fn current_thread_name() -> String {
 #[cfg(test)]
 pub fn create_file_disk(file_name: &str, contents: &str) {
     // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
-    fs::create_dir(Path::new(file_dir().as_str()))
-        .or(Ok::<(), ()>(()))
-        .unwrap();
+    fs::create_dir(Path::new(file_dir().as_str())).unwrap_or(());
     fs::write(
         Path::new(format!("{}/{file_name}", file_dir()).as_str()),
         contents,
@@ -144,10 +140,6 @@ pub fn cleanup() {
     let thread_name = current_thread_name();
     let temp_dir_name = temp_dir();
     remove_files();
-    remove_file(Path::new(format!("{thread_name}.sqlite").as_str()))
-        .or(Ok::<(), ()>(()))
-        .unwrap();
-    remove_dir_all(Path::new(temp_dir_name.as_str()))
-        .or(Ok::<(), ()>(()))
-        .unwrap();
+    remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
+    remove_dir_all(Path::new(temp_dir_name.as_str())).unwrap_or(());
 }

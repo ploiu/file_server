@@ -24,7 +24,7 @@ use crate::service::{folder_service, tag_service};
 #[inline]
 #[cfg(not(test))]
 pub fn file_dir() -> String {
-    return "./files".to_string();
+    "./files".to_string()
 }
 
 #[cfg(test)]
@@ -59,16 +59,16 @@ pub async fn save_file(
     let parent_id = file_input.folder_id();
     return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
-        let folder = folder_service::get_folder(Some(parent_id)).or_else(|e| {
+        let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
             eprintln!(
                 "Save file - failed to retrieve parent folder. Nested exception is {:?}",
                 e
             );
-            return if e == GetFolderError::NotFound {
-                Err(CreateFileError::ParentFolderNotFound)
+            if e == GetFolderError::NotFound {
+                CreateFileError::ParentFolderNotFound
             } else {
-                Err(CreateFileError::FailWriteDb)
-            };
+                CreateFileError::FailWriteDb
+            }
         })?;
         // folder exists, now try to create the file
         let file_id =
@@ -132,18 +132,18 @@ pub fn check_file_exists(id: u32) -> bool {
         return false;
     }
     con.close().unwrap();
-    return true;
+    true
 }
 
 /// reads the contents of the file with the passed id from the disk and returns it
 pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
     let res = get_file_path(id);
-    return if let Ok(path) = res {
+    if let Ok(path) = res {
         let path = format!("{}/{}", file_dir(), path);
         File::open(path).map_err(|_| GetFileError::NotFound)
     } else {
         Err(res.unwrap_err())
-    };
+    }
 }
 
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
@@ -158,18 +158,18 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     con.close().unwrap();
     // helps avoid nested matches
     delete_result?;
-    return fs::remove_file(&file_path).map_err(|e| {
+    fs::remove_file(&file_path).map_err(|e| {
         eprintln!(
             "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
             file_path, e
         );
         DeleteFileError::FileSystemError
-    });
+    })
 }
 
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
-    let result = match file_repository::delete_file(id, con) {
+    match file_repository::delete_file(id, con) {
         Ok(_) => Ok(()),
         Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
         Err(e) => {
@@ -179,8 +179,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
             );
             Err(DeleteFileError::DbError)
         }
-    };
-    result
+    }
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
@@ -379,7 +378,7 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     }
 }
 
-fn save_file_record(name: &String) -> Result<u32, CreateFileError> {
+fn save_file_record(name: &str) -> Result<u32, CreateFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
@@ -394,13 +393,13 @@ fn save_file_record(name: &String) -> Result<u32, CreateFileError> {
 /// retrieves the full path to the file with the passed id
 fn get_file_path(id: u32) -> Result<String, GetFileError> {
     let con = repository::open_connection();
-    let result = file_repository::get_file_path(id, &con).or_else(|e| {
+    let result = file_repository::get_file_path(id, &con).map_err(|e| {
         eprintln!("Failed to get file path! Nested exception is {:?}", e);
-        return if e == rusqlite::Error::QueryReturnedNoRows {
-            Err(GetFileError::NotFound)
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            GetFileError::NotFound
         } else {
-            Err(GetFileError::DbFailure)
-        };
+            GetFileError::DbFailure
+        }
     });
     con.close().unwrap();
     result
@@ -422,7 +421,7 @@ fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
     file_name: &String,
 ) -> Result<(), CreateFileError> {
-    let full_file_name = determine_file_name(&file_name, &file_input.extension);
+    let full_file_name = determine_file_name(file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let db_parent_id = if 0 == file_input.folder_id() {
@@ -770,7 +769,6 @@ mod update_file_tests {
         assert_eq!(2, folder_files.len());
         let mut file_names: Vec<String> = fs::read_dir(file_dir())
             .unwrap()
-            .into_iter()
             .map(|d| d.unwrap().file_name().into_string().unwrap())
             .collect();
         file_names.sort();

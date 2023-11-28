@@ -5,12 +5,11 @@ use crate::model::service::metadata::CheckAuthResult;
 
 /// returns the current version of the database as a String
 pub fn get_version(con: &mut Connection) -> Result<String, rusqlite::Error> {
-    let result = con.query_row(
+    con.query_row(
         include_str!("../assets/queries/metadata/get_database_version.sql"),
         [],
         |row| row.get(0),
-    );
-    result
+    )
 }
 
 /// retrieves the encrypted authentication string for requests in the database
@@ -25,7 +24,7 @@ pub fn get_auth(con: &mut Connection) -> Result<String, rusqlite::Error> {
 /// checks if the passed `auth` matches the encrypted auth string in the database
 pub fn check_auth(auth: Auth, con: &mut Connection) -> Result<CheckAuthResult, rusqlite::Error> {
     let hash = auth.to_string();
-    let result = match get_auth(con) {
+    match get_auth(con) {
         Ok(db_hash) => {
             if db_hash.eq(&hash) {
                 Ok(CheckAuthResult::Valid)
@@ -38,8 +37,7 @@ pub fn check_auth(auth: Auth, con: &mut Connection) -> Result<CheckAuthResult, r
             eprintln!("Failed to check auth in database: {:?}", e);
             Err(e)
         }
-    };
-    result
+    }
 }
 
 pub fn set_auth(auth: Auth, con: &mut Connection) -> Result<(), rusqlite::Error> {

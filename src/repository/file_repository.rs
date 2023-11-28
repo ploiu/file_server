@@ -11,7 +11,7 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }
@@ -31,8 +31,7 @@ pub fn get_file_path(id: u32, con: &Connection) -> Result<String, rusqlite::Erro
             "../assets/queries/file/get_file_path_by_id.sql"
         ))
         .unwrap();
-    let result = pst.query_row([id], |row| row.get(0));
-    result
+    pst.query_row([id], |row| row.get(0))
 }
 
 /// removes the file with the passed id from the database

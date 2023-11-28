@@ -75,7 +75,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         ValidateResult::NoPasswordSet => return UpdateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return UpdateFolderResponse::Unauthorized("Bad Credentials".to_string())
     };
-    let result = match folder_service::update_folder(&folder) {
+    match folder_service::update_folder(&folder) {
         Ok(updated_folder) => UpdateFolderResponse::Success(Json::from(updated_folder)),
         Err(e) if e == UpdateFolderError::NotFound => UpdateFolderResponse::FolderNotFound(BasicMessage::new("The folder with the passed id could not be found.")),
         Err(e) if e == UpdateFolderError::ParentNotFound => UpdateFolderResponse::ParentNotFound(BasicMessage::new("The parent folder with the passed id could not be found.")),
@@ -86,8 +86,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
         Err(e) if e == UpdateFolderError::NotAllowed => UpdateFolderResponse::FolderAlreadyExists(BasicMessage::new("Cannot move parent folder into its own child.")),
         Err(e) if e == UpdateFolderError::TagError => UpdateFolderResponse::TagError(BasicMessage::new("Failed to update tags. Check server logs for details.")),
         Err(e) => panic!("Update Folder: non-listed error {:?}", e)
-    };
-    result
+    }
 }
 
 #[delete("/<id>")]

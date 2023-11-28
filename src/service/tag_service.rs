@@ -22,7 +22,9 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
             return Err(CreateTagError::DbError);
         }
     };
-    let tag: repository::Tag = if None == existing_tag {
+    let tag: repository::Tag = if let Some(t) = existing_tag {
+        t
+    } else {
         match tag_repository::create_tag(&name, &con) {
             Ok(t) => t,
             Err(e) => {
@@ -31,9 +33,8 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
                 return Err(CreateTagError::DbError);
             }
         }
-    } else {
-        existing_tag.unwrap()
     };
+
     con.close().unwrap();
     Ok(TagApi::from(tag))
 }
@@ -115,10 +116,10 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
         }
     };
     con.close().unwrap();
-    return Ok(TagApi {
+    Ok(TagApi {
         id: request.id,
-        title: new_title.clone(),
-    });
+        title: new_title,
+    })
 }
 
 /// deletes the tag with the passed id. Does nothing if that tag doesn't exist

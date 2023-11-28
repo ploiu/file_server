@@ -111,7 +111,7 @@ pub fn get_all_parent_folders(
     let mut parent_id_rows = parent_id_pst.query([folder_id])?;
     while let Some(row) = parent_id_rows.next()? {
         let id: Option<u32> = row.get(0)?;
-        let folder = get_by_id(id, &con)?;
+        let folder = get_by_id(id, con)?;
         parents.push(folder);
     }
     Ok(parents)
@@ -178,7 +178,7 @@ pub fn link_folder_to_file(
         Ok(_) => Ok(()),
         Err(e) => {
             eprintln!("Failed to link file to folder. Nested exception is {:?}", e);
-            return Err(e);
+            Err(e)
         }
     }
 }

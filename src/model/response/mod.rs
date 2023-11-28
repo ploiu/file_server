@@ -28,7 +28,7 @@ pub struct TagApi {
 impl Clone for TagApi {
     fn clone(&self) -> Self {
         TagApi {
-            id: self.id.clone(),
+            id: self.id,
             title: self.title.clone(),
         }
     }
