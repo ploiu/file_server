@@ -1,7 +1,7 @@
 use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
 
-use crate::guard::Auth;
+use crate::guard::HeaderAuth;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
@@ -21,7 +21,7 @@ use crate::service::file_service::save_file;
 pub async fn upload_file(
     file_input: Form<Strict<CreateFileRequest<'_>>>,
     force: Option<bool>,
-    auth: Auth,
+    auth: HeaderAuth,
 ) -> CreateFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
@@ -48,7 +48,7 @@ pub async fn upload_file(
 }
 
 #[get("/metadata/<id>")]
-pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
+pub fn get_file(id: u32, auth: HeaderAuth) -> GetFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return GetFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -67,7 +67,7 @@ pub fn get_file(id: u32, auth: Auth) -> GetFileResponse {
 }
 
 #[get("/metadata?<search>&<tags>")]
-pub fn search_files(search: String, tags: Vec<String>, auth: Auth) -> SearchFileResponse {
+pub fn search_files(search: String, tags: Vec<String>, auth: HeaderAuth) -> SearchFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -90,7 +90,7 @@ pub fn search_files(search: String, tags: Vec<String>, auth: Auth) -> SearchFile
 }
 
 #[get("/<id>")]
-pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
+pub fn download_file(id: u32, auth: HeaderAuth) -> DownloadFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return DownloadFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -105,7 +105,7 @@ pub fn download_file(id: u32, auth: Auth) -> DownloadFileResponse {
 }
 
 #[delete("/<id>")]
-pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
+pub fn delete_file(id: u32, auth: HeaderAuth) -> DeleteFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return DeleteFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -127,7 +127,7 @@ pub fn delete_file(id: u32, auth: Auth) -> DeleteFileResponse {
 }
 
 #[put("/", data = "<data>")]
-pub fn update_file(data: Json<FileApi>, auth: Auth) -> UpdateFileResponse {
+pub fn update_file(data: Json<FileApi>, auth: HeaderAuth) -> UpdateFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return UpdateFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),

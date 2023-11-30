@@ -5,7 +5,9 @@ use std::fs;
 use std::path::Path;
 
 use rocket::{Build, Rocket};
+use simple_logger::SimpleLogger;
 
+use crate::handler::api_handler::update_password;
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -34,8 +36,15 @@ fn temp_dir() -> String {
     format!("./.{}_temp", thread_name)
 }
 
+/// the way tests run for rocket mean logging would be initialized multiple times, which causes errors
+fn init_log() {
+    #[cfg(not(test))]
+    SimpleLogger::new().init().unwrap();
+}
+
 #[launch]
 fn rocket() -> Rocket<Build> {
+    init_log();
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
@@ -43,7 +52,7 @@ fn rocket() -> Rocket<Build> {
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
     rocket::build()
-        .mount("/api", routes![api_version, set_password])
+        .mount("/api", routes![api_version, set_password, update_password])
         .mount(
             "/files",
             routes![

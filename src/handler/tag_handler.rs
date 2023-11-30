@@ -1,6 +1,6 @@
 use rocket::serde::json::Json;
 
-use crate::guard::Auth;
+use crate::guard::HeaderAuth;
 use crate::model::error::tag_errors::{GetTagError, UpdateTagError};
 use crate::model::guard::auth::ValidateResult;
 use crate::model::response::tag_responses::{
@@ -10,7 +10,7 @@ use crate::model::response::{BasicMessage, TagApi};
 use crate::service::tag_service;
 
 #[get("/<id>")]
-pub fn get_tag(id: u32, auth: Auth) -> GetTagResponse {
+pub fn get_tag(id: u32, auth: HeaderAuth) -> GetTagResponse {
     match auth.validate() {
         ValidateResult::Ok => {/* no op */},
         ValidateResult::NoPasswordSet => return GetTagResponse::Unauthorized("No password has been set. you can set a username and password by making a POST to `/api/password`".to_string()),
@@ -28,7 +28,7 @@ pub fn get_tag(id: u32, auth: Auth) -> GetTagResponse {
 }
 
 #[post("/", data = "<tag>")]
-pub fn create_tag(tag: Json<TagApi>, auth: Auth) -> CreateTagResponse {
+pub fn create_tag(tag: Json<TagApi>, auth: HeaderAuth) -> CreateTagResponse {
     match auth.validate() {
         ValidateResult::Ok => {/* no op */},
         ValidateResult::NoPasswordSet => return CreateTagResponse::Unauthorized("No password has been set. you can set a username and password by making a POST to `/api/password`".to_string()),
@@ -43,7 +43,7 @@ pub fn create_tag(tag: Json<TagApi>, auth: Auth) -> CreateTagResponse {
 }
 
 #[put("/", data = "<tag>")]
-pub fn update_tag(tag: Json<TagApi>, auth: Auth) -> UpdateTagResponse {
+pub fn update_tag(tag: Json<TagApi>, auth: HeaderAuth) -> UpdateTagResponse {
     match auth.validate() {
         ValidateResult::Ok => {/* no op */},
         ValidateResult::NoPasswordSet => return UpdateTagResponse::Unauthorized("No password has been set. you can set a username and password by making a POST to `/api/password`".to_string()),
@@ -64,7 +64,7 @@ pub fn update_tag(tag: Json<TagApi>, auth: Auth) -> UpdateTagResponse {
 }
 
 #[delete("/<id>")]
-pub fn delete_tag(id: u32, auth: Auth) -> DeleteTagResponse {
+pub fn delete_tag(id: u32, auth: HeaderAuth) -> DeleteTagResponse {
     match auth.validate() {
         ValidateResult::Ok => {/* no op */},
         ValidateResult::NoPasswordSet => return DeleteTagResponse::Unauthorized("No password has been set. you can set a username and password by making a POST to `/api/password`".to_string()),

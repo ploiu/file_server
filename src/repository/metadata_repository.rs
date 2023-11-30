@@ -1,10 +1,11 @@
 use rusqlite::Connection;
 
-use crate::guard::Auth;
+use crate::guard::HeaderAuth;
+use crate::model::request::BodyAuth;
 use crate::model::service::metadata::CheckAuthResult;
 
 /// returns the current version of the database as a String
-pub fn get_version(con: &mut Connection) -> Result<String, rusqlite::Error> {
+pub fn get_version(con: &Connection) -> Result<String, rusqlite::Error> {
     con.query_row(
         include_str!("../assets/queries/metadata/get_database_version.sql"),
         [],
@@ -13,7 +14,7 @@ pub fn get_version(con: &mut Connection) -> Result<String, rusqlite::Error> {
 }
 
 /// retrieves the encrypted authentication string for requests in the database
-pub fn get_auth(con: &mut Connection) -> Result<String, rusqlite::Error> {
+pub fn get_auth(con: &Connection) -> Result<String, rusqlite::Error> {
     con.query_row(
         include_str!("../assets/queries/metadata/get_auth_hash.sql"),
         [],
@@ -22,7 +23,7 @@ pub fn get_auth(con: &mut Connection) -> Result<String, rusqlite::Error> {
 }
 
 /// checks if the passed `auth` matches the encrypted auth string in the database
-pub fn check_auth(auth: Auth, con: &mut Connection) -> Result<CheckAuthResult, rusqlite::Error> {
+pub fn check_auth(auth: HeaderAuth, con: &Connection) -> Result<CheckAuthResult, rusqlite::Error> {
     let hash = auth.to_string();
     match get_auth(con) {
         Ok(db_hash) => {
@@ -40,7 +41,7 @@ pub fn check_auth(auth: Auth, con: &mut Connection) -> Result<CheckAuthResult, r
     }
 }
 
-pub fn set_auth(auth: Auth, con: &mut Connection) -> Result<(), rusqlite::Error> {
+pub fn set_auth(auth: HeaderAuth, con: &Connection) -> Result<(), rusqlite::Error> {
     let mut statement = con
         .prepare(include_str!("../assets/queries/metadata/set_auth_hash.sql"))
         .unwrap();
@@ -50,5 +51,60 @@ pub fn set_auth(auth: Auth, con: &mut Connection) -> Result<(), rusqlite::Error>
             eprintln!("Failed to set password. Nested exception is {:?}", e);
             Err(e)
         }
+    }
+}
+
+pub fn update_auth(auth: BodyAuth, con: &Connection) -> Result<(), rusqlite::Error> {
+    let mut statement = con
+        .prepare(include_str!(
+            "../assets/queries/metadata/update_auth_hash.sql"
+        ))
+        .unwrap();
+    statement.execute([auth.to_string()])?;
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::guard::HeaderAuth;
+    use rusqlite::Connection;
+
+    use crate::model::request::BodyAuth;
+    use crate::model::service::metadata::CheckAuthResult;
+    use crate::repository::metadata_repository::{check_auth, set_auth, update_auth};
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn update_auth_works() {
+        refresh_db();
+        let con: Connection = open_connection();
+        set_auth(
+            HeaderAuth {
+                username: "username".to_string(),
+                password: "password".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        update_auth(
+            BodyAuth {
+                username: "updated".to_string(),
+                password: "updated".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        let res = check_auth(
+            HeaderAuth {
+                username: "updated".to_string(),
+                password: "updated".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+        assert_eq!(CheckAuthResult::Valid, res);
+        cleanup();
     }
 }
