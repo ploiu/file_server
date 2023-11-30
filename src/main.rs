@@ -5,7 +5,7 @@ use std::fs;
 use std::path::Path;
 
 use rocket::{Build, Rocket};
-use simple_logger::SimpleLogger;
+
 
 use crate::handler::api_handler::update_password;
 use handler::{
@@ -1547,7 +1547,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
             .dispatch();
         assert_eq!(res.status(), Status::NoContent);
         // make sure the file was removed from the disk and db
-        if let Ok(_) = fs::read(format!("{}/{}", file_dir(), "test.txt")) {
+        if fs::read(format!("{}/{}", file_dir(), "test.txt")).is_ok() {
             fail()
         };
         let get_res = client
