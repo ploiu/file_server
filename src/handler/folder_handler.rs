@@ -1,6 +1,6 @@
 use rocket::serde::json::Json;
 
-use crate::guard::Auth;
+use crate::guard::HeaderAuth;
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetFolderError, UpdateFolderError,
 };
@@ -13,7 +13,7 @@ use crate::model::response::BasicMessage;
 use crate::service::folder_service;
 
 #[get("/<id>")]
-pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
+pub fn get_folder(id: Option<u32>, auth: HeaderAuth) -> GetFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return GetFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -32,7 +32,10 @@ pub fn get_folder(id: Option<u32>, auth: Auth) -> GetFolderResponse {
 }
 
 #[post("/", data = "<folder>")]
-pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> CreateFolderResponse {
+pub async fn create_folder(
+    folder: Json<CreateFolderRequest>,
+    auth: HeaderAuth,
+) -> CreateFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return CreateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -69,7 +72,7 @@ pub async fn create_folder(folder: Json<CreateFolderRequest>, auth: Auth) -> Cre
 }
 
 #[put("/", data = "<folder>")]
-pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFolderResponse {
+pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: HeaderAuth) -> UpdateFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return UpdateFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
@@ -90,7 +93,7 @@ pub fn update_folder(folder: Json<UpdateFolderRequest>, auth: Auth) -> UpdateFol
 }
 
 #[delete("/<id>")]
-pub fn delete_folder(id: u32, auth: Auth) -> DeleteFolderResponse {
+pub fn delete_folder(id: u32, auth: HeaderAuth) -> DeleteFolderResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return DeleteFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),

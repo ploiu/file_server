@@ -1,4 +1,5 @@
 /// represents the result of comparing a password to the database value
+#[derive(PartialEq, Debug)]
 pub enum CheckAuthResult {
     /// The passed authorization matches what's in the database
     Valid,

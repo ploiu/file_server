@@ -1,8 +1,8 @@
 use rocket::serde::{json::Json, Serialize};
 
 use crate::model::error::metadata_errors::CreatePasswordError;
-use crate::model::request::NewAuth;
-use crate::model::response::api_responses::SetPassWordResponse;
+use crate::model::request::{BodyAuth, UpdateAuth};
+use crate::model::response::api_responses::{SetPassWordResponse, UpdatePasswordResponse};
 use crate::model::response::BasicMessage;
 use crate::service::api_service;
 
@@ -28,8 +28,8 @@ pub fn api_version() -> Json<ApiVersion> {
 }
 
 #[post("/password", data = "<auth>")]
-pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
-    let result = api_service::create_password(auth.into_inner());
+pub fn set_password(auth: Json<BodyAuth>) -> SetPassWordResponse {
+    let result = api_service::create_auth(auth.into_inner());
     match result {
         Ok(_) => SetPassWordResponse::Created(()),
         Err(e) if e == CreatePasswordError::AlreadyExists => SetPassWordResponse::AlreadyExists(
@@ -38,5 +38,13 @@ pub fn set_password(auth: Json<NewAuth>) -> SetPassWordResponse {
         Err(_) => SetPassWordResponse::Failure(BasicMessage::new(
             "Failed to set password due to unknown error",
         )),
+    }
+}
+
+#[put("/password", data = "<auth>")]
+pub fn update_password(auth: Json<UpdateAuth>) -> UpdatePasswordResponse {
+    match api_service::update_auth(auth.into_inner()) {
+        Ok(_) => UpdatePasswordResponse::Success(()),
+        Err(_) => UpdatePasswordResponse::Unauthorized(()),
     }
 }

@@ -61,6 +61,20 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "api"
+        ],
+        "description": "updates the password to access the api. All non /api endpoints will not work unless a password is set",
+        "responses": {
+          "204": {
+            "description": "password updated"
+          },
+          "401": {
+            "description": "Failed to set password. Check server logs for details"
+          }
+        }
       }
     },
     "/files": {
@@ -784,6 +798,16 @@
           },
           "password": {
             "type": "string"
+          }
+        }
+      },
+      "updatePasswordRequest": {
+        "properties": {
+          "oldPassword": {
+            "$ref": "#/components/schemas/authorizationRequest"
+          },
+          "newPassword": {
+            "$ref": "#/components/schemas/authorizationRequest"
           }
         }
       },

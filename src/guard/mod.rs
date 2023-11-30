@@ -14,15 +14,15 @@ use crate::model::service::metadata::CheckAuthResult;
 use crate::service::api_service;
 
 #[derive(Debug)]
-pub struct Auth {
+pub struct HeaderAuth {
     pub username: String,
     pub password: String,
 }
 
-impl Auth {
+impl HeaderAuth {
     /// creates an `Auth` object from the passed header value.
     /// The value of header must be base64-encoded basic auth.
-    pub fn from(header: &str) -> Result<Auth, &str> {
+    pub fn from(header: &str) -> Result<HeaderAuth, &str> {
         // remove the "Basic " from the header, leaving only the base64 part
         let stripped_header = header.to_string().replace("Basic ", "");
         match general_purpose::STANDARD.decode(stripped_header.as_str()) {
@@ -33,7 +33,7 @@ impl Auth {
                 if split.len() != 2 || split.contains(&"") {
                     return Err("Invalid basic auth format: missing username or password");
                 }
-                Ok(Auth {
+                Ok(HeaderAuth {
                     username: String::from(split[0].trim()),
                     password: String::from(split[1].trim()),
                 })
@@ -57,7 +57,7 @@ impl Auth {
     }
 }
 
-impl fmt::Display for Auth {
+impl fmt::Display for HeaderAuth {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         let mut hasher = Sha256::new();
         // hash username and password combined
@@ -68,7 +68,7 @@ impl fmt::Display for Auth {
 }
 
 #[async_trait]
-impl<'a> FromRequest<'a> for Auth {
+impl<'a> FromRequest<'a> for HeaderAuth {
     type Error = AuthError;
 
     async fn from_request(request: &'a Request<'_>) -> Outcome<Self, Self::Error> {
@@ -78,7 +78,7 @@ impl<'a> FromRequest<'a> for Auth {
         }
         match request.headers().get_one("Authorization") {
             None => Outcome::Failure((Status::Unauthorized, AuthError::Missing)),
-            Some(value) if check_basic_auth(value) => match Auth::from(value) {
+            Some(value) if check_basic_auth(value) => match HeaderAuth::from(value) {
                 Ok(auth) => Outcome::Success(auth),
                 Err(_) => Outcome::Failure((Status::Unauthorized, AuthError::Invalid)),
             },
@@ -95,7 +95,7 @@ mod tests {
     fn test_from_valid_input() {
         // test:test
         let input = "Basic dGVzdDp0ZXN0Cg==";
-        let output = Auth::from(input).unwrap();
+        let output = HeaderAuth::from(input).unwrap();
         assert_eq!("test", output.username);
         assert_eq!("test", output.password);
     }
@@ -103,7 +103,7 @@ mod tests {
     #[test]
     fn test_from_unencoded_input() {
         let input = "test:test";
-        let output = Auth::from(input).unwrap_err();
+        let output = HeaderAuth::from(input).unwrap_err();
         assert_eq!("Invalid basic auth format: not base64", output);
     }
 
@@ -112,23 +112,23 @@ mod tests {
         // :test
         assert_eq!(
             "Invalid basic auth format: missing username or password",
-            Auth::from("OnRlc3Q=").unwrap_err()
+            HeaderAuth::from("OnRlc3Q=").unwrap_err()
         );
         // test:
         assert_eq!(
             "Invalid basic auth format: missing username or password",
-            Auth::from("dGVzdDo=").unwrap_err()
+            HeaderAuth::from("dGVzdDo=").unwrap_err()
         );
         // testtest
         assert_eq!(
             "Invalid basic auth format: missing username or password",
-            Auth::from("dGVzdHRlc3Q=").unwrap_err()
+            HeaderAuth::from("dGVzdHRlc3Q=").unwrap_err()
         )
     }
 
     #[test]
     fn test_to_string() {
-        let auth = Auth {
+        let auth = HeaderAuth {
             username: "test".to_string(),
             password: "test".to_string(),
         };
