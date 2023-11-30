@@ -5,6 +5,8 @@ use std::fs;
 use std::path::Path;
 
 use rocket::{Build, Rocket};
+#[cfg(not(test))]
+use simple_logger::SimpleLogger;
 
 
 use crate::handler::api_handler::update_password;
