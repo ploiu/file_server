@@ -22,7 +22,7 @@ This project is still in development, but here is what I want from something lik
 - supports any file type
 - supports flexible and powerful search based on file attributes:
     - [x] name
-    - [ ] user-defined tags (see [#30](https://github.com/ploiu/file_server/issues/30))
+    - [x] user-defined tags (see [#30](https://github.com/ploiu/file_server/issues/30))
     - [ ] file type
     - [ ] date
 - allows for organizing files into folders
