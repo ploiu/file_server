@@ -67,13 +67,19 @@ pub fn get_file(id: u32, auth: HeaderAuth) -> GetFileResponse {
 }
 
 #[get("/metadata?<search>&<tags>")]
-pub fn search_files(search: String, tags: Vec<String>, auth: HeaderAuth) -> SearchFileResponse {
+pub fn search_files(
+    search: Option<String>,
+    tags: Option<Vec<String>>,
+    auth: HeaderAuth,
+) -> SearchFileResponse {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    if search.trim().is_empty() && tags.is_empty() {
+    let search = search.unwrap_or("".to_string());
+    let tags = tags.unwrap_or(Vec::new());
+    if search.is_empty() && tags.is_empty() {
         return SearchFileResponse::BadRequest(BasicMessage::new(
             "Search string or tags are required.",
         ));

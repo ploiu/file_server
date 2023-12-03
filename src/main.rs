@@ -8,7 +8,6 @@ use rocket::{Build, Rocket};
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
-
 use crate::handler::api_handler::update_password;
 use handler::{
     api_handler::{api_version, set_password},
@@ -109,7 +108,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.0"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.1"}"#);
         cleanup();
     }
 
