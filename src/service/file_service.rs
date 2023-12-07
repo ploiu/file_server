@@ -264,6 +264,10 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     })
 }
 
+// FIXME massive performance issues when searching for tag only with 100+ files in the db
+//  can probably be fixed by getting all folder tags first in as few queries as possible,
+//  and getting files in those folders. Might be tricky but should help performance a lot.
+//  in general, this function needs to be smarter in how to pull files
 pub fn search_files(
     search_title: String,
     search_tags: Vec<String>,
