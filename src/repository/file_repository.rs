@@ -1,4 +1,7 @@
-use rusqlite::{params, Connection};
+use std::collections::HashSet;
+
+use rocket::http::ext::IntoCollection;
+use rusqlite::{Connection, params};
 
 use crate::model::repository::FileRecord;
 
@@ -108,4 +111,60 @@ pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
         name,
         parent_id,
     })
+}
+
+pub fn get_files_by_all_tags(tags: HashSet<String>, con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
+    let base_sql_string = include_str!("../assets/queries/file/get_files_by_all_tags.sql");
+    // need to fill out the in clause and the count clause
+    let joined_tags = tags.iter().map(|t| { format!("'{t}'").to_string() }).reduce(|combined, current| { format!("{combined},{current}").to_string() }).unwrap();
+    let replaced_string = base_sql_string.to_string().replace("?1", joined_tags.as_str()).replace("?2", tags.len().to_string().as_str());
+    let mut pst = con.prepare(replaced_string.as_str())?;
+    let mut files: Vec<FileRecord> = Vec::new();
+    let res = pst.query_map([], map_file)?.into_iter();
+    for file in res {
+        files.push(file?);
+    }
+    Ok(files)
+}
+
+#[cfg(test)]
+mod get_files_by_all_tags_tests {
+    use std::collections::HashSet;
+
+    use rusqlite::Connection;
+
+    use crate::model::repository::FileRecord;
+    use crate::repository::file_repository::get_files_by_all_tags;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, refresh_db};
+
+    #[test]
+    fn returns_files_with_all_tags() {
+        refresh_db();
+        let con: Connection = open_connection();
+        create_file_db_entry("bad", None);
+        create_file_db_entry("has some", None); // 2
+        create_file_db_entry("has all", None); // 3
+        create_file_db_entry("also has all", None); // 4
+        // add tags
+        create_tag_files("tag1", vec![2, 3, 4]);
+        create_tag_files("asdf", vec![3, 4]);
+        create_tag_files("fda", vec![2, 3, 4]);
+
+        let res = get_files_by_all_tags(HashSet::from(["tag1".to_string(), "fda".to_string(), "asdf".to_string()]), &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(vec![
+            FileRecord {
+                id: Some(3),
+                name: "has all".to_string(),
+                parent_id: None,
+            },
+            FileRecord {
+                id: Some(4),
+                name: "also has all".to_string(),
+                parent_id: None,
+            },
+        ], res);
+        cleanup();
+    }
 }
