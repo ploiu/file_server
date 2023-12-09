@@ -1,6 +1,6 @@
 use rocket::serde::Serialize;
 
-#[derive(Debug, Serialize, PartialEq)]
+#[derive(Debug, Serialize, PartialEq, Eq, Hash)]
 #[serde(crate = "rocket::serde")]
 pub struct FileRecord {
     /// the id, will only be populated when pulled from the database
@@ -11,7 +11,7 @@ pub struct FileRecord {
     pub parent_id: Option<u32>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub struct Folder {
     /// cannot be changed, and only retrieved from the database
     pub id: Option<u32>,

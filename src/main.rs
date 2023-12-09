@@ -8,7 +8,6 @@ use rocket::{Build, Rocket};
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
-use crate::handler::api_handler::update_password;
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -16,6 +15,7 @@ use handler::{
     tag_handler::{create_tag, delete_tag, get_tag, update_tag},
 };
 
+use crate::handler::api_handler::update_password;
 use crate::repository::initialize_db;
 
 mod guard;

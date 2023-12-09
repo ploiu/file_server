@@ -66,9 +66,9 @@ pub fn update_auth(auth: BodyAuth, con: &Connection) -> Result<(), rusqlite::Err
 
 #[cfg(test)]
 mod tests {
-    use crate::guard::HeaderAuth;
     use rusqlite::Connection;
 
+    use crate::guard::HeaderAuth;
     use crate::model::request::BodyAuth;
     use crate::model::service::metadata::CheckAuthResult;
     use crate::repository::metadata_repository::{check_auth, set_auth, update_auth};

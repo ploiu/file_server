@@ -273,11 +273,39 @@ pub fn search_files_new(
     search_tags: Vec<String>,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
+    let con: Connection = open_connection();
+    let matching_files: HashSet<FileRecord> = HashSet::new();
     if search_title.is_empty() {
-        pull_files_by_tags(search_tags)
+        // step 1: retrieve all files from the database that have all of the tags directly on them
+        let mut matching_files = match file_repository::get_files_by_all_tags(&search_tags, &con) {
+            Ok(files) => files,
+            Err(e) => {
+                log::error!("Failed to get all files by tags. Exception is {e}");
+                con.close().unwrap();
+                return Err(SearchFileError::DbError);
+            }
+        };
+        // step 2: retrieve all folders that have any passed tag
+        let folders_with_any_tag = match folder_service::get_folders_by_any_tag(&search_tags) {
+            Ok(f) => f,
+            Err(_) => {
+                con.close().unwrap();
+                return Err(SearchFileError::TagError);
+            }
+        };
+        // TODO step 3: reduce all the folders to the first folder with all the applied tags
+        // TODO step 4: for each folder (probably new function):
+        // TODO  1. retrieve all child folders recursively
+        // TODO  2. retrieve all immediate child files ---------------------V
+        // TODO  3. retrieve all child files of all child folders-----------|>these 2 can be combined with a function that gets all child files for a list of folder IDs
+        // TODO step 5: for each folder not deduplicated:
+        // TODO  1. retrieve all child folders recursively
+        // TODO  2. retrieve all child files of all child folders (+ original folder) using method in #4.3 above
+        // TODO  3. filter those files to only those with the rest of the tags (maybe convert to a single db query - might be weird)
     } else {
         panic!("unimplemented");
     }
+    Ok(HashSet::new())
 }
 
 pub fn search_files(
@@ -532,7 +560,7 @@ mod update_file_tests {
                 title: "tag1".to_string(),
             }],
         })
-            .unwrap();
+        .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!(
             FileApi {
@@ -561,7 +589,7 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             tags: vec![],
         })
-            .unwrap();
+        .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!(
             FileApi {
@@ -584,7 +612,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::NotFound, res);
         cleanup();
     }
@@ -599,7 +627,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FolderNotFound, res);
         cleanup();
     }
@@ -617,7 +645,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
         // now make sure that the files weren't changed on the disk
         let first = fs::read_to_string(format!("{}/{}", file_dir(), "test.txt")).unwrap();
@@ -632,7 +660,7 @@ mod update_file_tests {
         refresh_db();
         create_folder_db_entry("test", None); // id 1
         create_folder_db_entry("target", None); // id 2
-        // put the files in the folders
+                                                // put the files in the folders
         create_file_db_entry("test.txt", Some(1)); // id 1
         create_file_db_entry("test.txt", Some(2)); // id 2
         let res = update_file(FileApi {
@@ -641,7 +669,7 @@ mod update_file_tests {
             folder_id: Some(2),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
         // make sure the file wasn't moved in the db
         let db_test_folder = folder_service::get_folder(Some(1)).unwrap();
@@ -662,7 +690,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-            .unwrap();
+        .unwrap();
         let res = get_file_metadata(1).unwrap();
         assert_eq!("test".to_string(), res.name);
         // make sure the file is properly renamed on disk
@@ -686,7 +714,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-            .unwrap();
+        .unwrap();
         assert_eq!(1, res.id);
         assert_eq!("new_name.txt", res.name);
         let containing_folder = folder_service::get_folder(Some(1)).unwrap();
@@ -705,7 +733,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the database hasn't changed (file id 1 should be named file in root folder)
         let root_files = folder_service::get_folder(None).unwrap().files;
@@ -733,7 +761,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the db hasn't changed
         let folder_1_db_files = folder_service::get_folder(Some(1)).unwrap().files;
@@ -753,7 +781,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
         })
-            .unwrap_err();
+        .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the database hasn't changed (file id 1 should be named file in test folder)
         let root_folder = folder_service::get_folder(Some(1)).unwrap().folders;
@@ -787,7 +815,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
         })
-            .unwrap();
+        .unwrap();
         let folder_files = folder_service::get_folder(Some(0)).unwrap().files;
         assert_eq!(2, folder_files.len());
         let mut file_names: Vec<String> = fs::read_dir(file_dir())
@@ -804,7 +832,7 @@ mod update_file_tests {
 mod search_files_tests {
     use crate::model::api::FileApi;
     use crate::model::response::TagApi;
-    use crate::service::file_service::search_files;
+    use crate::service::file_service::search_files_new;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
         create_tag_folder, create_tag_folders, refresh_db,
@@ -815,7 +843,10 @@ mod search_files_tests {
         refresh_db();
         create_file_db_entry("test", None);
         create_file_db_entry("test2", None);
-        let res = search_files("test2".to_string(), vec![]).unwrap();
+        let res = search_files_new("test2".to_string(), vec![])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         assert_eq!(
             vec![FileApi {
                 id: 2,
@@ -835,8 +866,10 @@ mod search_files_tests {
         create_file_db_entry("second", None);
         create_tag_file("tag1", 1);
         create_tag_files("tag", vec![1, 2]);
-        let res =
-            search_files("".to_string(), vec!["tag1".to_string(), "tag".to_string()]).unwrap();
+        let res = search_files_new("".to_string(), vec!["tag1".to_string(), "tag".to_string()])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         // should only return the first one since it has both tags
         assert_eq!(
             vec![FileApi {
@@ -865,7 +898,10 @@ mod search_files_tests {
         create_file_db_entry("first", None);
         create_file_db_entry("second", None);
         create_tag_files("tag", vec![1, 2]);
-        let res = search_files("first".to_string(), vec!["tag".to_string()]).unwrap();
+        let res = search_files_new("first".to_string(), vec!["tag".to_string()])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         assert_eq!(
             vec![FileApi {
                 id: 1,
@@ -891,8 +927,11 @@ mod search_files_tests {
         create_file_db_entry("bottom file", Some(3));
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
-        // tag1 should retrieve all files
-        let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
+                                      // tag1 should retrieve all files
+        let res = search_files_new("".to_string(), vec!["tag1".to_string()])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         assert_eq!(
             vec![
                 FileApi {
@@ -910,7 +949,10 @@ mod search_files_tests {
             ],
             res
         );
-        let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
+        let res = search_files_new("".to_string(), vec!["tag2".to_string()])
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         assert_eq!(
             vec![FileApi {
                 id: 2,

@@ -17,7 +17,7 @@ pub struct BasicMessage {
 
 /// this will be the same no matter if it's a request or a response. This is a bit
 /// different than how Files and Folders are
-#[derive(Serialize, Deserialize, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
 #[serde(crate = "rocket::serde")]
 pub struct TagApi {
     /// will be None if new

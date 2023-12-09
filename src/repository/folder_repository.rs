@@ -1,6 +1,9 @@
+use std::collections::HashSet;
+
 use rusqlite::{params, Connection, Rows};
 
 use crate::model::repository;
+use crate::model::repository::Folder;
 use crate::repository::file_repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
@@ -198,6 +201,27 @@ pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, r
     Ok(ids)
 }
 
+pub fn get_folders_by_any_tag(
+    tags: &HashSet<String>,
+    con: &Connection,
+) -> Result<HashSet<Folder>, rusqlite::Error> {
+    // TODO look at rarray to pass a collection as a parameter (https://docs.rs/rusqlite/0.29.0/rusqlite/vtab/array/index.html)
+    let joined_tags = tags
+        .iter()
+        .map(|t| format!("'{t}'"))
+        .reduce(|combined, current| format!("{combined},{current}"))
+        .unwrap();
+    let query = include_str!("../assets/queries/folder/get_folders_by_any_tag.sql");
+    let replaced_query = query.replace("?1", joined_tags.as_str());
+    let mut pst = con.prepare(replaced_query.as_str()).unwrap();
+    let mut folders: HashSet<Folder> = HashSet::new();
+    let rows = pst.query_map([], map_folder)?;
+    for row in rows {
+        folders.insert(row?);
+    }
+    Ok(folders)
+}
+
 fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
     let id: Option<u32> = row.get(0)?;
     let name: String = row.get(1)?;
@@ -226,6 +250,7 @@ mod get_all_parent_folders_tests {
         assert_eq!(Ok(vec![]), result);
         cleanup();
     }
+
     #[test]
     fn returns_parent_when_only_one() {
         refresh_db();
@@ -242,6 +267,7 @@ mod get_all_parent_folders_tests {
         assert_eq!(Ok(vec![expected_parent]), result);
         cleanup();
     }
+
     #[test]
     fn returns_all_parents_when_multiple() {
         refresh_db();
@@ -264,6 +290,53 @@ mod get_all_parent_folders_tests {
         let result = get_all_parent_folders(3, &connection);
         connection.close().unwrap();
         assert_eq!(Ok(expected), result);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_folders_by_any_tag_tests {
+    use std::collections::HashSet;
+
+    use rusqlite::Connection;
+
+    use crate::model::repository::Folder;
+    use crate::repository::folder_repository::get_folders_by_any_tag;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, refresh_db};
+
+    #[test]
+    fn returns_folders_with_any_tag() {
+        refresh_db();
+        create_folder_db_entry("all tags", None); // 1
+        create_folder_db_entry("some tags", Some(1)); // 2
+        create_folder_db_entry("no tags", None); // 3
+        create_folder_db_entry("no relevant tags", None); // 4
+                                                          // tags on them folders
+        create_tag_folders("irrelevant", vec![2, 4]);
+        create_tag_folders("relevant 1", vec![1, 2]);
+        create_tag_folders("relevant 2", vec![1]);
+        let con: Connection = open_connection();
+
+        let res = get_folders_by_any_tag(
+            &HashSet::from(["relevant 1".to_string(), "relevant 2".to_string()]),
+            &con,
+        )
+        .unwrap()
+        .into_iter()
+        .collect::<Vec<Folder>>();
+        con.close().unwrap();
+        assert_eq!(2, res.len());
+        assert!(res.contains(&Folder {
+            id: Some(1),
+            parent_id: None,
+            name: "all tags".to_string(),
+        }));
+        assert!(res.contains(&Folder {
+            id: Some(2),
+            parent_id: Some(1),
+            name: "some tags".to_string(),
+        }));
         cleanup();
     }
 }

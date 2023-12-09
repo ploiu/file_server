@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
 
@@ -194,6 +195,38 @@ pub fn get_all_parent_folders(folder_id: u32) -> Result<Vec<FolderResponse>, Get
         converted_folders.push(converted);
     }
     con.close().unwrap();
+    Ok(converted_folders)
+}
+
+pub fn get_folders_by_any_tag(
+    tags: &HashSet<String>,
+) -> Result<HashSet<FolderResponse>, GetFolderError> {
+    let con: Connection = open_connection();
+    let folders = match folder_repository::get_folders_by_any_tag(tags, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            con.close().unwrap();
+            log::error!("Failed to pull folders by any tag. Exception is {e}");
+            return Err(GetFolderError::DbFailure);
+        }
+    };
+    con.close().unwrap();
+    let mut converted_folders: HashSet<FolderResponse> = HashSet::with_capacity(folders.len());
+    for folder in folders {
+        let tags = match tag_service::get_tags_on_folder(folder.id.unwrap()) {
+            Ok(t) => t,
+            Err(_) => return Err(GetFolderError::TagError),
+        };
+        converted_folders.insert(FolderResponse {
+            id: folder.id.unwrap(),
+            parent_id: folder.parent_id,
+            name: folder.name,
+            path: "no path".to_string(),
+            folders: Vec::new(),
+            files: Vec::new(),
+            tags,
+        });
+    }
     Ok(converted_folders)
 }
 

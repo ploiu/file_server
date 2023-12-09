@@ -6,7 +6,7 @@ use crate::model::response::{BasicMessage, TagApi};
 
 type NoContent = ();
 
-#[derive(Serialize, Debug, Deserialize, PartialEq)]
+#[derive(Serialize, Debug, Deserialize, PartialEq, Eq, Hash)]
 #[serde(crate = "rocket::serde")]
 pub struct FolderResponse {
     pub id: u32,
