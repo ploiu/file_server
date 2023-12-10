@@ -513,6 +513,7 @@ fn determine_file_name(root_name: &String, extension: &Option<String>) -> String
 #[cfg(test)]
 mod tests {
     use super::determine_file_name;
+    use crate::service::folder_service;
 
     #[test]
     fn determine_file_name_with_ext() {

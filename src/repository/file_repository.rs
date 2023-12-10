@@ -120,7 +120,7 @@ pub fn get_files_by_all_tags(
     // need to fill out the in clause and the count clause
     let joined_tags = tags
         .iter()
-        .map(|t| format!("'{t}'"))
+        .map(|t| format!("'{}'", t.replace("'", "''")))
         .reduce(|combined, current| format!("{combined},{current}"))
         .unwrap();
     let replaced_string = base_sql_string

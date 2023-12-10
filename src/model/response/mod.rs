@@ -17,21 +17,12 @@ pub struct BasicMessage {
 
 /// this will be the same no matter if it's a request or a response. This is a bit
 /// different than how Files and Folders are
-#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct TagApi {
     /// will be None if new
     pub id: Option<u32>,
     pub title: String,
-}
-
-impl Clone for TagApi {
-    fn clone(&self) -> Self {
-        TagApi {
-            id: self.id,
-            title: self.title.clone(),
-        }
-    }
 }
 
 // ----------------------------------

@@ -1,8 +1,9 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
 use regex::Regex;
+use rocket::http::ext::IntoCollection;
 use rusqlite::Connection;
 
 use model::repository::Folder;
@@ -15,9 +16,10 @@ use crate::model::error::folder_errors::{
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
+use crate::model::response::TagApi;
 use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
-use crate::service::{file_service, tag_service};
+use crate::service::{file_service, folder_service, tag_service};
 use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
@@ -228,6 +230,38 @@ pub fn get_folders_by_any_tag(
         });
     }
     Ok(converted_folders)
+}
+
+/// will reduce a list of folders down to the first one that has all the tags
+/// the folders passed must be all the folders retrieved in [folder_service::get_folders_by_any_tag]
+pub fn reduce_folders_by_tag(
+    folders: &HashSet<FolderResponse>,
+    tags: &HashSet<String>,
+) -> Result<HashSet<FolderResponse>, GetFolderError> {
+    // an index of the contents of condensed, to easily look up entries.
+    let mut condensed_list: HashMap<u32, FolderResponse> = HashMap::new();
+    // this will never change, because sometimes we need to pull folder info no longer in the condensed list if we're a child
+    let mut input_index: HashMap<u32, &FolderResponse> = HashMap::new();
+    for folder in folders {
+        // I don't like having to clone all the folders, but with just references the compiler complains about reference lifetimes
+        condensed_list.insert(folder.id, folder.clone());
+        input_index.insert(folder.id, folder);
+    }
+    let con: Connection = open_connection();
+    for (folder_id, folder) in input_index.iter() {
+        // 1. skip if we're not in condensed_list; we were removed in an earlier step
+        if !condensed_list.contains_key(folder_id) {
+            continue;
+        }
+        // TODO 2. get all parent folder IDs, take their tags for ourself, and remove those parents from condensed_list
+        // TODO 3. get all children folder IDs, give them our tags, and remove ourself from condensed_list
+        // TODO 4. remove all children who only have the same tags as us, because they're not the earliest with all tags (or they will never have all tags)
+        // TODO 5. remove ourself from condensed_list if we do not have all tags
+    }
+    con.close().unwrap();
+    let copied: HashSet<FolderResponse> =
+        condensed_list.into_iter().map(|(_, v)| v.clone()).collect();
+    Ok(copied)
 }
 
 // private functions
@@ -682,6 +716,153 @@ mod update_folder_tests {
             tags: vec![],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod reduce_folders_by_tag_tests {
+    use std::collections::HashSet;
+
+    use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
+    use crate::service::folder_service::reduce_folders_by_tag;
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, refresh_db};
+
+    #[test]
+    fn reduce_folders_by_tag_works() {
+        refresh_db();
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_folder_db_entry("top2", None); // 3
+        create_folder_db_entry("bottom", Some(2)); // 4
+        create_folder_db_entry("irrelevant 5", None); // 5
+        create_folder_db_entry("irrelevant 6", None); // 6
+        create_folder_db_entry("irrelevant 7", None); // 7
+        create_folder_db_entry("all tags", Some(5)); // 8
+        create_folder_db_entry("irrelevant 9", None); // 9
+        create_folder_db_entry("someotherfolder", Some(7)); // 10
+        create_tag_folders("tag1", vec![1, 4, 8]);
+        create_tag_folders("tag2", vec![2, 3, 8]);
+        create_tag_folders("tag3", vec![2, 10, 8]);
+        let folders = HashSet::from([
+            FolderResponse {
+                id: 1,
+                parent_id: None,
+                path: "".to_string(),
+                name: "top".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 2,
+                parent_id: Some(1),
+                path: "".to_string(),
+                name: "middle".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag3".to_string(),
+                    },
+                ],
+            },
+            FolderResponse {
+                id: 3,
+                parent_id: None,
+                path: "".to_string(),
+                name: "top2".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag2".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 4,
+                parent_id: Some(2),
+                path: "".to_string(),
+                name: "bottom".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 8,
+                parent_id: Some(5),
+                path: "".to_string(),
+                name: "all tags".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag1".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag3".to_string(),
+                    },
+                ],
+            },
+            FolderResponse {
+                id: 10,
+                parent_id: Some(7),
+                path: "".to_string(),
+                name: "someotherfolder".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                }],
+            },
+        ]);
+
+        let expected = HashSet::from([
+            FolderResponse {
+                id: 2,
+                parent_id: Some(1),
+                path: "".to_string(),
+                name: "middle".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![],
+            },
+            FolderResponse {
+                id: 8,
+                parent_id: Some(5),
+                path: "".to_string(),
+                name: "all tags".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![],
+            },
+        ]);
+
+        let actual = reduce_folders_by_tag(
+            &folders,
+            &HashSet::from(["tag1".to_string(), "tag2".to_string(), "tag3".to_string()]),
+        )
+        .unwrap();
+        assert_eq!(expected, actual);
         cleanup();
     }
 }

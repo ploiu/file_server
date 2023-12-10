@@ -208,7 +208,7 @@ pub fn get_folders_by_any_tag(
     // TODO look at rarray to pass a collection as a parameter (https://docs.rs/rusqlite/0.29.0/rusqlite/vtab/array/index.html)
     let joined_tags = tags
         .iter()
-        .map(|t| format!("'{t}'"))
+        .map(|t| format!("'{}'", t.replace("'", "''")))
         .reduce(|combined, current| format!("{combined},{current}"))
         .unwrap();
     let query = include_str!("../assets/queries/folder/get_folders_by_any_tag.sql");
