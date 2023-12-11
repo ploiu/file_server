@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 use rusqlite::{params, Connection, Rows};
 
@@ -222,6 +222,35 @@ pub fn get_folders_by_any_tag(
     Ok(folders)
 }
 
+pub fn get_parent_folders_by_tag<'a, T: IntoIterator<Item = &'a String> + Clone>(
+    folder_id: u32,
+    tags: &T,
+    con: &Connection,
+) -> Result<HashMap<u32, HashSet<String>>, rusqlite::Error> {
+    let query = include_str!("../assets/queries/folder/get_parent_folders_with_tags.sql");
+    // because I'm not using a rusqlite extension, I have to join the list of tags manually
+    let joined_tags = tags
+        .clone()
+        .into_iter()
+        .map(|t| format!("'{}'", t.replace("'", "''")))
+        .reduce(|combined, current| format!("{combined},{current}"))
+        .unwrap();
+    let built_query = query.replace("?2", joined_tags.as_str());
+    let mut pst = con.prepare(built_query.as_str())?;
+    let mut pairs: HashMap<u32, HashSet<String>> = HashMap::new();
+    let mut rows = pst.query([folder_id])?;
+    while let Some(row) = rows.next()? {
+        let folder_id: u32 = row.get(0)?;
+        let tags: String = row.get(1)?;
+        let split_tags = tags
+            .split(',')
+            .map(|s| s.to_string())
+            .collect::<HashSet<String>>();
+        pairs.insert(folder_id, split_tags);
+    }
+    Ok(pairs)
+}
+
 fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
     let id: Option<u32> = row.get(0)?;
     let name: String = row.get(1)?;
@@ -337,6 +366,28 @@ mod get_folders_by_any_tag_tests {
             parent_id: Some(1),
             name: "some tags".to_string(),
         }));
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_parent_folders_by_tag_tests {
+    use crate::repository::folder_repository::get_parent_folders_by_tag;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
+    use std::collections::HashSet;
+
+    #[test]
+    fn retrieves_parent_folders() {
+        refresh_db();
+        create_folder_db_entry("top", None);
+        create_folder_db_entry("middle", Some(1));
+        create_folder_db_entry("bottom", Some(2));
+        create_tag_folder("tag", 1);
+        let con = open_connection();
+        let res = get_parent_folders_by_tag(3, &[&"tag".to_string()], &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(HashSet::from(["tag".to_string()]), *res.get(&1).unwrap());
         cleanup();
     }
 }

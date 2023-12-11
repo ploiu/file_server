@@ -77,7 +77,6 @@ fn rocket() -> Rocket<Build> {
 
 ///
 /// Look at .run/test.run.xml for run arguments - since there's ops on the same db file we need to run with 1 thread
-/// TODO maybe change file directory for each test...that might make it so we can run tests in parallel
 ///
 #[cfg(test)]
 mod api_tests {

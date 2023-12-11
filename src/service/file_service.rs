@@ -20,7 +20,6 @@ use crate::repository;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 
-// TODO maybe turn into a macro so it gets inlined. I'm worried about performance for every single file system operation
 #[inline]
 #[cfg(not(test))]
 pub fn file_dir() -> String {

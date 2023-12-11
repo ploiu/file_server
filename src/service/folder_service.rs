@@ -16,7 +16,6 @@ use crate::model::error::folder_errors::{
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
-use crate::model::response::TagApi;
 use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, folder_service, tag_service};
@@ -253,7 +252,26 @@ pub fn reduce_folders_by_tag(
         if !condensed_list.contains_key(folder_id) {
             continue;
         }
-        // TODO 2. get all parent folder IDs, take their tags for ourself, and remove those parents from condensed_list
+        // 2. get all parent folder IDs, take their tags for ourself, and remove those parents from condensed_list
+        let mut our_tag_titles = folder
+            .tags
+            .iter()
+            .map(|t| t.title.clone())
+            .collect::<HashSet<String>>();
+        let parents = match folder_repository::get_parent_folders_by_tag(*folder_id, &tags, &con) {
+            Ok(p) => p,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!("Failed to pull parent folders. Exception is {e}");
+                return Err(GetFolderError::DbFailure);
+            }
+        };
+        for (parent_id, parent_tags) in parents {
+            parent_tags.into_iter().for_each(|t| {
+                our_tag_titles.insert(t);
+            });
+            condensed_list.remove(&parent_id);
+        }
         // TODO 3. get all children folder IDs, give them our tags, and remove ourself from condensed_list
         // TODO 4. remove all children who only have the same tags as us, because they're not the earliest with all tags (or they will never have all tags)
         // TODO 5. remove ourself from condensed_list if we do not have all tags
