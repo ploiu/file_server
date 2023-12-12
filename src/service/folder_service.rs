@@ -3,7 +3,6 @@ use std::fs;
 use std::path::Path;
 
 use regex::Regex;
-use rocket::http::ext::IntoCollection;
 use rusqlite::Connection;
 
 use model::repository::Folder;
@@ -16,6 +15,7 @@ use crate::model::error::folder_errors::{
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
+use crate::model::response::TagApi;
 use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, folder_service, tag_service};
@@ -272,9 +272,15 @@ pub fn reduce_folders_by_tag(
             });
             condensed_list.remove(&parent_id);
         }
-        // TODO 3. get all children folder IDs, give them our tags, and remove ourself from condensed_list
-        // TODO 4. remove all children who only have the same tags as us, because they're not the earliest with all tags (or they will never have all tags)
-        // TODO 5. remove ourself from condensed_list if we do not have all tags
+        // 3. get all children folder IDs, give them our tags, and remove ourself from condensed_list if we have children in condensed_list
+        if let Err(e) = give_children_tags(&mut condensed_list, &con, *folder_id, &our_tag_titles) {
+            con.close().unwrap();
+            return Err(e);
+        };
+        // 5. remove ourself from condensed_list if we do not have all tags
+        if our_tag_titles != *tags {
+            condensed_list.remove(folder_id);
+        }
     }
     con.close().unwrap();
     let copied: HashSet<FolderResponse> =
@@ -283,6 +289,60 @@ pub fn reduce_folders_by_tag(
 }
 
 // private functions
+fn give_children_tags(
+    condensed_list: &mut HashMap<u32, FolderResponse>,
+    con: &Connection,
+    folder_id: u32,
+    our_tag_titles: &HashSet<String>,
+) -> Result<(), GetFolderError> {
+    let all_child_folders_ids = match folder_repository::get_all_child_folder_ids(folder_id, &con) {
+        Ok(ids) => ids
+            .into_iter()
+            .filter(|id| condensed_list.contains_key(id))
+            .collect::<Vec<u32>>(),
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
+            );
+            return Err(GetFolderError::DbFailure);
+        }
+    };
+    for id in all_child_folders_ids.iter() {
+        let matching_folder = condensed_list.get_mut(id).unwrap();
+        let matching_folder_tags = matching_folder.tags.clone();
+        let combined_tag_titles = matching_folder_tags
+            .iter()
+            .map(|t| t.title.clone())
+            .chain(our_tag_titles.clone().into_iter());
+        let combined_tags = matching_folder_tags
+            .iter()
+            .map(|t| &t.title)
+            .chain(our_tag_titles.iter())
+            .map(|title| TagApi {
+                id: None,
+                title: title.clone(),
+            })
+            .collect::<Vec<TagApi>>();
+        *matching_folder = FolderResponse {
+            id: matching_folder.id,
+            parent_id: matching_folder.parent_id,
+            path: matching_folder.path.clone(),
+            name: matching_folder.name.clone(),
+            folders: vec![],
+            files: vec![],
+            tags: combined_tags,
+        };
+        // 4. remove all children who only have the same tags as us, because they're not the earliest with all tags (or they will never have all tags)
+        if HashSet::from_iter(combined_tag_titles) == *our_tag_titles {
+            condensed_list.remove(id);
+        }
+    }
+    if !all_child_folders_ids.is_empty() {
+        condensed_list.remove(&folder_id);
+    }
+    Ok(())
+}
+
 fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
     // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
     let db_folder = if let Some(0) = id { None } else { id };
@@ -750,25 +810,68 @@ mod reduce_folders_by_tag_tests {
     #[test]
     fn reduce_folders_by_tag_works() {
         refresh_db();
-        create_folder_db_entry("top", None); // 1
-        create_folder_db_entry("middle", Some(1)); // 2
-        create_folder_db_entry("top2", None); // 3
-        create_folder_db_entry("bottom", Some(2)); // 4
-        create_folder_db_entry("irrelevant 5", None); // 5
-        create_folder_db_entry("irrelevant 6", None); // 6
-        create_folder_db_entry("irrelevant 7", None); // 7
-        create_folder_db_entry("all tags", Some(5)); // 8
-        create_folder_db_entry("irrelevant 9", None); // 9
-        create_folder_db_entry("someotherfolder", Some(7)); // 10
-        create_tag_folders("tag1", vec![1, 4, 8]);
-        create_tag_folders("tag2", vec![2, 3, 8]);
-        create_tag_folders("tag3", vec![2, 10, 8]);
+        create_folder_db_entry("A", None); // 1
+        create_folder_db_entry("AB", Some(1)); // 2
+        create_folder_db_entry("ABB", Some(1)); // 3
+        create_folder_db_entry("AC", Some(2)); // 4
+        create_folder_db_entry("Dummy5", None); // 5
+        create_folder_db_entry("E", None); // 6
+        create_folder_db_entry("EB", Some(6)); // 7
+        create_folder_db_entry("EC", Some(7)); // 8
+        create_folder_db_entry("Dummy9", None); // 9
+        create_folder_db_entry("Dummy10", None); // 10
+        create_folder_db_entry("Dummy11", None); // 11
+        create_folder_db_entry("Dummy12", None); // 12
+        create_folder_db_entry("Dummy13", None); // 13
+        create_folder_db_entry("XA", None); // 14
+        create_folder_db_entry("X", Some(14)); // 15
+        create_folder_db_entry("Y", None); // 16
+        create_folder_db_entry("Z", Some(16)); // 17
+        create_tag_folders("tag1", vec![6, 16, 17, 2, 15, 14, 1]);
+        create_tag_folders("tag3", vec![4, 15, 8, 3]);
+        create_tag_folders("tag2", vec![2, 15, 3, 7]);
         let folders = HashSet::from([
             FolderResponse {
-                id: 1,
+                id: 6,
                 parent_id: None,
                 path: "".to_string(),
-                name: "top".to_string(),
+                name: "E".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 16,
+                parent_id: None,
+                path: "".to_string(),
+                name: "Y".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 4,
+                parent_id: Some(2),
+                path: "".to_string(),
+                name: "AC".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 17,
+                parent_id: Some(16),
+                path: "".to_string(),
+                name: "Z".to_string(),
                 folders: vec![],
                 files: vec![],
                 tags: vec![TagApi {
@@ -780,7 +883,59 @@ mod reduce_folders_by_tag_tests {
                 id: 2,
                 parent_id: Some(1),
                 path: "".to_string(),
-                name: "middle".to_string(),
+                name: "AB".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag1".to_string(),
+                    },
+                ],
+            },
+            FolderResponse {
+                id: 15,
+                parent_id: Some(14),
+                path: "".to_string(),
+                name: "X".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag3".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag1".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                ],
+            },
+            FolderResponse {
+                id: 8,
+                parent_id: Some(7),
+                path: "".to_string(),
+                name: "EC".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 3,
+                parent_id: Some(1),
+                path: "".to_string(),
+                name: "ABB".to_string(),
                 folders: vec![],
                 files: vec![],
                 tags: vec![
@@ -795,10 +950,10 @@ mod reduce_folders_by_tag_tests {
                 ],
             },
             FolderResponse {
-                id: 3,
-                parent_id: None,
+                id: 7,
+                parent_id: Some(6),
                 path: "".to_string(),
-                name: "top2".to_string(),
+                name: "EB".to_string(),
                 folders: vec![],
                 files: vec![],
                 tags: vec![TagApi {
@@ -807,10 +962,10 @@ mod reduce_folders_by_tag_tests {
                 }],
             },
             FolderResponse {
-                id: 4,
-                parent_id: Some(2),
+                id: 1,
+                parent_id: None,
                 path: "".to_string(),
-                name: "bottom".to_string(),
+                name: "A".to_string(),
                 folders: vec![],
                 files: vec![],
                 tags: vec![TagApi {
@@ -819,10 +974,49 @@ mod reduce_folders_by_tag_tests {
                 }],
             },
             FolderResponse {
-                id: 8,
-                parent_id: Some(5),
+                id: 14,
+                parent_id: None,
                 path: "".to_string(),
-                name: "all tags".to_string(),
+                name: "XA".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+        ]);
+
+        let expected = HashSet::from([
+            FolderResponse {
+                id: 4,
+                parent_id: Some(2),
+                path: "".to_string(),
+                name: "AC".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 8,
+                parent_id: Some(7),
+                path: "".to_string(),
+                name: "EC".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 15,
+                parent_id: Some(14),
+                path: "".to_string(),
+                name: "X".to_string(),
                 folders: vec![],
                 files: vec![],
                 tags: vec![
@@ -841,45 +1035,36 @@ mod reduce_folders_by_tag_tests {
                 ],
             },
             FolderResponse {
-                id: 10,
-                parent_id: Some(7),
-                path: "".to_string(),
-                name: "someotherfolder".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag3".to_string(),
-                }],
-            },
-        ]);
-
-        let expected = HashSet::from([
-            FolderResponse {
-                id: 2,
+                id: 3,
                 parent_id: Some(1),
                 path: "".to_string(),
-                name: "middle".to_string(),
+                name: "ABB".to_string(),
                 folders: vec![],
                 files: vec![],
-                tags: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag3".to_string(),
+                    },
+                ],
             },
-            FolderResponse {
-                id: 8,
-                parent_id: Some(5),
-                path: "".to_string(),
-                name: "all tags".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![],
-            },
-        ]);
+        ])
+        .into_iter()
+        .map(|f| f.id)
+        .collect::<HashSet<u32>>();
 
         let actual = reduce_folders_by_tag(
             &folders,
             &HashSet::from(["tag1".to_string(), "tag2".to_string(), "tag3".to_string()]),
         )
-        .unwrap();
+        .unwrap()
+        .into_iter()
+        .map(|f| f.id)
+        .collect::<HashSet<u32>>();
         assert_eq!(expected, actual);
         cleanup();
     }
