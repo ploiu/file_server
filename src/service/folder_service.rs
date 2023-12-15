@@ -278,7 +278,11 @@ pub fn reduce_folders_by_tag(
             return Err(e);
         };
         // 5. remove ourself from condensed_list if we do not have all tags
-        if our_tag_titles != *tags {
+        let intersected: HashSet<String> = our_tag_titles
+            .intersection(tags)
+            .map(|it| it.clone())
+            .collect();
+        if intersected != *tags {
             condensed_list.remove(folder_id);
         }
     }
@@ -289,24 +293,27 @@ pub fn reduce_folders_by_tag(
 }
 
 // private functions
+/// used as part of [reduce_folders_by_tag];
+/// handles giving all children our tags, and removing ourself if we have any children with tags we don't have
 fn give_children_tags(
     condensed_list: &mut HashMap<u32, FolderResponse>,
     con: &Connection,
     folder_id: u32,
     our_tag_titles: &HashSet<String>,
 ) -> Result<(), GetFolderError> {
-    let all_child_folders_ids = match folder_repository::get_all_child_folder_ids(folder_id, &con) {
-        Ok(ids) => ids
-            .into_iter()
-            .filter(|id| condensed_list.contains_key(id))
-            .collect::<Vec<u32>>(),
-        Err(e) => {
-            log::error!(
-                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
-            );
-            return Err(GetFolderError::DbFailure);
-        }
-    };
+    let all_child_folders_ids =
+        match folder_repository::get_all_child_folder_ids(&[folder_id], &con) {
+            Ok(ids) => ids
+                .into_iter()
+                .filter(|id| condensed_list.contains_key(id))
+                .collect::<Vec<u32>>(),
+            Err(e) => {
+                log::error!(
+                    "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
+                );
+                return Err(GetFolderError::DbFailure);
+            }
+        };
     for id in all_child_folders_ids.iter() {
         let matching_folder = condensed_list.get_mut(id).unwrap();
         let matching_folder_tags = matching_folder.tags.clone();
@@ -540,7 +547,8 @@ fn does_file_exist(
     folder_id: Option<u32>,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    let matching_file = folder_repository::get_child_files(folder_id, con)?
+    let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or(vec![]);
+    let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
         .iter()
         // this is required because apparently the file is dropped immediately when it's used...
         .map(|file| FileRecord {
@@ -558,7 +566,7 @@ fn is_attempt_move_to_sub_child(
     new_parent_id: &u32,
     con: &Connection,
 ) -> Result<bool, UpdateFolderError> {
-    match folder_repository::get_all_child_folder_ids(*folder_id, con) {
+    match folder_repository::get_all_child_folder_ids(&[*folder_id], con) {
         Ok(ids) => {
             if ids.contains(new_parent_id) {
                 Err(UpdateFolderError::NotAllowed)
@@ -587,7 +595,8 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileApi>, GetChildFilesEr
         };
     }
     // now we can retrieve all the file records in this folder
-    let child_files = match folder_repository::get_child_files(id, &con) {
+    let unwrapped_id = id.map(|it| vec![it]).unwrap_or(vec![]);
+    let child_files = match folder_repository::get_child_files(unwrapped_id, &con) {
         Ok(files) => files,
         Err(e) => {
             con.close().unwrap();
@@ -627,8 +636,8 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         }
     })?;
     // now that we have the folder, we can delete all the files for that folder
-    let files = folder_repository::get_child_files(Some(id), con)
-        .map_err(|_| DeleteFolderError::DbFailure)?;
+    let files =
+        folder_repository::get_child_files([id], con).map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(e) if e == DeleteFileError::NotFound => {}
@@ -800,12 +809,16 @@ mod update_folder_tests {
 
 #[cfg(test)]
 mod reduce_folders_by_tag_tests {
+    use rocket::serde::__private::de::TagOrContentField::Tag;
     use std::collections::HashSet;
 
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::folder_service::reduce_folders_by_tag;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, refresh_db};
+    use crate::test::{
+        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,
+        create_tag_folders, refresh_db,
+    };
 
     #[test]
     fn reduce_folders_by_tag_works() {
@@ -1065,6 +1078,71 @@ mod reduce_folders_by_tag_tests {
         .into_iter()
         .map(|f| f.id)
         .collect::<HashSet<u32>>();
+        assert_eq!(expected, actual);
+        cleanup();
+    }
+
+    #[test]
+    fn reduce_folders_by_tag_keeps_first_folder_with_all_tags() {
+        refresh_db();
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_folder_db_entry("bottom", Some(2)); // 3
+        create_file_db_entry("top file", Some(1));
+        create_file_db_entry("bottom file", Some(3));
+        create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
+        create_tag_folder("tag2", 3); // tag2 only on bottom folder
+        let input_folders = HashSet::from([
+            FolderResponse {
+                id: 2,
+                parent_id: Some(1),
+                name: "middle".to_string(),
+                path: "".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag2".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 3,
+                parent_id: Some(2),
+                name: "bottom".to_string(),
+                path: "".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                }],
+            },
+            FolderResponse {
+                id: 1,
+                parent_id: None,
+                name: "top".to_string(),
+                path: "".to_string(),
+                folders: vec![],
+                files: vec![],
+                tags: vec![
+                    TagApi {
+                        id: None,
+                        title: "tag1".to_string(),
+                    },
+                    TagApi {
+                        id: None,
+                        title: "tag2".to_string(),
+                    },
+                ],
+            },
+        ]);
+        let expected: HashSet<u32> = HashSet::<u32>::from([1u32]);
+        let actual: HashSet<u32> =
+            reduce_folders_by_tag(&input_folders, &HashSet::from(["tag1".to_string()]))
+                .unwrap()
+                .into_iter()
+                .map(|it| it.id)
+                .collect();
         assert_eq!(expected, actual);
         cleanup();
     }

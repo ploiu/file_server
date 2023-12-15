@@ -835,7 +835,7 @@ mod folder_tests {
         assert_eq!(res_body.message, "A file with that name already exists.");
         // verify the database hasn't changed (file id 1 should be named file in root folder)
         let con = open_connection();
-        let root_files = folder_repository::get_child_files(None, &con).unwrap_or(vec![]);
+        let root_files = folder_repository::get_child_files([], &con).unwrap_or(vec![]);
         assert_eq!(
             root_files[0],
             FileRecord {

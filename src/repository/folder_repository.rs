@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use rocket::http::ext::IntoCollection;
 use rusqlite::{params, Connection, Rows};
 
 use crate::model::repository;
@@ -120,12 +121,13 @@ pub fn get_all_parent_folders(
     Ok(parents)
 }
 
-// TODO move to file_repository
-pub fn get_child_files(
-    id: Option<u32>,
+pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
+    ids: T,
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
-    let mut pst = if id.is_some() {
+    // `is_empty` is not part of a trait, so we have to convert ids
+    let ids: HashSet<u32> = ids.clone().into_iter().collect();
+    let mut pst = if !ids.is_empty() {
         con.prepare(include_str!(
             "../assets/queries/folder_file/get_child_files_with_id.sql"
         ))
@@ -136,8 +138,13 @@ pub fn get_child_files(
         ))
         .unwrap()
     };
-    let mapped = if id.is_some() {
-        pst.query_map([id.unwrap()], file_repository::map_file)?
+    let mapped = if !ids.is_empty() {
+        let joined_ids = ids
+            .into_iter()
+            .map(|id| format!("{id}").to_string())
+            .reduce(|combined, current| format!("{combined},{current}").to_string())
+            .expect("Failed to reduce ids in get_child_files!");
+        pst.query_map([joined_ids], file_repository::map_file)?
     } else {
         pst.query_map([], file_repository::map_file)?
     };
@@ -187,14 +194,27 @@ pub fn link_folder_to_file(
 }
 
 /// returns all the ids of all child folders
-pub fn get_all_child_folder_ids(id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
+    input_ids: &T,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!(
             "../assets/queries/folder/get_child_folder_ids_recursive.sql"
         ))
         .unwrap();
-    let mut ids = Vec::<u32>::new();
-    let res = pst.query_map([id], |row| row.get(0))?;
+    let input_ids: HashSet<u32> = input_ids.clone().into_iter().collect();
+    let mut ids: Vec<u32> = Vec::new();
+    let joined_ids = if input_ids.is_empty() {
+        String::new()
+    } else {
+        input_ids
+            .into_iter()
+            .map(|id| { format!("{id}") }.to_string())
+            .reduce(|combined, current| format!("{combined},{current}"))
+            .unwrap()
+    };
+    let res = pst.query_map([joined_ids], |row| row.get(0))?;
     for i in res.into_iter() {
         ids.push(i.unwrap());
     }
@@ -372,10 +392,11 @@ mod get_folders_by_any_tag_tests {
 
 #[cfg(test)]
 mod get_parent_folders_by_tag_tests {
+    use std::collections::HashSet;
+
     use crate::repository::folder_repository::get_parent_folders_by_tag;
     use crate::repository::open_connection;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
-    use std::collections::HashSet;
 
     #[test]
     fn retrieves_parent_folders() {

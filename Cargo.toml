@@ -21,3 +21,7 @@ simple_logger = { version = "4.3.0", features = ["stderr", "colors", "timestamps
 
 # misc
 regex = "1.10.2"
+
+# disable when not profiling
+[profile.release]
+debug = false

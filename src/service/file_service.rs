@@ -292,14 +292,48 @@ pub fn search_files_new(
                 return Err(SearchFileError::TagError);
             }
         };
-        // TODO step 3: reduce all the folders to the first folder with all the applied tags
-        // TODO step 4: for each folder (probably new function):
-        // TODO  1. retrieve all child folders recursively
-        // TODO  2. retrieve all immediate child files ---------------------V
-        // TODO  3. retrieve all child files of all child folders-----------|>these 2 can be combined with a function that gets all child files for a list of folder IDs
+        // step 3: reduce all the folders to the first folder with all the applied tags
+        let reduced =
+            match folder_service::reduce_folders_by_tag(&folders_with_any_tag, &search_tags) {
+                Ok(folders) => folders,
+                Err(_) => {
+                    con.close().unwrap();
+                    log::error!("Failed to search files!");
+                    return Err(SearchFileError::DbError);
+                }
+            };
+        // step 4: for each folder (probably new function):
+        // 1. retrieve all child folders recursively
+        let reduced_ids: Vec<u32> = reduced.iter().map(|f| f.id.clone()).collect();
+        let all_relevant_folder_ids: HashSet<u32> =
+            match folder_repository::get_all_child_folder_ids(&reduced_ids, &con) {
+                Ok(f) => reduced_ids.into_iter().chain(f.into_iter()).collect(),
+                Err(e) => {
+                    con.close().unwrap();
+                    log::error!("Failed to retrieve all child folder IDs. Exception is {e}");
+                    return Err(SearchFileError::DbError);
+                }
+            };
+        println!("{:?}", all_relevant_folder_ids.clone());
+        //  2. retrieve all child files of all child folders-----------|>these 2 can be combined with a function that gets all child files for a list of folder IDs
+        let mut child_files: HashSet<FileRecord> = if all_relevant_folder_ids.is_empty() {
+            HashSet::new()
+        } else {
+            match folder_repository::get_child_files(all_relevant_folder_ids, &con) {
+                Ok(cf) => cf.into_iter().collect(),
+                Err(e) => {
+                    con.close().unwrap();
+                    log::error!(
+                        "Failed to retrieve child files when searching files. Exception is {e}"
+                    );
+                    return Err(SearchFileError::DbError);
+                }
+            }
+        };
+        println!("test");
         // TODO step 5: for each folder not deduplicated:
         // TODO  1. retrieve all child folders recursively
-        // TODO  2. retrieve all child files of all child folders (+ original folder) using method in #4.3 above
+        // TODO  2. retrieve all child files of all child folders (+ original folder) using method in #4.2 above
         // TODO  3. filter those files to only those with the rest of the tags (maybe convert to a single db query - might be weird)
     } else {
         panic!("unimplemented");
@@ -475,9 +509,9 @@ fn check_file_in_dir(
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let db_parent_id = if 0 == file_input.folder_id() {
-        None
+        vec![]
     } else {
-        Some(file_input.folder_id())
+        vec![file_input.folder_id()]
     };
     let child_files = folder_repository::get_child_files(db_parent_id, &con);
     con.close().unwrap();
@@ -512,7 +546,6 @@ fn determine_file_name(root_name: &String, extension: &Option<String>) -> String
 #[cfg(test)]
 mod tests {
     use super::determine_file_name;
-    use crate::service::folder_service;
 
     #[test]
     fn determine_file_name_with_ext() {
