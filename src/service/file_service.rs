@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -6,18 +6,19 @@ use std::string::ToString;
 
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
-use rusqlite::Connection;
+use rusqlite::{Connection, Error};
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
-use crate::model::repository::FileRecord;
+use crate::model::repository::{FileRecord, Tag};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
+use crate::model::response::TagApi;
 use crate::repository;
-use crate::repository::{file_repository, folder_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::{folder_service, tag_service};
 
 #[inline]
@@ -273,18 +274,41 @@ pub fn search_files_new(
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
     let con: Connection = open_connection();
-    let matching_files: HashSet<FileRecord> = HashSet::new();
+    let mut matching_files: HashSet<FileApi> = HashSet::new();
     if search_title.is_empty() {
-        // step 1: retrieve all files from the database that have all of the tags directly on them
-        let mut matching_files = match file_repository::get_files_by_all_tags(&search_tags, &con) {
-            Ok(files) => files,
+        // 1): retrieve all files from the database that have all of the tags directly on them
+        match file_repository::get_files_by_all_tags(&search_tags, &con) {
+            Ok(files) => {
+                for file in files {
+                    let tags: Vec<TagApi> = match tag_repository::get_tags_on_file(
+                        file.id.unwrap(),
+                        &con,
+                    ) {
+                        Ok(t) => t.into_iter().map(TagApi::from).collect(),
+                        Err(e) => {
+                            con.close().unwrap();
+                            log::error!(
+                                "Search: Failed to retrieve tags for file {:?}. Exception is {e}",
+                                file
+                            );
+                            return Err(SearchFileError::TagError);
+                        }
+                    };
+                    matching_files.insert(FileApi {
+                        id: file.id.unwrap(),
+                        folder_id: file.parent_id,
+                        name: file.name.clone(),
+                        tags,
+                    });
+                }
+            }
             Err(e) => {
                 log::error!("Failed to get all files by tags. Exception is {e}");
                 con.close().unwrap();
                 return Err(SearchFileError::DbError);
             }
         };
-        // step 2: retrieve all folders that have any passed tag
+        // 2): retrieve all folders that have any passed tag
         let folders_with_any_tag = match folder_service::get_folders_by_any_tag(&search_tags) {
             Ok(f) => f,
             Err(_) => {
@@ -292,7 +316,12 @@ pub fn search_files_new(
                 return Err(SearchFileError::TagError);
             }
         };
-        // step 3: reduce all the folders to the first folder with all the applied tags
+        // index of all our folders to make things easier to lookup
+        let mut folder_index: HashMap<u32, &FolderResponse> = HashMap::new();
+        for folder in folders_with_any_tag.iter() {
+            folder_index.insert(folder.id, folder);
+        }
+        // 3): reduce all the folders to the first folder with all the applied tags
         let reduced =
             match folder_service::reduce_folders_by_tag(&folders_with_any_tag, &search_tags) {
                 Ok(folders) => folders,
@@ -302,8 +331,8 @@ pub fn search_files_new(
                     return Err(SearchFileError::DbError);
                 }
             };
-        // step 4: for each folder (probably new function):
-        // 1. retrieve all child folders recursively
+        // 4): for each folder (probably new function):
+        // 4.1) retrieve all child folders recursively
         let reduced_ids: Vec<u32> = reduced.iter().map(|f| f.id.clone()).collect();
         let all_relevant_folder_ids: HashSet<u32> =
             match folder_repository::get_all_child_folder_ids(&reduced_ids, &con) {
@@ -314,13 +343,39 @@ pub fn search_files_new(
                     return Err(SearchFileError::DbError);
                 }
             };
-        println!("{:?}", all_relevant_folder_ids.clone());
-        //  2. retrieve all child files of all child folders-----------|>these 2 can be combined with a function that gets all child files for a list of folder IDs
-        let mut child_files: HashSet<FileRecord> = if all_relevant_folder_ids.is_empty() {
-            HashSet::new()
-        } else {
-            match folder_repository::get_child_files(all_relevant_folder_ids, &con) {
-                Ok(cf) => cf.into_iter().collect(),
+        //  4.2) retrieve all child files of all child folders
+        let deduped_child_files = match get_child_files(&all_relevant_folder_ids, &con) {
+            Ok(f) => f,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to retrieve child files when searching files. Exception is {e}"
+                );
+                return Err(SearchFileError::DbError);
+            }
+        };
+        // 5: for each folder not deduplicated:
+        let non_duped_base_folder_ids: HashSet<u32> = folders_with_any_tag
+            .difference(&reduced)
+            .map(|f| f.id)
+            .collect();
+        // 5.1) retrieve all child folders recursively
+        let non_duped_child_folder_ids: HashSet<u32> = match folder_repository::get_all_child_folder_ids(&non_duped_base_folder_ids, &con) {
+            Ok(f) => f,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!("Failed to retrieve non-duplicated child folder IDs in search. Exception is {e}");
+                return Err(SearchFileError::DbError);
+            }
+        }.into_iter().collect();
+        let non_duped_folder_ids: HashSet<u32> = non_duped_base_folder_ids
+            .union(&non_duped_child_folder_ids)
+            .map(|it| it.clone())
+            .collect();
+        // 5.2) retrieve all child files of all child folders (+ original folder) using method in #4.2 above
+        let remaining_child_files: HashSet<FileApi> =
+            match get_child_files(&non_duped_folder_ids, &con) {
+                Ok(f) => f.into_iter().collect(),
                 Err(e) => {
                     con.close().unwrap();
                     log::error!(
@@ -328,17 +383,33 @@ pub fn search_files_new(
                     );
                     return Err(SearchFileError::DbError);
                 }
-            }
-        };
-        println!("test");
-        // TODO step 5: for each folder not deduplicated:
-        // TODO  1. retrieve all child folders recursively
-        // TODO  2. retrieve all child files of all child folders (+ original folder) using method in #4.2 above
-        // TODO  3. filter those files to only those with the rest of the tags (maybe convert to a single db query - might be weird)
+            };
+        // 5.3) filter those files to only those with the rest of the tags
+        remaining_child_files
+            .into_iter()
+            .filter(|file| {
+                let parent_id = file.folder_id.unwrap_or(0);
+                let parent_tags: HashSet<String> = folder_index
+                    .get(&parent_id)
+                    .unwrap()
+                    .tags
+                    .iter()
+                    .map(|t| t.title.clone())
+                    .collect();
+                let missing_tags: HashSet<&String> = search_tags.difference(&parent_tags).collect();
+                let file_tags: HashSet<&String> = file.tags.iter().map(|t| &t.title).collect();
+                parent_tags != search_tags && file_tags == missing_tags
+            })
+            .for_each(|file| {
+                matching_files.insert(file.clone());
+            });
+        for file in deduped_child_files {
+            matching_files.insert(file);
+        }
     } else {
         panic!("unimplemented");
     }
-    Ok(HashSet::new())
+    Ok(matching_files)
 }
 
 pub fn search_files(
@@ -414,6 +485,33 @@ pub fn search_files(
 }
 
 // ==== private functions ==== \\
+
+fn get_child_files(
+    ids: &HashSet<u32>,
+    con: &Connection,
+) -> Result<HashSet<FileApi>, rusqlite::Error> {
+    let files: HashSet<FileRecord> = if ids.is_empty() {
+        HashSet::new()
+    } else {
+        folder_repository::get_child_files(ids.clone(), con)?
+            .into_iter()
+            .collect()
+    };
+    let mut converted: HashSet<FileApi> = HashSet::new();
+    for file in files {
+        let tags = tag_repository::get_tags_on_file(file.id.unwrap(), con)?
+            .into_iter()
+            .map(TagApi::from)
+            .collect();
+        converted.insert(FileApi {
+            id: file.id.unwrap_or(0),
+            name: file.name.clone(),
+            folder_id: file.parent_id,
+            tags,
+        });
+    }
+    Ok(converted)
+}
 
 fn pull_files_by_tags(search_tags: HashSet<String>) -> Result<HashSet<FileApi>, SearchFileError> {
     let con: Connection = open_connection();
@@ -870,6 +968,7 @@ mod search_files_tests {
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
         create_tag_folder, create_tag_folders, refresh_db,
     };
+    use std::collections::HashSet;
 
     #[test]
     fn search_files_works() {
@@ -961,40 +1060,52 @@ mod search_files_tests {
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
                                       // tag1 should retrieve all files
-        let res = search_files_new("".to_string(), vec!["tag1".to_string()])
-            .unwrap()
-            .into_iter()
-            .collect::<Vec<FileApi>>();
+        let res = search_files_new("".to_string(), vec!["tag1".to_string()]).unwrap();
         assert_eq!(
-            vec![
+            HashSet::from([
                 FileApi {
                     id: 1,
                     name: "top file".to_string(),
-                    folder_id: None,
+                    folder_id: Some(1),
                     tags: vec![],
                 },
                 FileApi {
                     id: 2,
                     name: "bottom file".to_string(),
-                    folder_id: None,
+                    folder_id: Some(3),
                     tags: vec![],
-                },
-            ],
+                }
+            ]),
             res
         );
-        let res = search_files_new("".to_string(), vec!["tag2".to_string()])
-            .unwrap()
-            .into_iter()
-            .collect::<Vec<FileApi>>();
+        let res = search_files_new("".to_string(), vec!["tag2".to_string()]).unwrap();
         assert_eq!(
-            vec![FileApi {
+            HashSet::from([FileApi {
                 id: 2,
                 name: "bottom file".to_string(),
-                folder_id: None,
+                folder_id: Some(3),
                 tags: vec![],
-            }],
+            }]),
             res
         );
+        cleanup();
+    }
+
+    #[test]
+    fn search_files_handles_partial_tag_folders() {
+        refresh_db();
+        create_folder_db_entry("top", None);
+        create_file_db_entry("good", Some(1));
+        create_file_db_entry("bad", Some(1));
+        create_tag_folders("tag1", vec![1]);
+        create_tag_file("tag2", 1);
+        let res: HashSet<String> =
+            search_files_new(String::new(), vec!["tag1".to_string(), "tag2".to_string()])
+                .unwrap()
+                .into_iter()
+                .map(|it| it.name)
+                .collect();
+        assert_eq!(HashSet::from(["good".to_string()]), res);
         cleanup();
     }
 }

@@ -1,3 +1,4 @@
+use rocket::futures::future::join;
 use std::collections::{HashMap, HashSet};
 
 use rocket::http::ext::IntoCollection;
@@ -127,33 +128,11 @@ pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
     // `is_empty` is not part of a trait, so we have to convert ids
     let ids: HashSet<u32> = ids.clone().into_iter().collect();
-    let mut pst = if !ids.is_empty() {
-        con.prepare(include_str!(
-            "../assets/queries/folder_file/get_child_files_with_id.sql"
-        ))
-        .unwrap()
+    if ids.is_empty() {
+        get_child_files_root(con)
     } else {
-        con.prepare(include_str!(
-            "../assets/queries/file/get_child_files_without_id.sql"
-        ))
-        .unwrap()
-    };
-    let mapped = if !ids.is_empty() {
-        let joined_ids = ids
-            .into_iter()
-            .map(|id| format!("{id}").to_string())
-            .reduce(|combined, current| format!("{combined},{current}").to_string())
-            .expect("Failed to reduce ids in get_child_files!");
-        pst.query_map([joined_ids], file_repository::map_file)?
-    } else {
-        pst.query_map([], file_repository::map_file)?
-    };
-
-    let mut files: Vec<repository::FileRecord> = Vec::new();
-    for file in mapped.into_iter() {
-        files.push(file?);
+        get_child_files_non_root(ids, con)
     }
-    Ok(files)
 }
 
 /// deletes a folder and unlinks every file inside of it.
@@ -280,6 +259,39 @@ fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error
         name,
         parent_id,
     })
+}
+
+fn get_child_files_root(con: &Connection) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/file/get_child_files_without_id.sql"
+    ))?;
+    let mapped = pst.query_map([], file_repository::map_file)?;
+    let mut files: Vec<repository::FileRecord> = Vec::new();
+    for file in mapped.into_iter() {
+        files.push(file?);
+    }
+    Ok(files)
+}
+
+fn get_child_files_non_root(
+    ids: HashSet<u32>,
+    con: &Connection,
+) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
+    let query_string = include_str!("../assets/queries/folder_file/get_child_files_with_id.sql");
+    // can't pass a collection of values for a single parameter, and can't combine them and pass as a string param because rusqlite wraps it in '' which we don't want for numeric IDs
+    let joined_ids = ids
+        .into_iter()
+        .map(|id| format!("{id}"))
+        .reduce(|combined, current| format!("{combined}, {current}"))
+        .expect("get_child_files_with_id: failed to reduce id collection");
+    let query_string = query_string.replace("?1", joined_ids.as_str());
+    let mut pst = con.prepare(query_string.as_str())?;
+    let mapped = pst.query_map([], file_repository::map_file)?;
+    let mut files: Vec<repository::FileRecord> = Vec::new();
+    for file in mapped.into_iter() {
+        files.push(file?);
+    }
+    Ok(files)
 }
 
 #[cfg(test)]
@@ -409,6 +421,58 @@ mod get_parent_folders_by_tag_tests {
         let res = get_parent_folders_by_tag(3, &[&"tag".to_string()], &con).unwrap();
         con.close().unwrap();
         assert_eq!(HashSet::from(["tag".to_string()]), *res.get(&1).unwrap());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_child_files_tests {
+    use crate::repository::folder_repository::get_child_files;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, fail, refresh_db};
+    use rusqlite::ToSql;
+    use std::collections::HashSet;
+
+    #[test]
+    fn get_child_files_works_for_root() {
+        refresh_db();
+        create_file_db_entry("test", None);
+        create_file_db_entry("test2", None);
+        create_folder_db_entry("top", None);
+        create_file_db_entry("bad", Some(1));
+        let con = open_connection();
+        let res: HashSet<String> = get_child_files([], &con)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        con.close().unwrap();
+        assert_eq!(
+            HashSet::from(["test".to_string(), "test2".to_string()]),
+            res
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn get_child_files_works_for_non_root() {
+        refresh_db();
+        create_file_db_entry("bad", None);
+        create_folder_db_entry("top", None);
+        create_folder_db_entry("middle", Some(1));
+        create_file_db_entry("good", Some(1));
+        create_file_db_entry("good2", Some(2));
+        let con = open_connection();
+        let res: HashSet<String> = get_child_files([1, 2], &con)
+            .unwrap()
+            .into_iter()
+            .map(|f| f.name)
+            .collect();
+        con.close().unwrap();
+        assert_eq!(
+            HashSet::from(["good".to_string(), "good2".to_string()]),
+            res
+        );
         cleanup();
     }
 }
