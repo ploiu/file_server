@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -10,7 +9,7 @@ use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
@@ -20,7 +19,6 @@ use crate::repository;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 
-// TODO maybe turn into a macro so it gets inlined. I'm worried about performance for every single file system operation
 #[inline]
 #[cfg(not(test))]
 pub fn file_dir() -> String {
@@ -149,7 +147,7 @@ pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     let file_path = match get_file_path(id) {
         Ok(path) => format!("{}/{}", file_dir(), path),
-        Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
+        Err(GetFileError::NotFound) => return Err(DeleteFileError::NotFound),
         Err(_) => return Err(DeleteFileError::DbError),
     };
     // now that we've determined the file exists, we can remove from the repository
@@ -171,7 +169,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     match file_repository::delete_file(id, con) {
         Ok(_) => Ok(()),
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(DeleteFileError::NotFound),
         Err(e) => {
             eprintln!(
                 "Failed to delete file record from database! Nested exception is: \n {:?}",
@@ -264,82 +262,6 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     })
 }
 
-// FIXME massive performance issues when searching for tag only with 100+ files in the db
-//  can probably be fixed by getting all folder tags first in as few queries as possible,
-//  and getting files in those folders. Might be tricky but should help performance a lot.
-//  in general, this function needs to be smarter in how to pull files
-pub fn search_files(
-    search_title: String,
-    search_tags: Vec<String>,
-) -> Result<Vec<FileApi>, SearchFileError> {
-    let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
-    let con: Connection = repository::open_connection();
-    let files = match file_repository::search_files(search_title, &con) {
-        Ok(f) => f,
-        Err(e) => {
-            con.close().unwrap();
-            eprintln!(
-                "Failed to retrieve file records from the database. Nested exception is {:?}",
-                e
-            );
-            return Err(SearchFileError::DbError);
-        }
-    };
-    let mut converted_files: Vec<FileApi> = Vec::new();
-    for file in files.iter() {
-        let id = file.id.unwrap();
-        let tags = match tag_service::get_tags_on_file(id) {
-            Ok(t) => t,
-            Err(_) => {
-                con.close().unwrap();
-                return Err(SearchFileError::TagError);
-            }
-        };
-        let mut tag_titles: HashSet<String> = HashSet::new();
-        // retrieve all the parent tags, but only if this file has non-root parent folders
-        if file.parent_id.is_some() {
-            let mut parent_folders =
-                match folder_service::get_all_parent_folders(file.parent_id.unwrap()) {
-                    Ok(f) => f,
-                    Err(_) => {
-                        con.close().unwrap();
-                        return Err(SearchFileError::TagError);
-                    }
-                };
-            let immediate_parent = match folder_service::get_folder(file.parent_id) {
-                Ok(f) => f,
-                Err(_) => {
-                    con.close().unwrap();
-                    return Err(SearchFileError::DbError);
-                }
-            };
-            parent_folders.push(immediate_parent);
-            let parent_tags: HashSet<String> = parent_folders
-                .into_iter()
-                .flat_map(|f| f.tags)
-                .map(|t| t.title)
-                .collect();
-            for tag in parent_tags {
-                tag_titles.insert(tag);
-            }
-        }
-        for tag in &tags {
-            tag_titles.insert(tag.title.clone());
-        }
-        if search_tags.intersection(&tag_titles).count() == search_tags.len() {
-            converted_files.push(FileApi {
-                id,
-                name: String::from(&file.name),
-                // for this purpose, none is ok because the folder context doesn't matter
-                folder_id: None,
-                tags,
-            })
-        }
-    }
-    con.close().unwrap();
-    Ok(converted_files)
-}
-
 // ==== private functions ==== \\
 
 /// persists the file to the disk and the database
@@ -429,9 +351,9 @@ fn check_file_in_dir(
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
     let db_parent_id = if 0 == file_input.folder_id() {
-        None
+        vec![]
     } else {
-        Some(file_input.folder_id())
+        vec![file_input.folder_id()]
     };
     let child_files = folder_repository::get_child_files(db_parent_id, &con);
     con.close().unwrap();
@@ -777,130 +699,6 @@ mod update_file_tests {
             .collect();
         file_names.sort();
         assert_eq!(vec!["inner", "test_thing.txt", "thing.txt"], file_names);
-        cleanup();
-    }
-}
-
-#[cfg(test)]
-mod search_files_tests {
-    use crate::model::api::FileApi;
-    use crate::model::response::TagApi;
-    use crate::service::file_service::search_files;
-    use crate::test::{
-        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
-        create_tag_folder, create_tag_folders, refresh_db,
-    };
-
-    #[test]
-    fn search_files_works() {
-        refresh_db();
-        create_file_db_entry("test", None);
-        create_file_db_entry("test2", None);
-        let res = search_files("test2".to_string(), vec![]).unwrap();
-        assert_eq!(
-            vec![FileApi {
-                id: 2,
-                name: "test2".to_string(),
-                folder_id: None,
-                tags: vec![],
-            }],
-            res
-        );
-        cleanup();
-    }
-
-    #[test]
-    fn search_files_includes_file_tags() {
-        refresh_db();
-        create_file_db_entry("first", None);
-        create_file_db_entry("second", None);
-        create_tag_file("tag1", 1);
-        create_tag_files("tag", vec![1, 2]);
-        let res =
-            search_files("".to_string(), vec!["tag1".to_string(), "tag".to_string()]).unwrap();
-        // should only return the first one since it has both tags
-        assert_eq!(
-            vec![FileApi {
-                id: 1,
-                name: "first".to_string(),
-                folder_id: None,
-                tags: vec![
-                    TagApi {
-                        id: Some(1),
-                        title: "tag1".to_string(),
-                    },
-                    TagApi {
-                        id: Some(2),
-                        title: "tag".to_string(),
-                    },
-                ],
-            }],
-            res
-        );
-        cleanup();
-    }
-
-    #[test]
-    fn search_files_tags_and_title() {
-        refresh_db();
-        create_file_db_entry("first", None);
-        create_file_db_entry("second", None);
-        create_tag_files("tag", vec![1, 2]);
-        let res = search_files("first".to_string(), vec!["tag".to_string()]).unwrap();
-        assert_eq!(
-            vec![FileApi {
-                id: 1,
-                name: "first".to_string(),
-                folder_id: None,
-                tags: vec![TagApi {
-                    id: Some(1),
-                    title: "tag".to_string(),
-                }],
-            }],
-            res
-        );
-        cleanup();
-    }
-
-    #[test]
-    fn search_files_includes_parent_folder_tags() {
-        refresh_db();
-        create_folder_db_entry("top", None); // 1
-        create_folder_db_entry("middle", Some(1)); // 2
-        create_folder_db_entry("bottom", Some(2)); // 3
-        create_file_db_entry("top file", Some(1));
-        create_file_db_entry("bottom file", Some(3));
-        create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
-        create_tag_folder("tag2", 3); // tag2 only on bottom folder
-                                      // tag1 should retrieve all files
-        let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
-        assert_eq!(
-            vec![
-                FileApi {
-                    id: 1,
-                    name: "top file".to_string(),
-                    folder_id: None,
-                    tags: vec![],
-                },
-                FileApi {
-                    id: 2,
-                    name: "bottom file".to_string(),
-                    folder_id: None,
-                    tags: vec![],
-                },
-            ],
-            res
-        );
-        let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
-        assert_eq!(
-            vec![FileApi {
-                id: 2,
-                name: "bottom file".to_string(),
-                folder_id: None,
-                tags: vec![],
-            }],
-            res
-        );
         cleanup();
     }
 }

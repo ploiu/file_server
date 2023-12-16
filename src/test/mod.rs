@@ -121,7 +121,6 @@ pub fn current_thread_name() -> String {
 
 #[cfg(test)]
 pub fn create_file_disk(file_name: &str, contents: &str) {
-    // TODO change the second () in OK to ! once it's no longer experimental (https://doc.rust-lang.org/std/primitive.never.html)
     fs::create_dir(Path::new(file_dir().as_str())).unwrap_or(());
     fs::write(
         Path::new(format!("{}/{file_name}", file_dir()).as_str()),

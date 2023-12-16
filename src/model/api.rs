@@ -4,7 +4,7 @@ use rocket::serde::{Deserialize, Serialize};
 use crate::model::repository::FileRecord;
 use crate::model::response::TagApi;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq)]
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct FileApi {
     pub id: u32,

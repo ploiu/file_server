@@ -1,10 +1,11 @@
+use rusqlite::Connection;
+
 use crate::guard::HeaderAuth;
 use crate::model::error::metadata_errors::{CreatePasswordError, UpdatePasswordError};
 use crate::model::request::{BodyAuth, UpdateAuth};
 use crate::model::service::metadata::CheckAuthResult;
 use crate::repository;
 use crate::repository::{metadata_repository, open_connection};
-use rusqlite::Connection;
 
 pub fn create_auth(auth: BodyAuth) -> Result<(), CreatePasswordError> {
     if is_password_set() {
@@ -61,7 +62,7 @@ fn is_password_set() -> bool {
 
     match auth_result {
         Ok(_) => true,
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => false,
+        Err(rusqlite::Error::QueryReturnedNoRows) => false,
         Err(e) => {
             panic!("Failed to check auth in database: {:?}", e);
         }

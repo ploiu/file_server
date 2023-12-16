@@ -13,8 +13,8 @@ use crate::model::response::file_responses::{
     SearchFileResponse, UpdateFileResponse,
 };
 use crate::model::response::BasicMessage;
-use crate::service::file_service;
 use crate::service::file_service::save_file;
+use crate::service::{file_service, search_service};
 
 /// accepts a file via request body and stores it off
 #[post("/?<force>", data = "<file_input>")]
@@ -56,9 +56,9 @@ pub fn get_file(id: u32, auth: HeaderAuth) -> GetFileResponse {
     }
     match file_service::get_file_metadata(id) {
         Ok(file) => GetFileResponse::Success(Json::from(file)),
-        Err(message) if message == GetFileError::NotFound => GetFileResponse::FileNotFound(
-            BasicMessage::new("The file with the passed id could not be found."),
-        ),
+        Err(GetFileError::NotFound) => GetFileResponse::FileNotFound(BasicMessage::new(
+            "The file with the passed id could not be found.",
+        )),
         // TODO maybe distinguish between not found on disk and not able to pull in DB?
         Err(_) => GetFileResponse::FileDbError(BasicMessage::new(
             "Failed to pull file info from database. Check server logs for details",
@@ -78,14 +78,16 @@ pub fn search_files(
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
     let search = search.unwrap_or("".to_string());
-    let tags = tags.unwrap_or(Vec::new());
+    let tags = tags.unwrap_or_default();
     if search.is_empty() && tags.is_empty() {
         return SearchFileResponse::BadRequest(BasicMessage::new(
             "Search string or tags are required.",
         ));
     }
-    match file_service::search_files(search, tags) {
-        Ok(files) => SearchFileResponse::Success(Json::from(files)),
+    match search_service::search_files(search, tags) {
+        Ok(files) => {
+            SearchFileResponse::Success(Json::from(files.into_iter().collect::<Vec<FileApi>>()))
+        }
         Err(SearchFileError::DbError) => SearchFileResponse::GenericError(BasicMessage::new(
             "Failed to search files. Check server logs for details",
         )),
@@ -104,9 +106,13 @@ pub fn download_file(id: u32, auth: HeaderAuth) -> DownloadFileResponse {
     }
     match file_service::get_file_contents(id) {
         Ok(f) => DownloadFileResponse::Success(f),
-        Err(e) if e == GetFileError::NotFound => DownloadFileResponse::FileNotFound(BasicMessage::new("The file with the passed id could not be found.")),
-        Err(e) if e == GetFileError::DbFailure => DownloadFileResponse::FileDbError(BasicMessage::new("Failed to retrieve the file info from the database. Check the server logs for details")),
-        Err(_) => panic!("Download file: We should never get here")
+        Err(GetFileError::NotFound) => DownloadFileResponse::FileNotFound(BasicMessage::new(
+            "The file with the passed id could not be found.",
+        )),
+        Err(GetFileError::DbFailure) => DownloadFileResponse::FileDbError(BasicMessage::new(
+            "Failed to retrieve the file info from the database. Check the server logs for details",
+        )),
+        Err(_) => panic!("Download file: We should never get here"),
     }
 }
 
@@ -119,16 +125,15 @@ pub fn delete_file(id: u32, auth: HeaderAuth) -> DeleteFileResponse {
     };
     match file_service::delete_file(id) {
         Ok(()) => DeleteFileResponse::Deleted(()),
-        Err(e) if e == DeleteFileError::NotFound => DeleteFileResponse::NotFound(
-            BasicMessage::new("The file with the passed id could not be found."),
-        ),
-        Err(e) if e == DeleteFileError::DbError => DeleteFileResponse::Failure(BasicMessage::new(
+        Err(DeleteFileError::NotFound) => DeleteFileResponse::NotFound(BasicMessage::new(
+            "The file with the passed id could not be found.",
+        )),
+        Err(DeleteFileError::DbError) => DeleteFileResponse::Failure(BasicMessage::new(
             "Failed to remove file reference from database.",
         )),
-        Err(e) if e == DeleteFileError::FileSystemError => DeleteFileResponse::Failure(
-            BasicMessage::new("Failed to remove file from the file system."),
-        ),
-        _ => panic!("delete file - we shouldn't reach here!"),
+        Err(DeleteFileError::FileSystemError) => DeleteFileResponse::Failure(BasicMessage::new(
+            "Failed to remove file from the file system.",
+        )),
     }
 }
 
@@ -142,20 +147,18 @@ pub fn update_file(data: Json<FileApi>, auth: HeaderAuth) -> UpdateFileResponse 
 
     match file_service::update_file(data.into_inner()) {
         Ok(f) => UpdateFileResponse::Success(Json::from(f)),
-        Err(e) if e == UpdateFileError::NotFound => UpdateFileResponse::NotFound(
-            BasicMessage::new("The file with the passed id could not be found."),
-        ),
-        Err(e) if e == UpdateFileError::FolderNotFound => UpdateFileResponse::NotFound(
-            BasicMessage::new("The folder with the passed id could not be found."),
-        ),
-        Err(e) if e == UpdateFileError::FileAlreadyExists => UpdateFileResponse::BadRequest(
+        Err(UpdateFileError::NotFound) => UpdateFileResponse::NotFound(BasicMessage::new(
+            "The file with the passed id could not be found.",
+        )),
+        Err(UpdateFileError::FolderNotFound) => UpdateFileResponse::NotFound(BasicMessage::new(
+            "The folder with the passed id could not be found.",
+        )),
+        Err(UpdateFileError::FileAlreadyExists) => UpdateFileResponse::BadRequest(
             BasicMessage::new("A file with the same name already exists in the specified folder"),
         ),
-        Err(e) if e == UpdateFileError::FolderAlreadyExistsWithSameName => {
-            UpdateFileResponse::BadRequest(BasicMessage::new(
-                "A folder with that name already exists.",
-            ))
-        }
+        Err(UpdateFileError::FolderAlreadyExistsWithSameName) => UpdateFileResponse::BadRequest(
+            BasicMessage::new("A folder with that name already exists."),
+        ),
         Err(_) => UpdateFileResponse::GenericError(BasicMessage::new(
             "Failed to update the file. Check the server logs for details",
         )),

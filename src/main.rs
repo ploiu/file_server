@@ -8,7 +8,6 @@ use rocket::{Build, Rocket};
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
-use crate::handler::api_handler::update_password;
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -16,6 +15,7 @@ use handler::{
     tag_handler::{create_tag, delete_tag, get_tag, update_tag},
 };
 
+use crate::handler::api_handler::update_password;
 use crate::repository::initialize_db;
 
 mod guard;
@@ -77,7 +77,6 @@ fn rocket() -> Rocket<Build> {
 
 ///
 /// Look at .run/test.run.xml for run arguments - since there's ops on the same db file we need to run with 1 thread
-/// TODO maybe change file directory for each test...that might make it so we can run tests in parallel
 ///
 #[cfg(test)]
 mod api_tests {
@@ -108,7 +107,7 @@ mod api_tests {
         let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
         let res = client.get(uri!("/api/version")).dispatch();
         assert_eq!(res.status(), Status::Ok);
-        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.1"}"#);
+        assert_eq!(res.into_string().unwrap(), r#"{"version":"2.5.2"}"#);
         cleanup();
     }
 
@@ -836,7 +835,7 @@ mod folder_tests {
         assert_eq!(res_body.message, "A file with that name already exists.");
         // verify the database hasn't changed (file id 1 should be named file in root folder)
         let con = open_connection();
-        let root_files = folder_repository::get_child_files(None, &con).unwrap_or(vec![]);
+        let root_files = folder_repository::get_child_files([], &con).unwrap_or(vec![]);
         assert_eq!(
             root_files[0],
             FileRecord {
@@ -979,7 +978,7 @@ mod folder_tests {
         assert_eq!(res_body.message, "A file with that name already exists.");
         // verify the database hasn't changed (file id 1 should be named file in test folder)
         let con = open_connection();
-        let root_folder = folder_repository::get_child_folders(Some(1), &con).unwrap_or(vec![]);
+        let root_folder = folder_repository::get_child_folders(Some(1), &con).unwrap_or_default();
         con.close().unwrap();
         assert_eq!(
             root_folder[0],

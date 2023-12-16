@@ -18,7 +18,7 @@ pub fn get_tag(id: u32, auth: HeaderAuth) -> GetTagResponse {
     };
     match tag_service::get_tag(id) {
         Ok(tag) => GetTagResponse::Success(Json::from(tag)),
-        Err(e) if e == GetTagError::TagNotFound => GetTagResponse::TagNotFound(BasicMessage::new(
+        Err(GetTagError::TagNotFound) => GetTagResponse::TagNotFound(BasicMessage::new(
             "The tag with the passed id could not be found.",
         )),
         Err(_) => GetTagResponse::TagDbError(BasicMessage::new(
@@ -51,10 +51,10 @@ pub fn update_tag(tag: Json<TagApi>, auth: HeaderAuth) -> UpdateTagResponse {
     };
     match tag_service::update_tag(tag.into_inner()) {
         Ok(tag) => UpdateTagResponse::Success(Json::from(tag)),
-        Err(e) if e == UpdateTagError::TagNotFound => {
+        Err(UpdateTagError::TagNotFound) => {
             UpdateTagResponse::TagNotFound(BasicMessage::new("No tag with that id was found."))
         }
-        Err(e) if e == UpdateTagError::NewNameAlreadyExists => UpdateTagResponse::TagAlreadyExists(
+        Err(UpdateTagError::NewNameAlreadyExists) => UpdateTagResponse::TagAlreadyExists(
             BasicMessage::new("A tag with that name already exists."),
         ),
         Err(_) => UpdateTagResponse::TagDbError(BasicMessage::new(

@@ -1,8 +1,10 @@
-use crate::guard::HeaderAuth;
-use rocket::serde::Deserialize;
-use sha2::{Digest, Sha256};
 use std::fmt;
 use std::io::Write;
+
+use rocket::serde::Deserialize;
+use sha2::{Digest, Sha256};
+
+use crate::guard::HeaderAuth;
 
 pub mod file_requests;
 pub mod folder_requests;
