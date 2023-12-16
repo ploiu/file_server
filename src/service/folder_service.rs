@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::hash::Hash;
 use std::path::Path;
 
 use regex::Regex;
@@ -267,22 +268,27 @@ pub fn reduce_folders_by_tag(
             }
         };
         for (parent_id, parent_tags) in parents {
+            // if the parent has all of our tags, we need to remove ourself (and our children)
+            if contains_all(&parent_tags, tags) {
+                condensed_list.remove(folder_id);
+                // this will tell `give_children_tags` that we already have all the tags (which we do because our parent does), so all the children get removed
+                our_tag_titles = parent_tags;
+                break;
+            }
             parent_tags.into_iter().for_each(|t| {
                 our_tag_titles.insert(t);
             });
             condensed_list.remove(&parent_id);
         }
-        // 3. get all children folder IDs, give them our tags, and remove ourself from condensed_list if we have children in condensed_list
-        if let Err(e) = give_children_tags(&mut condensed_list, &con, *folder_id, &our_tag_titles) {
+        // 3. + 4. get all children folder IDs, give them our tags, and remove ourself from condensed_list if we have children in condensed_list
+        if let Err(e) =
+            give_children_tags(&mut condensed_list, &con, *folder_id, &our_tag_titles, tags)
+        {
             con.close().unwrap();
             return Err(e);
         };
         // 5. remove ourself from condensed_list if we do not have all tags
-        let intersected: HashSet<String> = our_tag_titles
-            .intersection(tags)
-            .map(|it| it.clone())
-            .collect();
-        if intersected != *tags {
+        if !contains_all(&our_tag_titles, tags) {
             condensed_list.remove(folder_id);
         }
     }
@@ -300,6 +306,7 @@ fn give_children_tags(
     con: &Connection,
     folder_id: u32,
     our_tag_titles: &HashSet<String>,
+    tags: &HashSet<String>,
 ) -> Result<(), GetFolderError> {
     let all_child_folders_ids =
         match folder_repository::get_all_child_folder_ids(&[folder_id], &con) {
@@ -314,6 +321,13 @@ fn give_children_tags(
                 return Err(GetFolderError::DbFailure);
             }
         };
+    // if we have all of the tags, remove all our children because they're not the highest
+    if contains_all(our_tag_titles, tags) {
+        for id in all_child_folders_ids.iter() {
+            condensed_list.remove(id);
+        }
+        return Ok(());
+    }
     for id in all_child_folders_ids.iter() {
         let matching_folder = condensed_list.get_mut(id).unwrap();
         let matching_folder_tags = matching_folder.tags.clone();
@@ -660,6 +674,12 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         return Err(DeleteFolderError::DbFailure);
     };
     Ok(folder)
+}
+
+/// checks if the first hash set contains all the items in the second hash set
+fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -> bool {
+    let intersection: HashSet<T> = first.intersection(second).map(|t| t.clone()).collect();
+    &intersection == second
 }
 
 #[cfg(test)]
