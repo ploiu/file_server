@@ -1,4 +1,3 @@
-use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::fs::File;
 use std::path::Path;
@@ -10,15 +9,14 @@ use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::model::response::TagApi;
 use crate::repository;
-use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 
 #[inline]
@@ -149,7 +147,7 @@ pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     let file_path = match get_file_path(id) {
         Ok(path) => format!("{}/{}", file_dir(), path),
-        Err(e) if e == GetFileError::NotFound => return Err(DeleteFileError::NotFound),
+        Err(GetFileError::NotFound) => return Err(DeleteFileError::NotFound),
         Err(_) => return Err(DeleteFileError::DbError),
     };
     // now that we've determined the file exists, we can remove from the repository
@@ -171,7 +169,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     match file_repository::delete_file(id, con) {
         Ok(_) => Ok(()),
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Err(DeleteFileError::NotFound),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(DeleteFileError::NotFound),
         Err(e) => {
             eprintln!(
                 "Failed to delete file record from database! Nested exception is: \n {:?}",
@@ -264,86 +262,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     })
 }
 
-pub fn search_files(
-    search_title: String,
-    search_tags: Vec<String>,
-) -> Result<Vec<FileApi>, SearchFileError> {
-    let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
-    let con: Connection = repository::open_connection();
-    let files = match file_repository::search_files(search_title, &con) {
-        Ok(f) => f,
-        Err(e) => {
-            con.close().unwrap();
-            eprintln!(
-                "Failed to retrieve file records from the database. Nested exception is {:?}",
-                e
-            );
-            return Err(SearchFileError::DbError);
-        }
-    };
-    let mut converted_files: Vec<FileApi> = Vec::new();
-    for file in files.iter() {
-        let id = file.id.unwrap();
-        let tags = match tag_service::get_tags_on_file(id) {
-            Ok(t) => t,
-            Err(_) => {
-                con.close().unwrap();
-                return Err(SearchFileError::TagError);
-            }
-        };
-        let mut tag_titles: HashSet<String> = HashSet::new();
-        // retrieve all the parent tags, but only if this file has non-root parent folders
-        if file.parent_id.is_some() {
-            let mut parent_folders =
-                match folder_service::get_all_parent_folders(file.parent_id.unwrap()) {
-                    Ok(f) => f,
-                    Err(_) => {
-                        con.close().unwrap();
-                        return Err(SearchFileError::TagError);
-                    }
-                };
-            let immediate_parent = match folder_service::get_folder(file.parent_id) {
-                Ok(f) => f,
-                Err(_) => {
-                    con.close().unwrap();
-                    return Err(SearchFileError::DbError);
-                }
-            };
-            parent_folders.push(immediate_parent);
-            let parent_tags: HashSet<String> = parent_folders
-                .into_iter()
-                .flat_map(|f| f.tags)
-                .map(|t| t.title)
-                .collect();
-            for tag in parent_tags {
-                tag_titles.insert(tag);
-            }
-        }
-        for tag in &tags {
-            tag_titles.insert(tag.title.clone());
-        }
-        if search_tags.intersection(&tag_titles).count() == search_tags.len() {
-            converted_files.push(FileApi {
-                id,
-                name: String::from(&file.name),
-                // for this purpose, none is ok because the folder context doesn't matter
-                folder_id: None,
-                tags,
-            })
-        }
-    }
-    con.close().unwrap();
-    Ok(converted_files)
-}
-
 // ==== private functions ==== \\
-
-fn pull_files_by_tags(search_tags: HashSet<String>) -> Result<HashSet<FileApi>, SearchFileError> {
-    let con: Connection = open_connection();
-
-    con.close().unwrap();
-    Ok(HashSet::new())
-}
 
 /// persists the file to the disk and the database
 async fn persist_save_file_to_folder(

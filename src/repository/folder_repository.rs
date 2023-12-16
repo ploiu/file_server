@@ -1,11 +1,8 @@
-use rocket::futures::future::join;
 use std::collections::{HashMap, HashSet};
 
-use rocket::http::ext::IntoCollection;
 use rusqlite::{params, Connection, Rows};
 
 use crate::model::repository;
-use crate::model::repository::Folder;
 use crate::repository::file_repository;
 
 pub fn get_by_id(id: Option<u32>, con: &Connection) -> Result<repository::Folder, rusqlite::Error> {
@@ -103,25 +100,6 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
     Ok(())
 }
 
-pub fn get_all_parent_folders(
-    folder_id: u32,
-    con: &Connection,
-) -> Result<Vec<repository::Folder>, rusqlite::Error> {
-    let mut parents = Vec::<repository::Folder>::new();
-    let mut parent_id_pst = con
-        .prepare(include_str!(
-            "../assets/queries/folder/get_parent_folders_with_id.sql"
-        ))
-        .unwrap();
-    let mut parent_id_rows = parent_id_pst.query([folder_id])?;
-    while let Some(row) = parent_id_rows.next()? {
-        let id: Option<u32> = row.get(0)?;
-        let folder = get_by_id(id, con)?;
-        parents.push(folder);
-    }
-    Ok(parents)
-}
-
 pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
     ids: T,
     con: &Connection,
@@ -203,17 +181,17 @@ pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
 pub fn get_folders_by_any_tag(
     tags: &HashSet<String>,
     con: &Connection,
-) -> Result<HashSet<Folder>, rusqlite::Error> {
+) -> Result<HashSet<repository::Folder>, rusqlite::Error> {
     // TODO look at rarray to pass a collection as a parameter (https://docs.rs/rusqlite/0.29.0/rusqlite/vtab/array/index.html)
     let joined_tags = tags
         .iter()
-        .map(|t| format!("'{}'", t.replace("'", "''")))
+        .map(|t| format!("'{}'", t.replace('\'', "''")))
         .reduce(|combined, current| format!("{combined},{current}"))
         .unwrap();
     let query = include_str!("../assets/queries/folder/get_folders_by_any_tag.sql");
     let replaced_query = query.replace("?1", joined_tags.as_str());
     let mut pst = con.prepare(replaced_query.as_str()).unwrap();
-    let mut folders: HashSet<Folder> = HashSet::new();
+    let mut folders: HashSet<repository::Folder> = HashSet::new();
     let rows = pst.query_map([], map_folder)?;
     for row in rows {
         folders.insert(row?);
@@ -231,7 +209,7 @@ pub fn get_parent_folders_by_tag<'a, T: IntoIterator<Item = &'a String> + Clone>
     let joined_tags = tags
         .clone()
         .into_iter()
-        .map(|t| format!("'{}'", t.replace("'", "''")))
+        .map(|t| format!("'{}'", t.replace('\'', "''")))
         .reduce(|combined, current| format!("{combined},{current}"))
         .unwrap();
     let built_query = query.replace("?2", joined_tags.as_str());
@@ -292,67 +270,6 @@ fn get_child_files_non_root(
         files.push(file?);
     }
     Ok(files)
-}
-
-#[cfg(test)]
-mod get_all_parent_folders_tests {
-    use crate::model::repository::Folder;
-    use crate::repository::folder_repository::get_all_parent_folders;
-    use crate::repository::open_connection;
-    use crate::test::*;
-
-    #[test]
-    fn returns_empty_when_no_parent() {
-        refresh_db();
-        create_folder_db_entry("test", None);
-        let connection = open_connection();
-        let result = get_all_parent_folders(1, &connection);
-        connection.close().unwrap();
-        assert_eq!(Ok(vec![]), result);
-        cleanup();
-    }
-
-    #[test]
-    fn returns_parent_when_only_one() {
-        refresh_db();
-        create_folder_db_entry("parent", None);
-        create_folder_db_entry("child", Some(1));
-        let connection = open_connection();
-        let expected_parent = Folder {
-            id: Some(1),
-            name: "parent".to_string(),
-            parent_id: None,
-        };
-        let result = get_all_parent_folders(2, &connection);
-        connection.close().unwrap();
-        assert_eq!(Ok(vec![expected_parent]), result);
-        cleanup();
-    }
-
-    #[test]
-    fn returns_all_parents_when_multiple() {
-        refresh_db();
-        create_folder_db_entry("top", None);
-        create_folder_db_entry("middle", Some(1));
-        create_folder_db_entry("bottom", Some(2));
-        let expected = vec![
-            Folder {
-                id: Some(1),
-                name: "top".to_string(),
-                parent_id: None,
-            },
-            Folder {
-                id: Some(2),
-                name: "top/middle".to_string(),
-                parent_id: Some(1),
-            },
-        ];
-        let connection = open_connection();
-        let result = get_all_parent_folders(3, &connection);
-        connection.close().unwrap();
-        assert_eq!(Ok(expected), result);
-        cleanup();
-    }
 }
 
 #[cfg(test)]
@@ -427,11 +344,11 @@ mod get_parent_folders_by_tag_tests {
 
 #[cfg(test)]
 mod get_child_files_tests {
+    use std::collections::HashSet;
+
     use crate::repository::folder_repository::get_child_files;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, fail, refresh_db};
-    use rusqlite::ToSql;
-    use std::collections::HashSet;
+    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, refresh_db};
 
     #[test]
     fn get_child_files_works_for_root() {

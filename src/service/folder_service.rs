@@ -19,7 +19,7 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
 use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
-use crate::service::{file_service, folder_service, tag_service};
+use crate::service::{file_service, tag_service};
 use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
@@ -89,7 +89,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     }
     let original_folder = match get_folder_by_id(Some(folder.id)) {
         Ok(f) => f,
-        Err(e) if e == GetFolderError::NotFound => return Err(UpdateFolderError::NotFound),
+        Err(GetFolderError::NotFound) => return Err(UpdateFolderError::NotFound),
         _ => return Err(UpdateFolderError::DbFailure),
     };
     let db_folder = Folder {
@@ -163,41 +163,6 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
         return Err(DeleteFolderError::FileSystemError);
     };
     Ok(())
-}
-
-pub fn get_all_parent_folders(folder_id: u32) -> Result<Vec<FolderResponse>, GetFolderError> {
-    if folder_id == 0 {
-        return Ok(vec![]);
-    }
-    let con: Connection = open_connection();
-    let folders = match folder_repository::get_all_parent_folders(folder_id, &con) {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!(
-                "Failed to retrieve parent folders for folder with id {folder_id}! Error is {e}"
-            );
-            con.close().unwrap();
-            return Err(GetFolderError::DbFailure);
-        }
-    };
-    let mut converted_folders: Vec<FolderResponse> = Vec::new();
-    for folder in folders {
-        let mut converted = FolderResponse::from(&folder);
-        if folder.id.is_some() {
-            let tags = match tag_service::get_tags_on_folder(folder.id.unwrap()) {
-                Ok(t) => t,
-                Err(e) => {
-                    eprintln!("Failed to retrieve parent folder tags starting from folder with id {folder_id} (current folder id {:?})! Error is {:?}", folder.id, e);
-                    con.close().unwrap();
-                    return Err(GetFolderError::TagError);
-                }
-            };
-            converted.tags = tags;
-        }
-        converted_folders.push(converted);
-    }
-    con.close().unwrap();
-    Ok(converted_folders)
 }
 
 pub fn get_folders_by_any_tag(
@@ -293,8 +258,7 @@ pub fn reduce_folders_by_tag(
         }
     }
     con.close().unwrap();
-    let copied: HashSet<FolderResponse> =
-        condensed_list.into_iter().map(|(_, v)| v.clone()).collect();
+    let copied: HashSet<FolderResponse> = condensed_list.into_values().collect();
     Ok(copied)
 }
 
@@ -308,19 +272,19 @@ fn give_children_tags(
     our_tag_titles: &HashSet<String>,
     tags: &HashSet<String>,
 ) -> Result<(), GetFolderError> {
-    let all_child_folders_ids =
-        match folder_repository::get_all_child_folder_ids(&[folder_id], &con) {
-            Ok(ids) => ids
-                .into_iter()
-                .filter(|id| condensed_list.contains_key(id))
-                .collect::<Vec<u32>>(),
-            Err(e) => {
-                log::error!(
-                    "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
-                );
-                return Err(GetFolderError::DbFailure);
-            }
-        };
+    let all_child_folders_ids = match folder_repository::get_all_child_folder_ids(&[folder_id], con)
+    {
+        Ok(ids) => ids
+            .into_iter()
+            .filter(|id| condensed_list.contains_key(id))
+            .collect::<Vec<u32>>(),
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
+            );
+            return Err(GetFolderError::DbFailure);
+        }
+    };
     // if we have all of the tags, remove all our children because they're not the highest
     if contains_all(our_tag_titles, tags) {
         for id in all_child_folders_ids.iter() {
@@ -370,9 +334,7 @@ fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
     let con = repository::open_connection();
     let result = match folder_repository::get_by_id(db_folder, &con) {
         Ok(folder) => Ok(folder),
-        Err(error) if error == rusqlite::Error::QueryReturnedNoRows => {
-            Err(GetFolderError::NotFound)
-        }
+        Err(rusqlite::Error::QueryReturnedNoRows) => Err(GetFolderError::NotFound),
         Err(err) => {
             eprintln!(
                 "Failed to pull folder info from database! Nested exception is: \n {:?}",
@@ -561,7 +523,7 @@ fn does_file_exist(
     folder_id: Option<u32>,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or(vec![]);
+    let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
     let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
         .iter()
         // this is required because apparently the file is dropped immediately when it's used...
@@ -609,7 +571,7 @@ fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileApi>, GetChildFilesEr
         };
     }
     // now we can retrieve all the file records in this folder
-    let unwrapped_id = id.map(|it| vec![it]).unwrap_or(vec![]);
+    let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
     let child_files = match folder_repository::get_child_files(unwrapped_id, &con) {
         Ok(files) => files,
         Err(e) => {
@@ -654,7 +616,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
         folder_repository::get_child_files([id], con).map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
-            Err(e) if e == DeleteFileError::NotFound => {}
+            Err(DeleteFileError::NotFound) => {}
             Err(_) => return Err(DeleteFolderError::DbFailure),
             Ok(_) => { /*no op - file was removed properly*/ }
         };
@@ -678,7 +640,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
 
 /// checks if the first hash set contains all the items in the second hash set
 fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -> bool {
-    let intersection: HashSet<T> = first.intersection(second).map(|t| t.clone()).collect();
+    let intersection: HashSet<T> = first.intersection(second).cloned().collect();
     &intersection == second
 }
 
@@ -829,7 +791,6 @@ mod update_folder_tests {
 
 #[cfg(test)]
 mod reduce_folders_by_tag_tests {
-    use rocket::serde::__private::de::TagOrContentField::Tag;
     use std::collections::HashSet;
 
     use crate::model::response::folder_responses::FolderResponse;

@@ -33,7 +33,7 @@ pub fn check_auth(auth: HeaderAuth, con: &Connection) -> Result<CheckAuthResult,
                 Ok(CheckAuthResult::Invalid)
             }
         }
-        Err(e) if e == rusqlite::Error::QueryReturnedNoRows => Ok(CheckAuthResult::Missing),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(CheckAuthResult::Missing),
         Err(e) => {
             eprintln!("Failed to check auth in database: {:?}", e);
             Err(e)

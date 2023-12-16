@@ -1,7 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
 use regex::RegexBuilder;
-use rusqlite::{Connection, Error};
+use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::SearchFileError;
@@ -34,12 +34,10 @@ pub fn search_files(
             let search_gex = RegexBuilder::new(search_title.as_str())
                 .case_insensitive(true)
                 .build()
-                .expect(format!("Failed to build regex for search term [{search_title}]").as_str());
-            matching_files = matching_files
-                .iter()
-                .filter(|file| search_gex.is_match(file.name.as_str()))
-                .map(|file| file.clone())
-                .collect();
+                .unwrap_or_else(|_| {
+                    panic!("Failed to build regex for search term [{search_title}]")
+                });
+            matching_files.retain(|file| search_gex.is_match(file.name.as_str()));
         }
     } else {
         // search text isn't empty
@@ -70,7 +68,7 @@ fn search_files_by_tags(
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     let mut matching_files: HashSet<FileApi> = HashSet::new();
     // 1): retrieve all files from the database that have all of the tags directly on them
-    let files_with_all_tags: HashSet<FileApi> = match get_files_by_all_tags(&search_tags, &con) {
+    let files_with_all_tags: HashSet<FileApi> = match get_files_by_all_tags(search_tags, con) {
         Ok(f) => f,
         Err(e) => {
             log::error!("File search: Failed to retrieve all files by tags. Exception is {e}");
@@ -81,7 +79,7 @@ fn search_files_by_tags(
         matching_files.insert(file);
     }
     // 2): retrieve all folders that have any passed tag
-    let folders_with_any_tag = match folder_service::get_folders_by_any_tag(&search_tags) {
+    let folders_with_any_tag = match folder_service::get_folders_by_any_tag(search_tags) {
         Ok(f) => f,
         Err(_) => {
             return Err(SearchFileError::TagError);
@@ -93,7 +91,7 @@ fn search_files_by_tags(
         folder_index.insert(folder.id, folder);
     }
     // 3): reduce all the folders to the first folder with all the applied tags
-    let reduced = match folder_service::reduce_folders_by_tag(&folders_with_any_tag, &search_tags) {
+    let reduced = match folder_service::reduce_folders_by_tag(&folders_with_any_tag, search_tags) {
         Ok(folders) => folders,
         Err(_) => {
             log::error!("Failed to search files!");
@@ -101,7 +99,7 @@ fn search_files_by_tags(
         }
     };
     // 4): get all child files of all deduped folders and their children
-    let deduped_child_files: HashSet<FileApi> = match get_deduped_child_files(&reduced, &con) {
+    let deduped_child_files: HashSet<FileApi> = match get_deduped_child_files(&reduced, con) {
         Ok(files) => files,
         Err(e) => {
             log::error!("Failed to retrieve deduped child files. Exception is {e}");
@@ -110,11 +108,11 @@ fn search_files_by_tags(
     };
     // 5: for each folder not deduplicated, retrieve all child files in all child folders that contain the remaining tags
     let non_deduped_child_files: HashSet<FileApi> = match get_all_non_deduped_child_files(
-        &search_tags,
+        search_tags,
         &folder_index,
         &folders_with_any_tag,
         &reduced,
-        &con,
+        con,
     ) {
         Ok(files) => files,
         Err(e) => {
@@ -146,7 +144,7 @@ fn get_non_duped_folder_ids(
             .collect();
     let non_duped_folder_ids: HashSet<u32> = non_duped_base_folder_ids
         .union(&non_duped_child_folder_ids)
-        .map(|it| it.clone())
+        .copied()
         .collect();
     Ok(non_duped_folder_ids)
 }
@@ -156,7 +154,7 @@ fn get_files_by_all_tags(
     con: &Connection,
 ) -> Result<HashSet<FileApi>, rusqlite::Error> {
     let mut converted_files: HashSet<FileApi> = HashSet::new();
-    let mut files = file_repository::get_files_by_all_tags(search_tags, con)?;
+    let files = file_repository::get_files_by_all_tags(search_tags, con)?;
     for file in files {
         let tags: Vec<TagApi> = tag_repository::get_tags_on_file(file.id.unwrap(), con)?
             .into_iter()
@@ -176,7 +174,7 @@ fn get_deduped_child_files(
     reduced: &HashSet<FolderResponse>,
     con: &Connection,
 ) -> Result<HashSet<FileApi>, rusqlite::Error> {
-    let reduced_ids: Vec<u32> = reduced.iter().map(|f| f.id.clone()).collect();
+    let reduced_ids: Vec<u32> = reduced.iter().map(|f| f.id).collect();
     let all_relevant_folder_ids: HashSet<u32> =
         folder_repository::get_all_child_folder_ids(&reduced_ids, con)?
             .into_iter()
@@ -221,9 +219,9 @@ fn get_all_non_deduped_child_files(
     con: &Connection,
 ) -> Result<HashSet<FileApi>, rusqlite::Error> {
     let non_duped_folder_ids: HashSet<u32> =
-        get_non_duped_folder_ids(&reduced, &folders_with_any_tag, &con)?;
+        get_non_duped_folder_ids(reduced, folders_with_any_tag, con)?;
     // 5.1) retrieve all child files of all child folders (+ original folder) using method in #4.2 above
-    let remaining_child_files: HashSet<FileApi> = get_child_files(&non_duped_folder_ids, &con)?
+    let remaining_child_files: HashSet<FileApi> = get_child_files(&non_duped_folder_ids, con)?
         .into_iter()
         .collect();
     let mut final_files: HashSet<FileApi> = HashSet::new();
