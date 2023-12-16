@@ -13,8 +13,8 @@ use crate::model::response::file_responses::{
     SearchFileResponse, UpdateFileResponse,
 };
 use crate::model::response::BasicMessage;
-use crate::service::file_service;
 use crate::service::file_service::save_file;
+use crate::service::{file_service, search_service};
 
 /// accepts a file via request body and stores it off
 #[post("/?<force>", data = "<file_input>")]
@@ -84,8 +84,10 @@ pub fn search_files(
             "Search string or tags are required.",
         ));
     }
-    match file_service::search_files(search, tags) {
-        Ok(files) => SearchFileResponse::Success(Json::from(files)),
+    match search_service::search_files(search, tags) {
+        Ok(files) => {
+            SearchFileResponse::Success(Json::from(files.into_iter().collect::<Vec<FileApi>>()))
+        }
         Err(SearchFileError::DbError) => SearchFileResponse::GenericError(BasicMessage::new(
             "Failed to search files. Check server logs for details",
         )),
