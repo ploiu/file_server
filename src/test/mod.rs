@@ -114,9 +114,18 @@ pub fn fail() {
 }
 
 #[cfg(test)]
+#[cfg(not(target_family = "windows"))]
 pub fn current_thread_name() -> String {
     let current_thread = std::thread::current();
     current_thread.name().unwrap().to_string()
+}
+
+#[cfg(test)]
+#[cfg(target_family = "windows")]
+pub fn current_thread_name() -> String {
+    let current_thread = std::thread::current();
+    let current_thread_name = current_thread.name().unwrap().to_string();
+    current_thread_name.replace(":", "_")
 }
 
 #[cfg(test)]
