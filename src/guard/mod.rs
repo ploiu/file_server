@@ -77,12 +77,12 @@ impl<'a> FromRequest<'a> for HeaderAuth {
             String::from(value).starts_with("Basic")
         }
         match request.headers().get_one("Authorization") {
-            None => Outcome::Failure((Status::Unauthorized, AuthError::Missing)),
+            None => Outcome::Error((Status::Unauthorized, AuthError::Missing)),
             Some(value) if check_basic_auth(value) => match HeaderAuth::from(value) {
                 Ok(auth) => Outcome::Success(auth),
-                Err(_) => Outcome::Failure((Status::Unauthorized, AuthError::Invalid)),
+                Err(_) => Outcome::Error((Status::Unauthorized, AuthError::Invalid)),
             },
-            Some(_) => Outcome::Failure((Status::BadRequest, AuthError::Invalid)),
+            Some(_) => Outcome::Error((Status::BadRequest, AuthError::Invalid)),
         }
     }
 }

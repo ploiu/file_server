@@ -21,9 +21,9 @@ pub fn get_folder(id: Option<u32>, auth: HeaderAuth) -> GetFolderResponse {
     };
     match folder_service::get_folder(id) {
         Ok(folder) => GetFolderResponse::Success(Json::from(folder)),
-        Err(GetFolderError::NotFound) => GetFolderResponse::FolderNotFound(
-            BasicMessage::new("The folder with the passed id could not be found."),
-        ),
+        Err(GetFolderError::NotFound) => GetFolderResponse::FolderNotFound(BasicMessage::new(
+            "The folder with the passed id could not be found.",
+        )),
         // TODO maybe distinguish between not found on disk and not able to pull in DB?
         Err(_) => GetFolderResponse::FolderDbError(BasicMessage::new(
             "Failed to pull folder info from database. Check server logs for details",
@@ -43,11 +43,9 @@ pub async fn create_folder(
     };
     match folder_service::create_folder(&folder.into_inner()).await {
         Ok(f) => CreateFolderResponse::Success(Json::from(f)),
-        Err(CreateFolderError::ParentNotFound) => {
-            CreateFolderResponse::ParentNotFound(BasicMessage::new(
-                "No folder with the passed parentId was found.",
-            ))
-        }
+        Err(CreateFolderError::ParentNotFound) => CreateFolderResponse::ParentNotFound(
+            BasicMessage::new("No folder with the passed parentId was found."),
+        ),
         Err(CreateFolderError::AlreadyExists) => CreateFolderResponse::FolderAlreadyExists(
             BasicMessage::new("That folder already exists."),
         ),
