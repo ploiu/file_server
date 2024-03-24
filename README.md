@@ -33,3 +33,16 @@ it'd be a fun project for a language I never got to use but enjoyed the syntax o
 
 A well-documented api will allow anyone to build their own front end for this without fear of not knowing what they're
 doing. I plan to also use this project as an opportunity to write an Android-based application for the first time.
+
+## building
+This project _might_ be able to run on windows, but it is primarily designed to run on a linux installation. No guarantees are made about windows. 
+
+For building on linux, *gcc* is required to build sqlite. You will also need to add the `aarch64-unknown-linux-gnu` target using the command if you want to cross-compile for a raspberry pi.
+```shell
+rustup target add aarch64-unknown-linux-gnu
+```
+
+Also for cross-compiling to raspi, you will need to install aarch64 gcc. On ubuntu, you can do so with the command
+```shell
+sudo apt install gcc-aarch64-linux-gnu
+```
