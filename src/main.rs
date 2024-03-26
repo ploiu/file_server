@@ -8,6 +8,7 @@ use rocket::{Build, Rocket};
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
+use crate::config::{FileServerConfig, FILE_SERVER_CONFIG};
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -18,9 +19,11 @@ use handler::{
 use crate::handler::api_handler::update_password;
 use crate::repository::initialize_db;
 
+mod config;
 mod guard;
 mod handler;
 mod model;
+mod queue;
 mod repository;
 mod service;
 #[cfg(test)]
