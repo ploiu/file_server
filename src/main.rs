@@ -8,6 +8,7 @@ use rocket::{Build, Rocket};
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
+use crate::config::{FileServerConfig, FILE_SERVER_CONFIG};
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -16,11 +17,14 @@ use handler::{
 };
 
 use crate::handler::api_handler::update_password;
+use crate::queue::setup_rabbit_connection;
 use crate::repository::initialize_db;
 
+mod config;
 mod guard;
 mod handler;
 mod model;
+mod queue;
 mod repository;
 mod service;
 #[cfg(test)]
@@ -49,6 +53,7 @@ fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
+    setup_rabbit_connection().unwrap();
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
