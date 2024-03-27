@@ -5,6 +5,7 @@ use rocket::serde::Deserialize;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::panic::panic_any;
+use std::string::ToString;
 
 /// config properties for the rabbit queue
 #[derive(Deserialize, Clone)]
@@ -12,25 +13,35 @@ pub struct RabbitMqConfig {
     pub address: String,
 }
 
+#[derive(Deserialize, Clone)]
+pub struct FilePreviewConfig {
+    #[serde(rename = "sleeptimemillis")]
+    pub sleep_time_millis: u32,
+    #[serde(rename = "itemstoprocessperbatch")]
+    pub items_to_process_per_batch: u32,
+}
+
 /// config properties for the whole of this application
 #[derive(Deserialize, Clone)]
 pub struct FileServerConfig {
     #[serde(rename = "rabbitmq")]
     pub rabbit_mq: RabbitMqConfig,
+    #[serde(rename = "filepreview")]
+    pub file_preview: FilePreviewConfig,
 }
 
 /// Parses the config file located at ./FileServer.toml, if it exists.
 /// If this fails to parse the file, the application will panic
-pub fn parse_config() -> Option<FileServerConfig> {
+pub fn parse_config() -> FileServerConfig {
     let builder = Config::builder()
-        .add_source(config::File::with_name("./FileServers.toml"))
+        .add_source(config::File::with_name("./FileServer.toml"))
         .build();
     // some errors are fine, such as not found
     if let Err(ConfigError::Foreign(e)) = builder {
         let message = e.to_string();
         if message.contains("not found") {
             log::warn!("No config file found. Continuing startup...");
-            return None;
+            return FS_CONFIG_DEFAULT.clone();
         }
         panic!("Failed to parse config file. Exception is {e}");
         // basically everything else is unrecoverable, though
@@ -39,10 +50,19 @@ pub fn parse_config() -> Option<FileServerConfig> {
         panic!("Failed to parse config file. Exception is {e}");
     }
     let settings = builder.unwrap();
-    // let x = settings.try_deserialize::<HashMap<String, HashMap<String, String>>>().unwrap();
-    let config: FileServerConfig = settings.try_deserialize().unwrap();
-    Some(config)
+    settings
+        .try_deserialize()
+        .unwrap_or(FS_CONFIG_DEFAULT.clone())
 }
 
 /// global variable for config, that way it doesn't need to be repeatedly parsed
-pub static FILE_SERVER_CONFIG: Lazy<Option<FileServerConfig>> = Lazy::new(parse_config);
+pub static FILE_SERVER_CONFIG: Lazy<FileServerConfig> = Lazy::new(parse_config);
+static FS_CONFIG_DEFAULT: Lazy<FileServerConfig> = Lazy::new(|| FileServerConfig {
+    rabbit_mq: RabbitMqConfig {
+        address: "amqp://127.0.0.1:5672".to_string(),
+    },
+    file_preview: FilePreviewConfig {
+        sleep_time_millis: 300_000,
+        items_to_process_per_batch: 20,
+    },
+});
