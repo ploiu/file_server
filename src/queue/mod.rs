@@ -1,11 +1,14 @@
-use crate::config::FILE_SERVER_CONFIG;
+use std::time::{Duration, SystemTime};
+
 use lapin::options::{BasicAckOptions, BasicConsumeOptions, QueueDeclareOptions};
 use lapin::types::FieldTable;
 use lapin::{Connection, ConnectionProperties};
 use rocket::futures::{FutureExt, StreamExt};
 use rocket::yansi::Paint;
-use std::time::{Duration, SystemTime};
 
+use crate::config::FILE_SERVER_CONFIG;
+
+#[cfg(not(test))]
 pub fn setup_rabbit_connection() -> Result<(), lapin::Error> {
     let addr = FILE_SERVER_CONFIG.clone().rabbit_mq.address;
 
@@ -56,5 +59,10 @@ pub fn setup_rabbit_connection() -> Result<(), lapin::Error> {
         .detach();
     });
 
+    Ok(())
+}
+
+#[cfg(test)]
+pub fn setup_rabbit_connection() -> Result<(), ()> {
     Ok(())
 }

@@ -1,11 +1,12 @@
-use config::{Config, ConfigError};
-use once_cell::sync::Lazy;
-use rocket::form::validate::Contains;
-use rocket::serde::Deserialize;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::panic::panic_any;
 use std::string::ToString;
+
+use config::{Config, ConfigError};
+use once_cell::sync::Lazy;
+use rocket::form::validate::Contains;
+use rocket::serde::Deserialize;
 
 /// config properties for the rabbit queue
 #[derive(Deserialize, Clone)]
