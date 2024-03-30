@@ -15,6 +15,11 @@ pub struct RabbitMqConfig {
 }
 
 #[derive(Deserialize, Clone)]
+pub struct DbConfig {
+    pub location: String,
+}
+
+#[derive(Deserialize, Clone)]
 pub struct FilePreviewConfig {
     #[serde(rename = "sleeptimemillis")]
     pub sleep_time_millis: u32,
@@ -29,6 +34,7 @@ pub struct FileServerConfig {
     pub rabbit_mq: RabbitMqConfig,
     #[serde(rename = "filepreview")]
     pub file_preview: FilePreviewConfig,
+    pub database: DbConfig,
 }
 
 /// Parses the config file located at ./FileServer.toml, if it exists.
@@ -65,5 +71,8 @@ static FS_CONFIG_DEFAULT: Lazy<FileServerConfig> = Lazy::new(|| FileServerConfig
     file_preview: FilePreviewConfig {
         sleep_time_millis: 300_000,
         items_to_process_per_batch: 20,
+    },
+    database: DbConfig {
+        location: "./db.sqlite".to_string(),
     },
 });

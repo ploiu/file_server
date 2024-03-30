@@ -6,3 +6,6 @@ address = "amqp://127.0.0.1:5672"
 sleepTimeMillis = 300_000
 # the maximum number of files to process per batch
 itemsToProcessPerBatch = 20
+
+[Database]
+location = "./db.sqlite"
