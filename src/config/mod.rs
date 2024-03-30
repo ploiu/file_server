@@ -11,7 +11,8 @@ use rocket::serde::Deserialize;
 /// config properties for the rabbit queue
 #[derive(Deserialize, Clone)]
 pub struct RabbitMqConfig {
-    pub address: String,
+    pub address: Option<String>,
+    pub enabled: bool,
 }
 
 #[derive(Deserialize, Clone)]
@@ -66,7 +67,8 @@ pub fn parse_config() -> FileServerConfig {
 pub static FILE_SERVER_CONFIG: Lazy<FileServerConfig> = Lazy::new(parse_config);
 static FS_CONFIG_DEFAULT: Lazy<FileServerConfig> = Lazy::new(|| FileServerConfig {
     rabbit_mq: RabbitMqConfig {
-        address: "amqp://127.0.0.1:5672".to_string(),
+        address: Some("amqp://127.0.0.1:5672".to_string()),
+        enabled: true,
     },
     file_preview: FilePreviewConfig {
         sleep_time_millis: 300_000,

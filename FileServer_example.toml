@@ -1,4 +1,8 @@
+# if disabled, will not generate file previews for uploaded files
 [RabbitMq]
+# required
+enabled = true
+# optional
 address = "amqp://127.0.0.1:5672"
 
 [FilePreview]
