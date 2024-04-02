@@ -49,16 +49,16 @@ pub async fn generate_preview(message_data: String) -> bool {
     }
     // now time to store our blob in the database
     let con: Connection = open_connection();
-    if let Err(e) = file_repository::create_file_preview(id, preview_blob, &con) {
+    let create_result = file_repository::create_file_preview(id, preview_blob, &con);
+    con.close().unwrap();
+    if let Err(e) = create_result {
         log::error!(
             "Failed to save file preview in the database for file id {id}. Exception is {:?}",
             e
         );
         // TODO really we would benefit from the ability to try twice or something...
-        con.close().unwrap();
         return true;
     }
-    con.close().unwrap();
     true
 }
 
