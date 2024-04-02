@@ -1,9 +1,8 @@
 use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions, QueueDeclareOptions};
 use lapin::types::FieldTable;
-use lapin::{Channel, Connection, ConnectionProperties, Consumer, Queue};
+use lapin::{Channel, Connection, ConnectionProperties};
 use once_cell::sync::Lazy;
 use rocket::futures::StreamExt;
-use rocket::yansi::Paint;
 use std::future::Future;
 use std::time::Duration;
 

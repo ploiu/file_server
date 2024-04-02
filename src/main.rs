@@ -5,11 +5,11 @@ use std::fs;
 use std::path::Path;
 
 use rocket::{Build, Rocket};
-use sha2::digest::Output;
+use service::preview_service::generate_preview;
+
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
-use crate::config::{FileServerConfig, FILE_SERVER_CONFIG};
 use handler::{
     api_handler::{api_version, set_password},
     file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
@@ -45,12 +45,7 @@ fn temp_dir() -> String {
 /// the way tests run for rocket mean logging would be initialized multiple times, which causes errors
 fn init_log() {
     #[cfg(not(test))]
-    SimpleLogger::new().init().unwrap();
-}
-
-async fn logging_consumer(data: String) -> bool {
-    log::info!("{}", data);
-    true
+    SimpleLogger::new().env().init().unwrap();
 }
 
 #[launch]
@@ -59,7 +54,7 @@ fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
-    file_preview_consumer(logging_consumer);
+    file_preview_consumer(generate_preview);
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();

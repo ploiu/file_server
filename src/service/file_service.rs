@@ -58,7 +58,7 @@ pub async fn save_file(
     return if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
-            eprintln!(
+            log::error!(
                 "Save file - failed to retrieve parent folder. Nested exception is {:?}",
                 e
             );
@@ -101,7 +101,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
         Ok(f) => f,
         Err(e) => {
             con.close().unwrap();
-            eprintln!(
+            log::error!(
                 "Failed to pull file info from database. Nested exception is {:?}",
                 e
             );
@@ -157,9 +157,10 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     // helps avoid nested matches
     delete_result?;
     fs::remove_file(&file_path).map_err(|e| {
-        eprintln!(
+        log::error!(
             "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
-            file_path, e
+            file_path,
+            e
         );
         DeleteFileError::FileSystemError
     })
@@ -171,7 +172,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
         Ok(_) => Ok(()),
         Err(rusqlite::Error::QueryReturnedNoRows) => Err(DeleteFileError::NotFound),
         Err(e) => {
-            eprintln!(
+            log::error!(
                 "Failed to delete file record from database! Nested exception is: \n {:?}",
                 e
             );
@@ -219,7 +220,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         file_repository::update_file(&file.id, &new_parent_id, &file.name().unwrap(), &con)
     {
         con.close().unwrap();
-        eprintln!(
+        log::error!(
             "Failed to update file record in database. Nested exception is {:?}",
             e
         );
@@ -248,7 +249,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     con.close().unwrap();
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
     if let Err(e) = fs::rename(old_path, new_path.to_string()) {
-        eprintln!(
+        log::error!(
             "Failed to move file in the file system. Nested exception is {:?}",
             e
         );
@@ -260,6 +261,21 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         name: file.name().unwrap(),
         tags,
     })
+}
+
+/// retrieves the full path to the file with the passed id
+pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
+    let con = repository::open_connection();
+    let result = file_repository::get_file_path(id, &con).map_err(|e| {
+        log::error!("Failed to get file path! Nested exception is {:?}", e);
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            GetFileError::NotFound
+        } else {
+            GetFileError::DbFailure
+        }
+    });
+    con.close().unwrap();
+    result
 }
 
 // ==== private functions ==== \\
@@ -282,7 +298,7 @@ async fn persist_save_file_to_folder(
             Ok(id)
         }
         Err(e) => {
-            eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(CreateFileError::FailWriteDisk)
         }
     }
@@ -298,7 +314,7 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     match file_input.file.persist_to(&file_name).await {
         Ok(_) => Ok(save_file_record(&file_name)?),
         Err(e) => {
-            eprintln!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(CreateFileError::FailWriteDisk)
         }
     }
@@ -314,21 +330,6 @@ fn save_file_record(name: &str) -> Result<u32, CreateFileError> {
         file_repository::create_file(&file_record, &con).map_err(|_| CreateFileError::FailWriteDb);
     con.close().unwrap();
     res
-}
-
-/// retrieves the full path to the file with the passed id
-fn get_file_path(id: u32) -> Result<String, GetFileError> {
-    let con = repository::open_connection();
-    let result = file_repository::get_file_path(id, &con).map_err(|e| {
-        eprintln!("Failed to get file path! Nested exception is {:?}", e);
-        if e == rusqlite::Error::QueryReturnedNoRows {
-            GetFileError::NotFound
-        } else {
-            GetFileError::DbFailure
-        }
-    });
-    con.close().unwrap();
-    result
 }
 
 /// adds a link to the folder for the passed file in the database
