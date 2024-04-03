@@ -12,7 +12,10 @@ use simple_logger::SimpleLogger;
 
 use handler::{
     api_handler::{api_version, set_password},
-    file_handler::{delete_file, download_file, get_file, search_files, update_file, upload_file},
+    file_handler::{
+        delete_file, download_file, get_file, get_file_preview, search_files, update_file,
+        upload_file,
+    },
     folder_handler::{create_folder, delete_folder, get_folder, update_folder},
     tag_handler::{create_tag, delete_tag, get_tag, update_tag},
 };
@@ -68,7 +71,8 @@ fn rocket() -> Rocket<Build> {
                 delete_file,
                 download_file,
                 update_file,
-                search_files
+                search_files,
+                get_file_preview
             ],
         )
         .mount(

@@ -17,6 +17,12 @@ pub enum GetFileError {
 }
 
 #[derive(PartialEq, Debug)]
+pub enum GetPreviewError {
+    NotFound,
+    DbFailure,
+}
+
+#[derive(PartialEq, Debug)]
 pub enum DeleteFileError {
     // file reference not found in repository
     NotFound,

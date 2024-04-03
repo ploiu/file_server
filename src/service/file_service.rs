@@ -9,7 +9,7 @@ use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
@@ -280,6 +280,27 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
             GetFileError::NotFound
         } else {
             GetFileError::DbFailure
+        }
+    });
+    con.close().unwrap();
+    result
+}
+
+/// Retrieves the preview contents of the file with the passed id in png format.
+/// The preview might not immediately exist in the database at the time this function is called,
+/// so extra care needs to be taken to not blow up if (when) that happens.
+///
+/// # Errors
+///
+/// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
+pub fn get_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
+    let con: Connection = repository::open_connection();
+    let result = file_repository::get_file_preview(id, &con).map_err(|e| {
+        log::error!("Failed to get file preview! Nested exception is {:?}", e);
+        if e == rusqlite::Error::QueryReturnedNoRows {
+            GetPreviewError::NotFound
+        } else {
+            GetPreviewError::DbFailure
         }
     });
     con.close().unwrap();
@@ -713,6 +734,6 @@ mod update_file_tests {
 }
 
 #[cfg(all(test, not(rust_analyzer)))]
-mod save_file_tests {
+mod get_file_preview_tests {
     use crate::service::file_service::*;
 }
