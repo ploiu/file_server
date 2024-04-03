@@ -9,7 +9,7 @@ authors = ["Ploiu"]
 [dependencies]
 # core technologies
 rocket = { version = "0.5", features = ["json", "tls"] }
-rusqlite = { version = "0.31", features = ["bundled"] }
+rusqlite = { version = "0.31", features = ["bundled", "array"] }
 # text encoding
 base64 = "0.22"
 sha2 = "0.10"

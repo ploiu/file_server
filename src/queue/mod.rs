@@ -1,6 +1,9 @@
-use lapin::options::{BasicAckOptions, BasicConsumeOptions, BasicNackOptions, QueueDeclareOptions};
+use lapin::options::{
+    BasicAckOptions, BasicConsumeOptions, BasicNackOptions, BasicPublishOptions,
+    QueueDeclareOptions,
+};
 use lapin::types::FieldTable;
-use lapin::{Channel, Connection, ConnectionProperties};
+use lapin::{BasicProperties, Channel, Connection, ConnectionProperties};
 use once_cell::sync::Lazy;
 use rocket::futures::StreamExt;
 use std::future::Future;
@@ -20,7 +23,7 @@ struct RabbitProvider {
 /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
 ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
 ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
-#[cfg(not(test))]
+#[cfg(any(not(test), rust_analyzer))]
 pub fn file_preview_consumer<F, Fut>(function: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
@@ -78,8 +81,32 @@ where
     }
 }
 
+/// publishes a message to the queue with the passed `queue_name`.
+/// failing to publish a message will not return an error, but will log the
+/// reason for failure. This is because rabbit is used to offload smaller tasks
+/// that aren't strictly necessary for the operation of the file server.
+#[cfg(any(not(test), rust_analyzer))]
+pub fn publish_message(queue_name: &str, message: &String) {
+    let provider = RABBIT_PROVIDER.as_ref().unwrap();
+    let channel = &provider.channel;
+    let payload: &[u8] = message.as_bytes();
+    let res = async_global_executor::block_on(channel.basic_publish(
+        "",
+        queue_name,
+        BasicPublishOptions::default(),
+        payload,
+        BasicProperties::default(),
+    ));
+    if let Err(e) = res {
+        log::error!(
+            "Failed to publish message {message} to queue {queue_name}. Exception is {:?}",
+            e
+        );
+    }
+}
+
 /// should only be called if RabbitConfig.enabled = true
-#[cfg(not(test))]
+#[cfg(any(not(test), rust_analyzer))]
 impl RabbitProvider {
     fn init() -> Self {
         let config = FILE_SERVER_CONFIG.clone();
@@ -109,7 +136,7 @@ impl RabbitProvider {
     }
 }
 
-#[cfg(not(test))]
+#[cfg(any(not(test), rust_analyzer))]
 static RABBIT_PROVIDER: Lazy<Option<RabbitProvider>> = Lazy::new(|| {
     let config = FILE_SERVER_CONFIG.clone();
     return if config.rabbit_mq.enabled {
@@ -121,13 +148,13 @@ static RABBIT_PROVIDER: Lazy<Option<RabbitProvider>> = Lazy::new(|| {
 
 // ---------------------------- test implementations that don't start up rabbit
 
-#[cfg(test)]
-static RABBIT_PROVIDER: Lazy<Option<RabbitProvider>> = Lazy::new(|| None);
-
-#[cfg(test)]
-pub fn file_preview_consumer<F, Fut>(function: F)
+#[cfg(all(test, not(rust_analyzer)))]
+pub fn file_preview_consumer<F, Fut>(_: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
     Fut: Future<Output = bool> + Send,
 {
 }
+
+#[cfg(all(test, not(rust_analyzer)))]
+pub fn publish_message(_: &str, _: &String) {}

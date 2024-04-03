@@ -15,17 +15,19 @@ use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
+use crate::{queue, repository};
+
+use super::preview_service;
 
 #[inline]
-#[cfg(not(test))]
+#[cfg(any(not(test), rust_analyzer))]
 pub fn file_dir() -> String {
     "./files".to_string()
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(rust_analyzer)))]
 pub fn file_dir() -> String {
     let thread_name = crate::test::current_thread_name();
     let dir_name = format!("./{}", thread_name);
@@ -44,6 +46,7 @@ pub async fn check_root_dir(dir: String) {
 
 /// saves a file to the disk and database
 pub async fn save_file(
+    // because of this, we can't test this except through rocket
     file_input: &mut CreateFileRequest<'_>,
     force: bool,
 ) -> Result<FileApi, CreateFileError> {
@@ -55,7 +58,9 @@ pub async fn save_file(
     // we shouldn't leak implementation details to the client, so this strips the root dir from the response
     let root_regex = Regex::new(format!("^{}/", file_dir()).as_str()).unwrap();
     let parent_id = file_input.folder_id();
-    return if parent_id != 0 {
+    let file_id: u32;
+    let resulting_file: FileApi;
+    if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
             log::error!(
@@ -69,14 +74,14 @@ pub async fn save_file(
             }
         })?;
         // folder exists, now try to create the file
-        let file_id =
+        file_id =
             persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
-        Ok(FileApi {
+        resulting_file = FileApi {
             id: file_id,
             folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
             tags: Vec::new(),
-        })
+        }
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
             format!(".{}", ext)
@@ -84,14 +89,17 @@ pub async fn save_file(
             String::from("")
         };
         let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
-        let file_id = persist_save_file(file_input).await?;
-        Ok(FileApi {
+        file_id = persist_save_file(file_input).await?;
+        resulting_file = FileApi {
             id: file_id,
             folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
             tags: Vec::new(),
-        })
-    };
+        }
+    }
+    // now publish the file to the rabbit queue so a preview can be generated for it later
+    queue::publish_message("icon_gen", &file_id.to_string());
+    Ok(resulting_file)
 }
 
 /// retrieves the file from the database with the passed id
@@ -386,8 +394,8 @@ fn determine_file_name(root_name: &String, extension: &Option<String>) -> String
     }
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, not(rust_analyzer)))]
+mod deterine_file_name_tests {
     use super::determine_file_name;
 
     #[test]
@@ -407,7 +415,7 @@ mod tests {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, not(rust_analyzer)))]
 mod update_file_tests {
     use std::fs;
 
@@ -702,4 +710,9 @@ mod update_file_tests {
         assert_eq!(vec!["inner", "test_thing.txt", "thing.txt"], file_names);
         cleanup();
     }
+}
+
+#[cfg(all(test, not(rust_analyzer)))]
+mod save_file_tests {
+    use crate::service::file_service::*;
 }
