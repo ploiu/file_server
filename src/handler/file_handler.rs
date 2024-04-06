@@ -4,17 +4,18 @@ use rocket::serde::json::Json;
 use crate::guard::HeaderAuth;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, SearchFileError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, GetPreviewError, SearchFileError,
+    UpdateFileError,
 };
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
-    SearchFileResponse, UpdateFileResponse,
+    GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::file_service::save_file;
-use crate::service::{file_service, search_service};
+use crate::service::{file_service, preview_service, search_service};
 
 /// accepts a file via request body and stores it off
 #[post("/?<force>", data = "<file_input>")]
@@ -163,4 +164,22 @@ pub fn update_file(data: Json<FileApi>, auth: HeaderAuth) -> UpdateFileResponse 
             "Failed to update the file. Check the server logs for details",
         )),
     }
+}
+
+#[get("/preview/<id>")]
+pub fn get_file_preview(id: u32, auth: HeaderAuth) -> GetPreviewResponse {
+    match auth.validate() {
+        ValidateResult::Ok => { /*no op*/ }
+        ValidateResult::NoPasswordSet => return GetPreviewResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    return match file_service::get_preview(id) {
+        Ok(preview) => GetPreviewResponse::Success(preview),
+        Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
+            "No preview for a file with that id could be found",
+        )),
+        Err(e) => GetPreviewResponse::GenericError(BasicMessage::new(
+            format!("Failed to get file preview. Exception is {:?}", e).as_str(),
+        )),
+    };
 }

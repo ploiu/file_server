@@ -1,0 +1,15 @@
+# if disabled, will not generate file previews for uploaded files
+[RabbitMq]
+# required
+enabled = true
+# optional
+address = "amqp://127.0.0.1:5672"
+
+[FilePreview]
+# the number of milliseconds to wait between processing batches of file previews
+sleepTimeMillis = 300_000
+# the maximum number of files to process per batch
+itemsToProcessPerBatch = 20
+
+[Database]
+location = "./db.sqlite"

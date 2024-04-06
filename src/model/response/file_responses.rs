@@ -82,3 +82,15 @@ pub enum SearchFileResponse {
     #[response(status = 500, content_type = "json")]
     GenericError(Json<BasicMessage>),
 }
+
+#[derive(Responder)]
+pub enum GetPreviewResponse {
+    #[response(status = 200)]
+    Success(Vec<u8>),
+    #[response(status = 404, content_type = "json")]
+    NotFound(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 500, content_type = "json")]
+    GenericError(Json<BasicMessage>),
+}
