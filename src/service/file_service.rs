@@ -176,16 +176,26 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
-    match file_repository::delete_file(id, con) {
-        Ok(_) => Ok(()),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Err(DeleteFileError::NotFound),
-        Err(e) => {
-            log::error!(
-                "Failed to delete file record from database! Nested exception is: \n {:?}",
-                e
-            );
-            Err(DeleteFileError::DbError)
-        }
+    // we first need to delete the file preview
+    let preview_delete_result = file_repository::delete_file_preview(id, con);
+    // we don't necessarily care if the preview wasn't deleted or not for this return value, but it's best to log it if error
+    if preview_delete_result.is_err() {
+        log::warn!(
+            "Failed to delete file preview for file {id}. Exception is {:?}",
+            preview_delete_result.unwrap_err()
+        );
+    }
+    let delete_result = file_repository::delete_file(id, con);
+    if delete_result.is_ok() {
+        return Ok(());
+    } else if Err(rusqlite::Error::QueryReturnedNoRows) == delete_result {
+        return Err(DeleteFileError::NotFound);
+    } else {
+        log::error!(
+            "Failed to delete file record from database! Nested exception is: \n {:?}",
+            delete_result.unwrap_err()
+        );
+        return Err(DeleteFileError::DbError);
     }
 }
 
@@ -293,7 +303,7 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 /// # Errors
 ///
 /// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
-pub fn get_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
+pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let con: Connection = repository::open_connection();
     let result = file_repository::get_file_preview(id, &con).map_err(|e| {
         log::error!("Failed to get file preview! Nested exception is {:?}", e);
@@ -734,6 +744,36 @@ mod update_file_tests {
 }
 
 #[cfg(all(test, not(rust_analyzer)))]
-mod get_file_preview_tests {
-    use crate::service::file_service::*;
+mod delete_file_with_id_tests {
+    use crate::{
+        service::file_service::*,
+        test::{cleanup, create_file_db_entry, create_file_preview, fail, refresh_db},
+    };
+
+    #[test]
+    fn test_deletes_file_properly() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        let con = open_connection();
+        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!((), res);
+        let file = get_file_metadata(1).unwrap_err();
+        assert_eq!(GetFileError::NotFound, file);
+        cleanup();
+    }
+
+    #[test]
+    fn test_deletes_file_preview() {
+        refresh_db();
+        create_file_db_entry("test.txt", None);
+        create_file_preview(1);
+        let con = open_connection();
+        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!((), res);
+        let preview = get_file_preview(1).unwrap_err();
+        assert_eq!(GetPreviewError::NotFound, preview);
+        cleanup();
+    }
 }

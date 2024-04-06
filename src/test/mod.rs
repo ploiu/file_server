@@ -48,6 +48,12 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
 }
 
 #[cfg(test)]
+pub fn create_file_preview(file_id: u32) {
+    let connection = open_connection();
+    file_repository::create_file_preview(file_id, vec![0x00], &connection).unwrap();
+}
+
+#[cfg(test)]
 pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {
     let connection = open_connection();
     folder_repository::create_folder(

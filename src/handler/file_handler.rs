@@ -173,7 +173,7 @@ pub fn get_file_preview(id: u32, auth: HeaderAuth) -> GetPreviewResponse {
         ValidateResult::NoPasswordSet => return GetPreviewResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
-    return match file_service::get_preview(id) {
+    return match file_service::get_file_preview(id) {
         Ok(preview) => GetPreviewResponse::Success(preview),
         Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
             "No preview for a file with that id could be found",
