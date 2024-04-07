@@ -19,8 +19,6 @@ use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
 
-use super::preview_service;
-
 #[inline]
 #[cfg(any(not(test), rust_analyzer))]
 pub fn file_dir() -> String {

@@ -105,7 +105,7 @@ fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
             return Err(PreviewError::FailedDecode);
         }
     };
-    let resized = img.resize(300, 300, image::imageops::FilterType::Gaussian);
+    let resized = img.resize(150, 150, image::imageops::FilterType::Gaussian);
     let mut blob = Vec::<u8>::new();
     if let Err(e) = resized.write_to(&mut Cursor::new(&mut blob), image::ImageFormat::Png) {
         log::error!("Failed to write resized image with path [{image_path}] to blob array. Exception is {:?}", e);

@@ -1,3 +1,6 @@
+use std::future::Future;
+use std::time::Duration;
+
 use lapin::options::{
     BasicAckOptions, BasicConsumeOptions, BasicNackOptions, BasicPublishOptions,
     QueueDeclareOptions,
@@ -6,11 +9,10 @@ use lapin::types::FieldTable;
 use lapin::{BasicProperties, Channel, Connection, ConnectionProperties};
 use once_cell::sync::Lazy;
 use rocket::futures::StreamExt;
-use std::future::Future;
-use std::time::Duration;
 
 use crate::config::FILE_SERVER_CONFIG;
 
+#[cfg(any(not(test), rust_analyzer))]
 struct RabbitProvider {
     /// the connection to the rabbit mq
     connection: Connection,
@@ -119,12 +121,15 @@ impl RabbitProvider {
             .unwrap();
             let channel = rabbit_connection.create_channel().await.unwrap();
             // even though this isn't used anywhere, we need to declare the queue or else it won't exist when we go to consume it
+            let queue_options = QueueDeclareOptions {
+                passive: false,
+                durable: true,
+                exclusive: false,
+                auto_delete: false,
+                nowait: false,
+            };
             channel
-                .queue_declare(
-                    "icon_gen",
-                    QueueDeclareOptions::default(),
-                    FieldTable::default(),
-                )
+                .queue_declare("icon_gen", queue_options, FieldTable::default())
                 .await
                 .unwrap();
             (rabbit_connection, channel)

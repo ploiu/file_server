@@ -10,3 +10,7 @@ services:
       - /opt/rabbitmq_scripts/rabbit-run-initialization.sh
     volumes:
       - ./docker/rabbit:/opt/rabbitmq_scripts
+    deploy:
+      resources:
+        limits:
+          memory: 256M

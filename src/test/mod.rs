@@ -9,6 +9,10 @@ use crate::repository::{
 use crate::service::file_service::file_dir;
 use crate::temp_dir;
 
+pub mod api_tests;
+pub mod file_tests;
+pub mod folder_tests;
+
 /// username:password
 #[cfg(test)]
 pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
