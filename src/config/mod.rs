@@ -19,10 +19,9 @@ pub struct DbConfig {
 
 #[derive(Deserialize, Clone)]
 pub struct FilePreviewConfig {
+    /// The amount of time to wait since the last request to process each preview
     #[serde(rename = "sleeptimemillis")]
     pub sleep_time_millis: u32,
-    #[serde(rename = "itemstoprocessperbatch")]
-    pub items_to_process_per_batch: u32,
 }
 
 /// config properties for the whole of this application
@@ -68,8 +67,7 @@ static FS_CONFIG_DEFAULT: Lazy<FileServerConfig> = Lazy::new(|| FileServerConfig
         enabled: true,
     },
     file_preview: FilePreviewConfig {
-        sleep_time_millis: 300_000,
-        items_to_process_per_batch: 20,
+        sleep_time_millis: 30_000,
     },
     database: DbConfig {
         location: "./db.sqlite".to_string(),

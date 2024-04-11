@@ -1,8 +1,9 @@
 #[macro_use]
 extern crate rocket;
 
-use std::fs;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
+use std::{fs, time::Instant};
 
 use rocket::{Build, Rocket};
 use service::preview_service::generate_preview;
@@ -31,6 +32,7 @@ mod model;
 mod queue;
 mod repository;
 mod service;
+mod util;
 
 #[cfg(not(test))]
 fn temp_dir() -> String {
@@ -55,7 +57,9 @@ pub fn rocket() -> Rocket<Build> {
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
-    file_preview_consumer(generate_preview);
+    // keep track of when the last request was made. This will let us wait for the server to be free before processing file previews
+    let last_request_time: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
+    file_preview_consumer(&last_request_time, generate_preview);
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
@@ -81,6 +85,7 @@ pub fn rocket() -> Rocket<Build> {
             "/tags",
             routes![get_tag, create_tag, update_tag, delete_tag],
         )
+        .manage(last_request_time)
 }
 
 #[cfg(test)]

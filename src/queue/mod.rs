@@ -11,6 +11,8 @@ use once_cell::sync::Lazy;
 use rocket::futures::StreamExt;
 
 use crate::config::FILE_SERVER_CONFIG;
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 #[cfg(any(not(test), rust_analyzer))]
 struct RabbitProvider {
@@ -22,11 +24,12 @@ struct RabbitProvider {
 
 /// sets up a long-running consumer job that invokes the passed [function](Fn)
 /// whenever there are items in the rabbit queue
+/// * `last_request_time` - the last time a request was made. A preview will not be generated as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
 /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
 ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
 ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
 #[cfg(any(not(test), rust_analyzer))]
-pub fn file_preview_consumer<F, Fut>(function: F)
+pub fn file_preview_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
     Fut: Future<Output = bool> + Send,
@@ -35,11 +38,8 @@ where
     if config.rabbit_mq.enabled {
         // using as_ref here because I definitely do _not_ want to clone the rabbit connection
         let provider = RABBIT_PROVIDER.as_ref().unwrap();
-
-        let sleep_time = config.file_preview.sleep_time_millis;
-        let items_to_process = config.file_preview.items_to_process_per_batch;
+        let last_request_time = last_request_time.clone();
         async_global_executor::spawn(async move {
-            let mut num_left_to_process: u32 = items_to_process;
             let mut consumer = provider
                 .channel
                 .basic_consume(
@@ -55,6 +55,33 @@ where
             to run on a dedicated raspi, but still */
             while let Some(delivery) = consumer.next().await {
                 let delivery = delivery.expect("error in consumer");
+                let time_since_last_request = match last_request_time.lock() {
+                    Ok(lock) => lock.elapsed().as_millis(),
+                    Err(mut e) => {
+                        // we're poisoned. This is not likely given how we use this mutex, but we need to reset its state
+                        **e.get_mut() = Instant::now();
+                        last_request_time.clear_poison();
+                        0
+                    }
+                } as u32;
+                if time_since_last_request <= config.file_preview.sleep_time_millis {
+                    log::info!(
+                        "Not generating previews since the time since last request is only {:?}",
+                        time_since_last_request
+                    );
+                    // we haven't waited enough time since the last request, so unack the message, sleep, and then skip this item
+                    delivery
+                        .nack(BasicNackOptions {
+                            multiple: false,
+                            requeue: true,
+                        })
+                        .await
+                        .unwrap();
+                    std::thread::sleep(Duration::from_millis(
+                        config.file_preview.sleep_time_millis as u64,
+                    ));
+                    continue;
+                }
                 let msg = String::from_utf8(delivery.data.clone()).unwrap();
                 if function(msg).await {
                     delivery
@@ -70,12 +97,6 @@ where
                         })
                         .await
                         .unwrap();
-                }
-
-                num_left_to_process -= 1;
-                if num_left_to_process == 0 {
-                    num_left_to_process = items_to_process;
-                    std::thread::sleep(Duration::from_millis(sleep_time as u64));
                 }
             }
         })
@@ -154,7 +175,7 @@ static RABBIT_PROVIDER: Lazy<Option<RabbitProvider>> = Lazy::new(|| {
 // ---------------------------- test implementations that don't start up rabbit
 
 #[cfg(all(test, not(rust_analyzer)))]
-pub fn file_preview_consumer<F, Fut>(_: F)
+pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
     Fut: Future<Output = bool> + Send,
