@@ -2,11 +2,11 @@
 [RabbitMq]
 # required
 enabled = true
-# optional
+# required if RabbitMq.enabled = true
 address = "amqp://127.0.0.1:5672"
 
 [FilePreview]
-# the number of milliseconds to wait between processing batches of file previews
+# the number of milliseconds to wait after a request before previews will be processed. This is on a per-item basis
 sleepTimeMillis = 30_000
 
 [Database]
