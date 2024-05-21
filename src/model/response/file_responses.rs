@@ -25,7 +25,7 @@ pub enum DownloadFileResponse {
     FileNotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
     FileDbError(Json<BasicMessage>),
-    #[response(status = 200)]
+    #[response(status = 200, content_type = "application/octet-stream")]
     Success(File),
     #[response(status = 401)]
     Unauthorized(String),
@@ -79,6 +79,18 @@ pub enum SearchFileResponse {
     Unauthorized(String),
     #[response(status = 400, content_type = "json")]
     BadRequest(Json<BasicMessage>),
+    #[response(status = 500, content_type = "json")]
+    GenericError(Json<BasicMessage>),
+}
+
+#[derive(Responder)]
+pub enum GetPreviewResponse {
+    #[response(status = 200, content_type = "image/png")]
+    Success(Vec<u8>),
+    #[response(status = 404, content_type = "json")]
+    NotFound(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
     #[response(status = 500, content_type = "json")]
     GenericError(Json<BasicMessage>),
 }

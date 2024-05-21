@@ -39,6 +39,15 @@ pub struct Tag {
     pub title: String,
 }
 
+#[derive(Debug)]
+pub struct FilePreview {
+    /// the id of the file this preview is for
+    pub id: u32,
+    /// the binary contents of the file preview.
+    /// This is stored in jpeg format
+    pub file_preview: Vec<u8>,
+}
+
 // ----------------------------
 impl FileRecord {
     pub fn from(name: String) -> FileRecord {

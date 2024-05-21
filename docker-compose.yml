@@ -1,0 +1,16 @@
+version: "3.9"
+services:
+  rabbit-mq:
+    image: rabbitmq:3-management
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    command:
+      - sh
+      - /opt/rabbitmq_scripts/rabbit-run-initialization.sh
+    volumes:
+      - ./docker/rabbit:/opt/rabbitmq_scripts
+    deploy:
+      resources:
+        limits:
+          memory: 256M
