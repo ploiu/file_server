@@ -8,19 +8,20 @@ use rusqlite::Connection;
 
 use model::repository::Folder;
 
-use crate::{model, repository};
 use crate::model::api::FileApi;
-use crate::model::error::file_errors::DeleteFileError;
+use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
 };
+
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
-use crate::repository::{folder_repository, open_connection};
-use crate::service::{file_service, tag_service};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
+use crate::service::{file_service, tag_service};
+use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
@@ -260,6 +261,32 @@ pub fn reduce_folders_by_tag(
     con.close().unwrap();
     let copied: HashSet<FolderResponse> = condensed_list.into_values().collect();
     Ok(copied)
+}
+
+pub fn get_file_previews_for_folder(id: u32) -> Result<Vec<Vec<u8>>, GetPreviewError> {
+    let mut con: Connection = open_connection();
+    let ids: Vec<u32> = if id == 0 {vec![]} else {vec![id]};
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &mut con) {
+        Ok(res) => res,
+        Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
+            con.close().unwrap();
+            log::error!("Failed to query files for folder {id}. Error is {e:?}");
+            return Err(GetPreviewError::DbFailure);
+        }
+        Err(_e) => vec![],
+    }
+    .into_iter()
+    .map(|it| it.id.unwrap())
+    .collect();
+    let previews = match file_repository::get_file_previews(file_ids, &con) {
+        Ok(res) => res,
+        Err(e) => {
+            con.close().unwrap();
+            log::error!("Failed to retrieve file previews for folder {id}. Error is {e:?}");
+            return Err(GetPreviewError::DbFailure);
+        }
+    };
+    Ok(previews)
 }
 
 // private functions

@@ -109,3 +109,16 @@ pub enum DeleteFolderResponse {
     #[response(status = 401)]
     Unauthorized(String),
 }
+
+#[derive(Responder)]
+pub enum GetMultiPreviewResponse {
+    /// takes a json string of Vec<Vec<u8>>
+    #[response(status = 200, content_type = "application/json")]
+    Success(String),
+    #[response(status = 404, content_type = "json")]
+    NotFound(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 500, content_type = "json")]
+    GenericError(Json<BasicMessage>),
+}

@@ -10,10 +10,11 @@ use crate::model::error::folder_errors::{
 };
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::BasicMessage;
+
 use crate::model::response::folder_responses::{
-    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, UpdateFolderResponse,
+    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, GetMultiPreviewResponse, UpdateFolderResponse
 };
+use crate::model::response::BasicMessage;
 use crate::service::folder_service;
 use crate::util::update_last_request_time;
 
@@ -121,5 +122,23 @@ pub fn delete_folder(
         Err(DeleteFolderError::FolderNotFound) => DeleteFolderResponse::FolderNotFound(BasicMessage::new("The folder with the request id does not exist.")),
         Err(DeleteFolderError::DbFailure) => DeleteFolderResponse::FolderDbError(BasicMessage::new("Failed to remove folder reference from the database. Check server logs for details.")),
         Err(DeleteFolderError::FileSystemError) => DeleteFolderResponse::FileSystemError(BasicMessage::new("Failed to remove folder from the file system. Check server logs for details."))
+    }
+}
+
+#[get("/preview/<id>")]
+pub fn get_child_file_previews(
+    id: u32,
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> GetMultiPreviewResponse {
+    match auth.validate() {
+        ValidateResult::Ok => { /*no op*/ }
+        ValidateResult::NoPasswordSet => return GetMultiPreviewResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return GetMultiPreviewResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    update_last_request_time(last_request_time);
+    match folder_service::get_file_previews_for_folder(id) {
+        Ok(res) => GetMultiPreviewResponse::Success(serde_json::to_string(&res).unwrap()),
+        Err(_) => GetMultiPreviewResponse::GenericError(BasicMessage::new("Failed to retrieve file previews for folder")),
     }
 }

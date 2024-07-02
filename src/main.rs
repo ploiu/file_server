@@ -6,17 +6,12 @@ use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rocket::{Build, Rocket};
-#[cfg(not(test))]
-use simple_logger::SimpleLogger;
 
 use handler::{
-    api_handler::{api_version, set_password},
-    file_handler::{
-        delete_file, download_file, get_file, get_file_preview, search_files, update_file,
-        upload_file,
-    },
-    folder_handler::{create_folder, delete_folder, get_folder, update_folder},
-    tag_handler::{create_tag, delete_tag, get_tag, update_tag},
+    api_handler::*,
+    file_handler::*,
+    folder_handler::*,
+    tag_handler::*,
 };
 use service::preview_service::generate_preview;
 
@@ -44,15 +39,34 @@ fn temp_dir() -> String {
     format!("./.{}_temp", thread_name)
 }
 
-/// the way tests run for rocket mean logging would be initialized multiple times, which causes errors
-fn init_log() {
-    #[cfg(not(test))]
-    SimpleLogger::new().env().init().unwrap();
+#[cfg(any(not(test), rust_analyzer))]
+fn init_log() -> Result<(), fern::InitError> {
+    // cargo fix keeps removing this if it's outside the function
+    use std::time::SystemTime;
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                humantime::format_rfc3339_seconds(SystemTime::now()),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        .chain(fern::log_file("output.log")?)
+        .apply()?;
+    Ok(())
+}
+
+#[cfg(test)]
+fn init_log() -> Result<(), fern::InitError> {
+    Ok(())
 }
 
 #[launch]
 pub fn rocket() -> Rocket<Build> {
-    init_log();
+    init_log().unwrap();
     initialize_db().unwrap();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
@@ -78,7 +92,7 @@ pub fn rocket() -> Rocket<Build> {
         )
         .mount(
             "/folders",
-            routes![get_folder, create_folder, update_folder, delete_folder],
+            routes![get_folder, create_folder, update_folder, delete_folder, get_child_file_previews],
         )
         .mount(
             "/tags",
