@@ -1,9 +1,8 @@
 use rocket::http::Status;
 use rocket::local::blocking::Client;
 
-use crate::test::*;
-
 use crate::rocket;
+use crate::test::*;
 
 fn client() -> Client {
     Client::tracked(rocket()).unwrap()

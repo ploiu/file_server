@@ -7,13 +7,12 @@ use rocket::serde::json::serde_json as serde;
 
 use crate::model::repository::{FileRecord, Folder};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::BasicMessage;
+use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{folder_repository, initialize_db, open_connection};
+use crate::rocket;
 use crate::service::file_service::file_dir;
 use crate::test::*;
-
-use crate::rocket;
 
 fn client() -> Client {
     Client::tracked(rocket()).unwrap()

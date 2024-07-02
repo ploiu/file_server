@@ -9,9 +9,9 @@ use crate::repository::{
 use crate::service::file_service::file_dir;
 use crate::temp_dir;
 
-pub mod api_tests;
-pub mod file_tests;
-pub mod folder_tests;
+pub mod api_handler_tests;
+pub mod file_handler_tests;
+pub mod folder_handler_tests;
 
 /// username:password
 #[cfg(test)]

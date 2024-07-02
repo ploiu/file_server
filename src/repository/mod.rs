@@ -1,9 +1,10 @@
 use std::path::Path;
 
-use crate::config::FILE_SERVER_CONFIG;
+use rusqlite::{Connection, Result};
 #[cfg(not(test))]
 use rusqlite::OpenFlags;
-use rusqlite::{Connection, Result};
+
+use crate::config::FILE_SERVER_CONFIG;
 
 pub mod file_repository;
 pub mod folder_repository;

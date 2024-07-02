@@ -1,13 +1,11 @@
 #[macro_use]
 extern crate rocket;
 
+use std::{fs, time::Instant};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::{fs, time::Instant};
 
 use rocket::{Build, Rocket};
-use service::preview_service::generate_preview;
-
 #[cfg(not(test))]
 use simple_logger::SimpleLogger;
 
@@ -20,6 +18,7 @@ use handler::{
     folder_handler::{create_folder, delete_folder, get_folder, update_folder},
     tag_handler::{create_tag, delete_tag, get_tag, update_tag},
 };
+use service::preview_service::generate_preview;
 
 use crate::handler::api_handler::update_password;
 use crate::queue::file_preview_consumer;

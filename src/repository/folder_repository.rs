@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use rusqlite::{params, Connection, Rows};
+use rusqlite::{Connection, params, Rows};
 
 use crate::model::repository;
 use crate::repository::file_repository;

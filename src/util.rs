@@ -1,6 +1,7 @@
-use rocket::State;
 use std::sync::{Arc, Mutex, TryLockError};
 use std::time::Instant;
+
+use rocket::State;
 
 pub fn update_last_request_time(last_request_time: &State<Arc<Mutex<Instant>>>) {
     match last_request_time.try_lock() {

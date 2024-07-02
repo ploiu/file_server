@@ -7,6 +7,7 @@ use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
+use crate::{queue, repository};
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
@@ -17,7 +18,6 @@ use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
-use crate::{queue, repository};
 
 #[inline]
 #[cfg(any(not(test), rust_analyzer))]
@@ -745,7 +745,7 @@ mod update_file_tests {
 mod delete_file_with_id_tests {
     use crate::{
         service::file_service::*,
-        test::{cleanup, create_file_db_entry, create_file_preview, fail, refresh_db},
+        test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
     };
 
     #[test]

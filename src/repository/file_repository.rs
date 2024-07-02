@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 
 use crate::model::repository::FileRecord;
 
@@ -211,12 +211,13 @@ mod get_files_by_all_tags_tests {
 
 #[cfg(test)]
 mod file_preview_tests {
+    use rusqlite::Connection;
+
     use crate::repository::file_repository::{
         create_file_preview, delete_file_preview, get_file_preview,
     };
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, fail, refresh_db};
-    use rusqlite::Connection;
+    use crate::test::{cleanup, create_file_db_entry, refresh_db};
 
     #[test]
     fn test_create_file_preview_works() {

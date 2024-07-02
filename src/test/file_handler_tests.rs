@@ -1,5 +1,9 @@
 use std::fs;
 
+use rocket::http::{Header, Status};
+use rocket::local::blocking::Client;
+use rocket::serde::json::serde_json as serde;
+
 use crate::model::api::FileApi;
 use crate::model::response::BasicMessage;
 use crate::repository::initialize_db;
@@ -7,9 +11,6 @@ use crate::rocket;
 use crate::service::file_service::file_dir;
 use crate::test;
 use crate::test::*;
-use rocket::http::{Header, Status};
-use rocket::local::blocking::Client;
-use rocket::serde::json::serde_json as serde;
 
 fn client() -> Client {
     Client::tracked(rocket()).unwrap()
