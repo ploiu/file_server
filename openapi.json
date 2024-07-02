@@ -373,6 +373,51 @@
         }
       }
     },
+    "/files/preview/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": ["files"],
+        "description": "downloads a small png of the file with the passed id",
+        "responses": {
+          "200": {
+            "description": "file found and preview returned",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
     "/folders/{id}": {
       "parameters": [
         {
