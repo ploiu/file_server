@@ -9,6 +9,10 @@ use crate::repository::{
 use crate::service::file_service::file_dir;
 use crate::temp_dir;
 
+pub mod api_handler_tests;
+pub mod file_handler_tests;
+pub mod folder_handler_tests;
+
 /// username:password
 #[cfg(test)]
 pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
@@ -45,6 +49,12 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
         folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
     }
     connection.close().unwrap();
+}
+
+#[cfg(test)]
+pub fn create_file_preview(file_id: u32) {
+    let connection = open_connection();
+    file_repository::create_file_preview(file_id, vec![0x00], &connection).unwrap();
 }
 
 #[cfg(test)]

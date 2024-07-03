@@ -9,13 +9,15 @@ pub mod folder_repository;
 pub mod metadata_repository;
 pub mod tag_repository;
 
-#[cfg(not(test))]
-static DB_LOCATION: &str = "./db.sqlite";
-
 /// creates a new connection and returns it, but panics if the connection could not be created
 #[cfg(not(test))]
 pub fn open_connection() -> Connection {
-    return match Connection::open_with_flags(Path::new(DB_LOCATION), OpenFlags::default()) {
+    use crate::config::FILE_SERVER_CONFIG;
+
+    return match Connection::open_with_flags(
+        Path::new(FILE_SERVER_CONFIG.clone().database.location.as_str()),
+        OpenFlags::default(),
+    ) {
         Ok(con) => con,
         Err(error) => panic!("Failed to get a connection to the database!: {}", error),
     };
@@ -63,10 +65,19 @@ fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
         log::info!("Migrating database to v2...");
         migrate_v2(con)?;
     }
+    if table_version < 3 {
+        log::info!("Migrating database to v3...");
+        migrate_v3(con)?;
+    }
     Ok(())
 }
 
 fn migrate_v2(con: &Connection) -> Result<()> {
     let migration_script = include_str!("../assets/migration/v2.sql");
+    con.execute_batch(migration_script)
+}
+
+fn migrate_v3(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("../assets/migration/v3.sql");
     con.execute_batch(migration_script)
 }

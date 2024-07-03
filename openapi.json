@@ -373,6 +373,51 @@
         }
       }
     },
+    "/files/preview/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": ["files"],
+        "description": "downloads a small png of the file with the passed id",
+        "responses": {
+          "200": {
+            "description": "file found and preview returned",
+            "content": {
+              "image/png": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "file not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
     "/folders/{id}": {
       "parameters": [
         {
@@ -542,6 +587,51 @@
           },
           "404": {
             "description": "either the target folder was not found, or the parent folder it's being moved to is not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
+    "/folders/preview/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": ["folders"],
+        "description": "downloads all file previews under the folder with the passed id",
+        "responses": {
+          "200": {
+            "description": "folder found and previews returned",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "description": "map of key => file id : byte[]"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "file not found",
             "content": {
               "application/json": {
                 "schema": {

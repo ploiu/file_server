@@ -259,7 +259,7 @@ fn get_child_files_non_root(
     // can't pass a collection of values for a single parameter, and can't combine them and pass as a string param because rusqlite wraps it in '' which we don't want for numeric IDs
     let joined_ids = ids
         .into_iter()
-        .map(|id| format!("{id}"))
+        .map(|id| id.to_string())
         .reduce(|combined, current| format!("{combined}, {current}"))
         .expect("get_child_files_with_id: failed to reduce id collection");
     let query_string = query_string.replace("?1", joined_ids.as_str());

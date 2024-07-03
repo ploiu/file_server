@@ -8,3 +8,6 @@
 cert_options.conf
 .file_server_temp/**
 !.file_server_temp/.gitkeep
+FileServer.toml
+output.log
+output_test.log

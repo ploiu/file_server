@@ -9,15 +9,16 @@ use rusqlite::Connection;
 use model::repository::Folder;
 
 use crate::model::api::FileApi;
-use crate::model::error::file_errors::DeleteFileError;
+use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
 };
+
 use crate::model::repository::FileRecord;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
-use crate::repository::{folder_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
@@ -260,6 +261,41 @@ pub fn reduce_folders_by_tag(
     con.close().unwrap();
     let copied: HashSet<FolderResponse> = condensed_list.into_values().collect();
     Ok(copied)
+}
+
+pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
+    let mut con: Connection = open_connection();
+    let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &mut con) {
+        Ok(res) => res,
+        Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
+            con.close().unwrap();
+            log::error!("Failed to query files for folder {id}. Error is {e:?}");
+            return Err(GetPreviewError::DbFailure);
+        }
+        Err(_e) => vec![],
+    }
+    .into_iter()
+    .map(|it| it.id.unwrap())
+    .collect();
+    let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
+    for id in file_ids {
+        let preview = match file_repository::get_file_preview(id, &con) {
+            Ok(p) => p,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!("Failed to get preview for file {id}. Error is {e:?}");
+                if rusqlite::Error::QueryReturnedNoRows == e {
+                    return Err(GetPreviewError::NotFound);
+                } else {
+                    return Err(GetPreviewError::DbFailure);
+                }
+            }
+        };
+        map.insert(id, preview);
+    }
+    con.close().unwrap();
+    Ok(map)
 }
 
 // private functions
