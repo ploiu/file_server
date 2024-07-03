@@ -1,10 +1,8 @@
 use std::path::Path;
 
-use rusqlite::{Connection, Result};
 #[cfg(not(test))]
 use rusqlite::OpenFlags;
-
-
+use rusqlite::{Connection, Result};
 
 pub mod file_repository;
 pub mod folder_repository;

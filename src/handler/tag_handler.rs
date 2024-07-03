@@ -7,10 +7,10 @@ use rocket::State;
 use crate::guard::HeaderAuth;
 use crate::model::error::tag_errors::{GetTagError, UpdateTagError};
 use crate::model::guard::auth::ValidateResult;
-use crate::model::response::{BasicMessage, TagApi};
 use crate::model::response::tag_responses::{
     CreateTagResponse, DeleteTagResponse, GetTagResponse, UpdateTagResponse,
 };
+use crate::model::response::{BasicMessage, TagApi};
 use crate::service::tag_service;
 use crate::util::update_last_request_time;
 

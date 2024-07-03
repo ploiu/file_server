@@ -1,12 +1,12 @@
 use std::io::Cursor;
 
-use image::DynamicImage;
 use image::io::Reader as ImageReader;
+use image::DynamicImage;
 use rusqlite::Connection;
 
-use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
 use crate::model::error::preview_errors::PreviewError;
 use crate::repository::{file_repository, open_connection};
+use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
 
 /// generates a preview of a file based on the passed `message_data` parameter.
 /// Not all files will have previews generated (mainly images, videos, and gifs)

@@ -12,7 +12,8 @@ use crate::model::guard::auth::ValidateResult;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 
 use crate::model::response::folder_responses::{
-    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, GetMultiPreviewResponse, UpdateFolderResponse
+    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, GetMultiPreviewResponse,
+    UpdateFolderResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::folder_service;
@@ -139,6 +140,8 @@ pub fn get_child_file_previews(
     update_last_request_time(last_request_time);
     match folder_service::get_file_previews_for_folder(id) {
         Ok(res) => GetMultiPreviewResponse::Success(json::Json(res)),
-        Err(_) => GetMultiPreviewResponse::GenericError(BasicMessage::new("Failed to retrieve file previews for folder")),
+        Err(_) => GetMultiPreviewResponse::GenericError(BasicMessage::new(
+            "Failed to retrieve file previews for folder",
+        )),
     }
 }

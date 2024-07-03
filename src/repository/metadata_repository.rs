@@ -55,12 +55,32 @@ pub fn set_auth(auth: HeaderAuth, con: &Connection) -> Result<(), rusqlite::Erro
 }
 
 pub fn update_auth(auth: BodyAuth, con: &Connection) -> Result<(), rusqlite::Error> {
-    let mut statement = con
-        .prepare(include_str!(
-            "../assets/queries/metadata/update_auth_hash.sql"
-        ))
-        .unwrap();
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/update_auth_hash.sql"
+    ))?;
     statement.execute([auth.to_string()])?;
+    Ok(())
+}
+
+pub fn get_generated_previews_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/get_preview_generated_flag.sql"
+    ))?;
+    let query_res: Result<String, rusqlite::Error> = statement.query_row([], |it| it.get(0));
+    if let Err(rusqlite::Error::QueryReturnedNoRows) = query_res {
+        Ok(false)
+    } else if query_res.is_ok() {
+        Ok(true)
+    } else {
+        Err(query_res.unwrap_err())
+    }
+}
+
+pub fn set_generated_previews_flag(con: &Connection) -> Result<(), rusqlite::Error> {
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/set_preview_generated_flag.sql"
+    ))?;
+    statement.execute([])?;
     Ok(())
 }
 

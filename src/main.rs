@@ -1,18 +1,14 @@
 #[macro_use]
 extern crate rocket;
 
-use std::{fs, time::Instant};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::{fs, time::Instant};
 
 use rocket::{Build, Rocket};
 
-use handler::{
-    api_handler::*,
-    file_handler::*,
-    folder_handler::*,
-    tag_handler::*,
-};
+use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
+use service::file_service::generate_all_previews;
 use service::preview_service::generate_preview;
 
 use crate::handler::api_handler::update_password;
@@ -68,6 +64,7 @@ fn init_log() -> Result<(), fern::InitError> {
 pub fn rocket() -> Rocket<Build> {
     init_log().unwrap();
     initialize_db().unwrap();
+    generate_all_previews();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     // keep track of when the last request was made. This will let us wait for the server to be free before processing file previews
@@ -92,7 +89,13 @@ pub fn rocket() -> Rocket<Build> {
         )
         .mount(
             "/folders",
-            routes![get_folder, create_folder, update_folder, delete_folder, get_child_file_previews],
+            routes![
+                get_folder,
+                create_folder,
+                update_folder,
+                delete_folder,
+                get_child_file_previews
+            ],
         )
         .mount(
             "/tags",

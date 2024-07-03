@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use rusqlite::{Connection, params};
+use rusqlite::{params, Connection};
 
 use crate::model::repository::FileRecord;
 
@@ -138,14 +138,27 @@ pub fn create_file_preview(
 }
 
 pub fn get_file_preview(file_id: u32, con: &Connection) -> Result<Vec<u8>, rusqlite::Error> {
-    let mut pst = con.prepare(&format!(include_str!("../assets/queries/file/get_file_preview.sql"), file_id))?;
+    let mut pst = con.prepare(&format!(
+        include_str!("../assets/queries/file/get_file_preview.sql"),
+        file_id
+    ))?;
     let res: Vec<u8> = pst.query_row([], |row| row.get(0))?;
     Ok(res)
 }
 
-pub fn get_file_previews(file_ids: Vec<u32>, con: &Connection) -> Result<Vec<Vec<u8>>, rusqlite::Error> {
-    let placeholder: String = file_ids.into_iter().map(|it| it.to_string()).collect::<Vec<_>>().join(",");
-    let mut pst = con.prepare(&format!(include_str!("../assets/queries/file/get_file_preview.sql"), placeholder))?;
+pub fn get_file_previews(
+    file_ids: Vec<u32>,
+    con: &Connection,
+) -> Result<Vec<Vec<u8>>, rusqlite::Error> {
+    let placeholder: String = file_ids
+        .into_iter()
+        .map(|it| it.to_string())
+        .collect::<Vec<_>>()
+        .join(",");
+    let mut pst = con.prepare(&format!(
+        include_str!("../assets/queries/file/get_file_preview.sql"),
+        placeholder
+    ))?;
     let mut previews: Vec<Vec<u8>> = vec![];
     let rows = pst.query_map([], |row| row.get(0))?;
     for row in rows {
@@ -160,6 +173,16 @@ pub fn delete_file_preview(file_id: u32, con: &Connection) -> Result<(), rusqlit
     ))?;
     pst.execute(params![file_id])?;
     Ok(())
+}
+
+pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_file_ids.sql"))?;
+    let mut ids: Vec<u32> = vec![];
+    let res = pst.query_map([], |row| row.get(0))?;
+    for row in res {
+        ids.push(row?);
+    }
+    Ok(ids)
 }
 
 pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {

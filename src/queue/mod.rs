@@ -3,12 +3,9 @@ use std::sync::{Arc, Mutex};
 
 use std::time::Instant;
 
-
-
-use lapin::{Channel, Connection};
 #[cfg(not(test))]
 use crate::config::FILE_SERVER_CONFIG;
-
+use lapin::{Channel, Connection};
 
 struct RabbitProvider {
     /// the connection to the rabbit mq
@@ -32,9 +29,9 @@ where
     use lapin::options::BasicNackOptions;
     use lapin::options::{BasicAckOptions, BasicConsumeOptions};
     use lapin::types::FieldTable;
-    
+
     use rocket::futures::StreamExt;
-    
+
     use std::time::Duration;
 
     let config = FILE_SERVER_CONFIG.clone();
@@ -115,6 +112,10 @@ where
 pub fn publish_message(queue_name: &str, message: &String) {
     use lapin::{options::BasicPublishOptions, BasicProperties};
 
+    if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
+        return;
+    }
+
     let provider = RABBIT_PROVIDER.as_ref().unwrap();
     let channel = &provider.channel;
     let payload: &[u8] = message.as_bytes();
@@ -137,11 +138,10 @@ pub fn publish_message(queue_name: &str, message: &String) {
 #[cfg(any(not(test), rust_analyzer))]
 impl RabbitProvider {
     fn init() -> Self {
-        
         use lapin::options::QueueDeclareOptions;
         use lapin::types::FieldTable;
         use lapin::ConnectionProperties;
-        
+
         let config = FILE_SERVER_CONFIG.clone();
         let (connection, channel) = async_global_executor::block_on(async {
             let rabbit_connection = Connection::connect(

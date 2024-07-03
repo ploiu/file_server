@@ -265,7 +265,7 @@ pub fn reduce_folders_by_tag(
 
 pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
     let mut con: Connection = open_connection();
-    let ids: Vec<u32> = if id == 0 {vec![]} else {vec![id]};
+    let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
     let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &mut con) {
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
@@ -290,10 +290,11 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
                 } else {
                     return Err(GetPreviewError::DbFailure);
                 }
-            },
+            }
         };
         map.insert(id, preview);
     }
+    con.close().unwrap();
     Ok(map)
 }
 
