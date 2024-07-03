@@ -46,3 +46,6 @@ Also for cross-compiling to raspi, you will need to install aarch64 gcc. On ubun
 ```shell
 sudo apt install gcc-aarch64-linux-gnu
 ```
+
+## Running
+all features require [rabbitmq](https://www.rabbitmq.com/) to be running on your machine. Running `docker-compose up` in the project root directory will start up a docker with rabbit, and create an admin user with username `admin` and password `admin`. To turn off rabbit-related features (such as file previews), set `RabbitMq.enabled` to `false` in `FileServer.toml`
