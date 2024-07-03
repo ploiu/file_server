@@ -14,6 +14,8 @@ pub mod tag_repository;
 /// creates a new connection and returns it, but panics if the connection could not be created
 #[cfg(not(test))]
 pub fn open_connection() -> Connection {
+    use crate::config::FILE_SERVER_CONFIG;
+
     return match Connection::open_with_flags(
         Path::new(FILE_SERVER_CONFIG.clone().database.location.as_str()),
         OpenFlags::default(),

@@ -619,10 +619,10 @@
           "200": {
             "description": "folder found and previews returned",
             "content": {
-              "image/png": {
+              "application/json": {
                 "schema": {
-                  "type": "string",
-                  "format": "binary"
+                  "type": "object",
+                  "description": "map of key => file id : byte[]"
                 }
               }
             }

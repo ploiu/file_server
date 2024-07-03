@@ -5,13 +5,11 @@ use std::time::Instant;
 
 
 
+use lapin::{Channel, Connection};
+#[cfg(not(test))]
+use crate::config::FILE_SERVER_CONFIG;
 
 
-
-
-
-
-#[cfg(any(not(test), rust_analyzer))]
 struct RabbitProvider {
     /// the connection to the rabbit mq
     connection: Connection,
@@ -31,6 +29,14 @@ where
     F: Fn(String) -> Fut + Send + 'static,
     Fut: Future<Output = bool> + Send,
 {
+    use lapin::options::BasicNackOptions;
+    use lapin::options::{BasicAckOptions, BasicConsumeOptions};
+    use lapin::types::FieldTable;
+    
+    use rocket::futures::StreamExt;
+    
+    use std::time::Duration;
+
     let config = FILE_SERVER_CONFIG.clone();
     if config.rabbit_mq.enabled {
         // using as_ref here because I definitely do _not_ want to clone the rabbit connection
@@ -107,6 +113,8 @@ where
 /// that aren't strictly necessary for the operation of the file server.
 #[cfg(any(not(test), rust_analyzer))]
 pub fn publish_message(queue_name: &str, message: &String) {
+    use lapin::{options::BasicPublishOptions, BasicProperties};
+
     let provider = RABBIT_PROVIDER.as_ref().unwrap();
     let channel = &provider.channel;
     let payload: &[u8] = message.as_bytes();
@@ -129,6 +137,11 @@ pub fn publish_message(queue_name: &str, message: &String) {
 #[cfg(any(not(test), rust_analyzer))]
 impl RabbitProvider {
     fn init() -> Self {
+        
+        use lapin::options::QueueDeclareOptions;
+        use lapin::types::FieldTable;
+        use lapin::ConnectionProperties;
+        
         let config = FILE_SERVER_CONFIG.clone();
         let (connection, channel) = async_global_executor::block_on(async {
             let rabbit_connection = Connection::connect(
@@ -160,14 +173,15 @@ impl RabbitProvider {
 }
 
 #[cfg(any(not(test), rust_analyzer))]
-static RABBIT_PROVIDER: Lazy<Option<RabbitProvider>> = Lazy::new(|| {
-    let config = FILE_SERVER_CONFIG.clone();
-    return if config.rabbit_mq.enabled {
-        Some(RabbitProvider::init())
-    } else {
-        None
-    };
-});
+static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
+    once_cell::sync::Lazy::new(|| {
+        let config = FILE_SERVER_CONFIG.clone();
+        return if config.rabbit_mq.enabled {
+            Some(RabbitProvider::init())
+        } else {
+            None
+        };
+    });
 
 // ---------------------------- test implementations that don't start up rabbit
 

@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rocket::serde::{Deserialize, json::Json, Serialize};
 
 use crate::model::api::FileApi;
@@ -114,7 +116,7 @@ pub enum DeleteFolderResponse {
 pub enum GetMultiPreviewResponse {
     /// takes a json string of Vec<Vec<u8>>
     #[response(status = 200, content_type = "application/json")]
-    Success(String),
+    Success(Json<HashMap<u32, Vec<u8>>>),
     #[response(status = 404, content_type = "json")]
     NotFound(Json<BasicMessage>),
     #[response(status = 401)]

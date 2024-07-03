@@ -263,7 +263,7 @@ pub fn reduce_folders_by_tag(
     Ok(copied)
 }
 
-pub fn get_file_previews_for_folder(id: u32) -> Result<Vec<Vec<u8>>, GetPreviewError> {
+pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
     let mut con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 {vec![]} else {vec![id]};
     let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &mut con) {
@@ -278,15 +278,23 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<Vec<Vec<u8>>, GetPreviewE
     .into_iter()
     .map(|it| it.id.unwrap())
     .collect();
-    let previews = match file_repository::get_file_previews(file_ids, &con) {
-        Ok(res) => res,
-        Err(e) => {
-            con.close().unwrap();
-            log::error!("Failed to retrieve file previews for folder {id}. Error is {e:?}");
-            return Err(GetPreviewError::DbFailure);
-        }
-    };
-    Ok(previews)
+    let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
+    for id in file_ids {
+        let preview = match file_repository::get_file_preview(id, &con) {
+            Ok(p) => p,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!("Failed to get preview for file {id}. Error is {e:?}");
+                if rusqlite::Error::QueryReturnedNoRows == e {
+                    return Err(GetPreviewError::NotFound);
+                } else {
+                    return Err(GetPreviewError::DbFailure);
+                }
+            },
+        };
+        map.insert(id, preview);
+    }
+    Ok(map)
 }
 
 // private functions

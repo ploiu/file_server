@@ -925,7 +925,6 @@ dependencies = [
  "rocket",
  "rusqlite",
  "serde",
- "serde_json",
  "sha2",
 ]
 

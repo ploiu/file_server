@@ -1,7 +1,7 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use rocket::serde::json::Json;
+use rocket::serde::json::{self, Json};
 use rocket::State;
 
 use crate::guard::HeaderAuth;
@@ -138,7 +138,7 @@ pub fn get_child_file_previews(
     };
     update_last_request_time(last_request_time);
     match folder_service::get_file_previews_for_folder(id) {
-        Ok(res) => GetMultiPreviewResponse::Success(serde_json::to_string(&res).unwrap()),
+        Ok(res) => GetMultiPreviewResponse::Success(json::Json(res)),
         Err(_) => GetMultiPreviewResponse::GenericError(BasicMessage::new("Failed to retrieve file previews for folder")),
     }
 }
