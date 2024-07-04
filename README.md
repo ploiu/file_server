@@ -49,3 +49,12 @@ sudo apt install gcc-aarch64-linux-gnu
 
 ## Running
 all features require [rabbitmq](https://www.rabbitmq.com/) to be running on your machine. Running `docker-compose up` in the project root directory will start up a docker with rabbit, and create an admin user with username `admin` and password `admin`. To turn off rabbit-related features (such as file previews), set `RabbitMq.enabled` to `false` in `FileServer.toml`
+
+## notes
+generating file previews requires rabbitmq to be running _when this application starts_. Timing can vary depending on your device, but here's an example script that can guide you in booting up properly (works great in `/etc/rc.local`):
+```sh
+sudo rabbitmq-server &
+# for lower end hardware, we'll need to wait before listening for a node. This is subject to hardware power
+sleep 45
+sudo rabbitmqctl await_online_nodes 1 && $(./sudo file_server &) &
+```
