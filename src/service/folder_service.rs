@@ -282,6 +282,8 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     for id in file_ids {
         let preview = match file_repository::get_file_preview(id, &con) {
             Ok(p) => p,
+            // no preview for 1 specific file is common and fine
+            Err(rusqlite::Error::QueryReturnedNoRows) => continue,
             Err(e) => {
                 con.close().unwrap();
                 log::error!("Failed to get preview for file {id}. Error is {e:?}");
