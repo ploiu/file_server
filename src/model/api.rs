@@ -44,7 +44,7 @@ impl FileApi {
         FileApi {
             tags,
             id: file.id.unwrap(),
-            folder_id: None,
+            folder_id: file.parent_id,
             name: file.name,
         }
     }
