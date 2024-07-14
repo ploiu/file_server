@@ -422,6 +422,7 @@ fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
     file_name: &String,
 ) -> Result<(), CreateFileError> {
+    log::warn!("{file_name}{:?}", &file_input.extension);
     let full_file_name = determine_file_name(file_name, &file_input.extension);
     // first check that the db does not have a record of the file in its directory
     let con = repository::open_connection();
@@ -438,6 +439,7 @@ fn check_file_in_dir(
     // compare the names of all the child files
     for child in child_files.unwrap().iter() {
         if child.name.to_lowercase() == full_file_name.to_lowercase() {
+            log::warn!("Not saving file {full_file_name} because it already exists.");
             return Err(CreateFileError::AlreadyExists);
         }
     }

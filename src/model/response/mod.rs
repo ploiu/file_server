@@ -35,11 +35,11 @@ impl BasicMessage {
     }
 }
 
-impl TagApi {
-    pub fn from(orig: repository::Tag) -> TagApi {
+impl From<repository::Tag> for TagApi {
+    fn from(value: repository::Tag) -> Self {
         TagApi {
-            id: Some(orig.id),
-            title: orig.title,
+            id: Some(value.id),
+            title: value.title,
         }
     }
 }

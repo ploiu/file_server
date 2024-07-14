@@ -14,11 +14,11 @@ use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
 };
 
-use crate::model::repository::FileRecord;
+use crate::model::repository::{FileRecord, Tag};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
-use crate::repository::{file_repository, folder_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
@@ -30,15 +30,31 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
         id
     };
     let folder = get_folder_by_id(db_id)?;
-    let mut folder = FolderResponse::from(&folder);
+    let mut folder: FolderResponse = folder.into();
     let con: Connection = repository::open_connection();
-    let child_folders = folder_repository::get_child_folders(db_id, &con).map_err(|e| {
-        eprintln!(
-            "Failed to pull child folder info from database! Nested exception is: \n {:?}",
-            e
-        );
-        GetFolderError::DbFailure
-    });
+    let child_folders = match folder_repository::get_child_folders(db_id, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!("Failed to pull child folders from database! Nested exception is {e:?}");
+            con.close().unwrap();
+            return Err(GetFolderError::DbFailure);
+        }
+    };
+    let mut converted_folders: Vec<FolderResponse> = Vec::new();
+    for child in child_folders {
+        let tags: Vec<TagApi> =
+            match tag_repository::get_tags_on_folder(child.id.unwrap_or(0), &con) {
+                Ok(t) => t.into_iter().map(|it| it.into()).collect(),
+                Err(e) => {
+                    log::error!("Failed to retrieve tags for folder. Exception is {e:?}");
+                    con.close().unwrap();
+                    return Err(GetFolderError::TagError);
+                }
+            };
+        let mut converted: FolderResponse = child.into();
+        converted += tags;
+        converted_folders.push(converted);
+    }
     let tag_db_id = if let Some(id_res) = id { id_res } else { 0 };
     let tags = match tag_service::get_tags_on_folder(tag_db_id) {
         Ok(t) => t,
@@ -48,11 +64,9 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
         }
     };
     con.close().unwrap();
-    folder.folders(child_folders?);
-    folder.files(get_files_for_folder(db_id).unwrap());
-    for tag in tags {
-        folder.tags.push(tag);
-    }
+    folder += converted_folders;
+    folder += get_files_for_folder(db_id).unwrap();
+    folder += tags;
     Ok(folder)
 }
 
@@ -76,7 +90,7 @@ pub async fn create_folder(
             let folder_path = format!("{}/{}", file_dir(), f.name);
             let fs_path = Path::new(folder_path.as_str());
             match fs::create_dir(fs_path) {
-                Ok(_) => Ok(FolderResponse::from(&f)),
+                Ok(_) => Ok(f.into()),
                 Err(_) => Err(CreateFolderError::FileSystemFailure),
             }
         }
