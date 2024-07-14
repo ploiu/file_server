@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::ops::AddAssign;
 
 use rocket::serde::{json::Json, Deserialize, Serialize};
 
@@ -21,8 +22,26 @@ pub struct FolderResponse {
     pub tags: Vec<TagApi>,
 }
 
-impl FolderResponse {
-    pub fn from(base: &Folder) -> FolderResponse {
+impl AddAssign<Vec<TagApi>> for FolderResponse {
+    fn add_assign(&mut self, rhs: Vec<TagApi>) {
+        self.tags = rhs;
+    }
+}
+
+impl AddAssign<Vec<FileApi>> for FolderResponse {
+    fn add_assign(&mut self, rhs: Vec<FileApi>) {
+        self.files = rhs;
+    }
+}
+
+impl AddAssign<Vec<FolderResponse>> for FolderResponse {
+    fn add_assign(&mut self, rhs: Vec<FolderResponse>) {
+        self.folders = rhs;
+    }
+}
+
+impl From<Folder> for FolderResponse {
+    fn from(base: Folder) -> Self {
         let split_name = String::from(&base.name);
         let split_name = split_name.split('/');
         let name = String::from(split_name.last().unwrap_or(base.name.as_str()));
@@ -36,17 +55,6 @@ impl FolderResponse {
             files: Vec::new(),
             tags: Vec::new(),
         }
-    }
-
-    pub fn folders(&mut self, folders: Vec<Folder>) {
-        folders
-            .iter()
-            .map(FolderResponse::from)
-            .for_each(|f| self.folders.push(f));
-    }
-
-    pub fn files(&mut self, files: Vec<FileApi>) {
-        files.into_iter().for_each(|f| self.files.push(f));
     }
 }
 
