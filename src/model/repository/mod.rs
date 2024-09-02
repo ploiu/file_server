@@ -31,7 +31,7 @@ pub struct FolderFiles {
     pub file_id: u32,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct Tag {
     /// the id of the tag
     pub id: u32,

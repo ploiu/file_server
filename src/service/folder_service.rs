@@ -63,9 +63,9 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
             return Err(GetFolderError::TagError);
         }
     };
+    folder += get_files_for_folder(db_id, &con).unwrap();
     con.close().unwrap();
     folder += converted_folders;
-    folder += get_files_for_folder(db_id).unwrap();
     folder += tags;
     Ok(folder)
 }
@@ -607,46 +607,40 @@ fn is_attempt_move_to_sub_child(
 }
 
 /// returns the top-level files for the passed folder
-fn get_files_for_folder(id: Option<u32>) -> Result<Vec<FileApi>, GetChildFilesError> {
-    let con: Connection = repository::open_connection();
-    // first we need to check the folder exists
-    if let Err(e) = folder_repository::get_by_id(id, &con) {
-        con.close().unwrap();
-        return if e == rusqlite::Error::QueryReturnedNoRows {
-            Err(GetChildFilesError::FolderNotFound)
-        } else {
-            eprintln!(
-                "Failed to query database for folders. Nested exception is: \n {:?}",
-                e
-            );
-            Err(GetChildFilesError::DbFailure)
-        };
-    }
+fn get_files_for_folder(
+    id: Option<u32>,
+    con: &Connection,
+) -> Result<Vec<FileApi>, GetChildFilesError> {
     // now we can retrieve all the file records in this folder
     let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
     let child_files = match folder_repository::get_child_files(unwrapped_id, &con) {
         Ok(files) => files,
         Err(e) => {
-            con.close().unwrap();
-            eprintln!(
-                "Failed to query database for child files. Nested exception is: \n {:?}",
-                e
-            );
+            log::error!("Failed to query database for child files. Nested exception is: \n {e:?}");
             return Err(GetChildFilesError::DbFailure);
+        }
+    };
+    let file_ids: Vec<u32> = child_files
+        .iter()
+        .map(|f| f.id.expect("files pulled from database didn't have ID!"))
+        .collect();
+    let file_tags = match tag_repository::get_tags_on_files(file_ids, &con) {
+        Ok(res) => res,
+        Err(e) => {
+            log::error!("Failed to get tags on file {e:?}");
+            return Err(GetChildFilesError::TagError);
         }
     };
     let mut result: Vec<FileApi> = Vec::new();
     for file in child_files {
-        let tags = match tag_service::get_tags_on_file(file.id.unwrap()) {
-            Ok(t) => t,
-            Err(_) => {
-                con.close().unwrap();
-                return Err(GetChildFilesError::TagError);
-            }
+        let tags: Vec<Tag> = if file_tags.contains_key(&file.id.unwrap()) {
+            file_tags.get(&file.id.unwrap()).unwrap().clone()
+        } else {
+            Vec::new()
         };
-        result.push(FileApi::from(file, tags))
+        let tags: Vec<TagApi> = tags.iter().map(|it| it.clone().into()).collect();
+        result.push(FileApi::from(file, tags));
     }
-    con.close().unwrap();
     Ok(result)
 }
 

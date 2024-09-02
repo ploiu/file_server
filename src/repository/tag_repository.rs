@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use rusqlite::Connection;
 
 use crate::model::repository;
@@ -65,14 +67,61 @@ pub fn get_tags_on_file(
     con: &Connection,
 ) -> Result<Vec<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
-    let rows = pst.query_map(rusqlite::params![file_id], |row| Ok(tag_mapper(row)))?;
+    let rows = pst.query_map(rusqlite::params![file_id], |row| tag_mapper(row))?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
         // I know it's probably bad style, but I'm laughing too hard at the double question mark.
         // no I don't know what my code is doing and I'm glad my code reflects that
-        tags.push(tag_res??);
+        tags.push(tag_res?);
     }
     Ok(tags)
+}
+
+pub fn get_tags_on_files(
+    file_ids: Vec<u32>,
+    con: &Connection,
+) -> Result<HashMap<u32, Vec<repository::Tag>>, rusqlite::Error> {
+    struct TagFile {
+        file_id: u32,
+        tag_id: u32,
+        tag_title: String,
+    }
+    let in_clause: Vec<String> = file_ids.iter().map(|it| format!("'{it}'")).collect();
+    let in_clause = in_clause.join(",");
+    let formatted_query = format!(
+        include_str!("../assets/queries/tags/get_tags_for_files.sql"),
+        in_clause
+    );
+    let mut pst = con.prepare(&formatted_query.as_str())?;
+    let rows = pst.query_map([], |row| {
+        let file_id: u32 = row.get(0)?;
+        let tag_id: u32 = row.get(1)?;
+        let tag_title: String = row.get(2)?;
+        Ok(TagFile {
+            file_id,
+            tag_id,
+            tag_title,
+        })
+    })?;
+    let mut mapped: HashMap<u32, Vec<repository::Tag>> = HashMap::new();
+    for res in rows {
+        let res = res?;
+        if !mapped.contains_key(&res.file_id) {
+            mapped.insert(
+                res.file_id,
+                vec![repository::Tag {
+                    id: res.tag_id,
+                    title: res.tag_title,
+                }],
+            );
+        } else {
+            mapped.get_mut(&res.file_id).unwrap().push(repository::Tag {
+                id: res.tag_id,
+                title: res.tag_title,
+            });
+        }
+    }
+    Ok(mapped)
 }
 
 pub fn remove_tag_from_file(
@@ -448,6 +497,34 @@ mod remove_tag_from_folder_tests {
         let tags = get_tags_on_folder(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), tags);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_tags_on_files_tests {
+    use std::collections::HashMap;
+
+    use crate::{model::repository::Tag, repository::open_connection, test::*};
+
+    #[test]
+    fn returns_proper_mapping_for_file_tags() {
+        refresh_db();
+        create_file_db_entry("file1", None);
+        create_file_db_entry("file2", None);
+        create_file_db_entry("control", None);
+        create_tag_file("tag1", 1);
+        create_tag_file("tag2", 1);
+        create_tag_file("tag3", 2);
+        let con = open_connection();
+        let res = super::get_tags_on_files(vec![1, 2, 3], &con).unwrap();
+        con.close().unwrap();
+        #[rustfmt::skip]
+        let expected = HashMap::from([
+            (1, vec![Tag {id: 1, title: "tag1".to_string()}, Tag {id: 2, title: "tag2".to_string()}]),
+            (2, vec![Tag {id: 3, title: "tag3".to_string()}])
+        ]);
+        assert_eq!(res, expected);
         cleanup();
     }
 }
