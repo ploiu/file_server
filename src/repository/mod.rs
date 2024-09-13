@@ -69,6 +69,10 @@ fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
         log::info!("Migrating database to v3...");
         migrate_v3(con)?;
     }
+    if table_version < 4 {
+        log::info!("Migrating database to v4...");
+        migrate_v4(con)?;
+    }
     Ok(())
 }
 
@@ -79,5 +83,10 @@ fn migrate_v2(con: &Connection) -> Result<()> {
 
 fn migrate_v3(con: &Connection) -> Result<()> {
     let migration_script = include_str!("../assets/migration/v3.sql");
+    con.execute_batch(migration_script)
+}
+
+fn migrate_v4(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("../assets/migration/v4.sql");
     con.execute_batch(migration_script)
 }
