@@ -11,3 +11,4 @@ cert_options.conf
 FileServer.toml
 output.log
 output_test.log
+dumped.sql
