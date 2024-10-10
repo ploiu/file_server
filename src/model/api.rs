@@ -4,6 +4,72 @@ use rocket::serde::{Deserialize, Serialize};
 use crate::model::repository::FileRecord;
 use crate::model::response::TagApi;
 
+#[derive(Deserialize, Serialize, Debug, Eq, PartialEq, PartialOrd, Ord, Hash, Copy, Clone)]
+pub enum FileTypes {
+    Application,
+    Archive,
+    Audio,
+    Cad,
+    Code,
+    Configuration,
+    Diagram,
+    Document,
+    Font,
+    GameRom,
+    Image,
+    Material,
+    Model,
+    Object,
+    Presentation,
+    SaveFile,
+    Spreadsheet,
+    Text,
+    Video,
+    Unknown,
+}
+
+impl From<String> for FileTypes {
+    fn from(value: String) -> Self {
+        let value = value.as_str();
+        match value.to_ascii_lowercase().as_str() {
+            "application" => Self::Application,
+            "archive" => Self::Archive,
+            "audio" => Self::Audio,
+            "cad" => Self::Cad,
+            "code" => Self::Code,
+            "configuration" => Self::Configuration,
+            "diagram" => Self::Diagram,
+            "document" => Self::Document,
+            "font" => Self::Font,
+            "game_rom" => Self::GameRom,
+            "image" => Self::Image,
+            "material" => Self::Material,
+            "model" => Self::Model,
+            "object" => Self::Object,
+            "presentation" => Self::Presentation,
+            "save_file" => Self::SaveFile,
+            "spreadsheet" => Self::Spreadsheet,
+            "text" => Self::Text,
+            "video" => Self::Video,
+            "unknown" => Self::Unknown,
+            _ => {
+                log::warn!(
+                    "file type from database {value} does not match any branches in FileTypes#from"
+                );
+                Self::Unknown
+            }
+        }
+    }
+}
+
+#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct FileMetadata {
+    pub size: u32,
+    pub date_created: u64,
+    pub file_types: Vec<FileTypes>,
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct FileApi {

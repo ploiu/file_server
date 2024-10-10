@@ -2,7 +2,7 @@ begin;
 
 create table FileTypes (
     id integer primary key autoincrement,
-    fileType text not null unique
+    value text not null unique
 );
 
 alter table
@@ -22,18 +22,17 @@ set
 
 create table FileRecordTypes (
     id integer primary key autoincrement,
-    fildId integer references FileRecords(id) on delete cascade,
+    fileId integer references FileRecords(id) on delete cascade,
     fileTypeId integer references FileTypes(id)
 );
 
 insert into
-    FileTypes(fileType)
+    FileTypes(value)
 values
     ('application'),
     ('archive'),
     ('audio'),
     ('cad'),
-    ('calendar'),
     ('code'),
     ('configuration'),
     ('diagram'),
@@ -48,7 +47,8 @@ values
     ('save_file'),
     ('spreadsheet'),
     ('text'),
-    ('video');
+    ('video'),
+    ('unknown');
 
 update
     Metadata
