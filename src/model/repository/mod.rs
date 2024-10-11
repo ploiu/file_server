@@ -9,6 +9,7 @@ pub struct FileRecord {
     pub name: String,
     /// will be None if in the root folder
     pub parent_id: Option<u32>,
+    // TODO NaiveDateTime
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]

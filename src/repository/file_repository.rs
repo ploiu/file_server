@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use chrono::{DateTime, Local, NaiveDateTime};
 use rusqlite::{params, Connection};
 
 use crate::model::repository::FileRecord;
@@ -23,7 +24,7 @@ pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
 
-    pst.query_row([id], map_file)
+    pst.query_row([id], map_file_all_fields)
 }
 
 /// returns the full path (excluding root name) of the specified file in the database
@@ -94,7 +95,7 @@ pub fn search_files(
         .prepare(include_str!("../assets/queries/file/search_files.sql"))
         .unwrap();
     let mut results: Vec<FileRecord> = Vec::new();
-    let rows = pst.query_map([&criteria], map_file)?;
+    let rows = pst.query_map([&criteria], map_file_all_fields)?;
     for file in rows.into_iter() {
         results.push(file?);
     }
@@ -118,7 +119,7 @@ pub fn get_files_by_all_tags(
         .replace("?2", tags.len().to_string().as_str());
     let mut pst = con.prepare(replaced_string.as_str())?;
     let mut files: HashSet<FileRecord> = HashSet::new();
-    let res = pst.query_map([], map_file)?;
+    let res = pst.query_map([], map_file_all_fields)?;
     for file in res {
         files.insert(file?);
     }
@@ -185,10 +186,15 @@ pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     Ok(ids)
 }
 
-pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
+pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
     let id = row.get(0)?;
     let name = row.get(1)?;
-    let parent_id = row.get(2)?;
+    // not that I ever think this will be used for files this large - sqlite3 can store up to 8 bytes for a numeric value with a sign, so i64 it is
+    let size: i64 = row.get(2)?;
+    // TODO insert needs to insert date time
+    let date_created: NaiveDateTime = row.get(3)?;
+    let file_types: Option<String> = row.get(4)?;
+    let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,
         name,

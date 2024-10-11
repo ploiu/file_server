@@ -12,3 +12,4 @@ FileServer.toml
 output.log
 output_test.log
 dumped.sql
+*::*

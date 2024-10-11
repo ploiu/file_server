@@ -483,7 +483,7 @@ mod deterine_file_name_tests {
     }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod update_file_tests {
     use std::fs;
 
@@ -780,7 +780,7 @@ mod update_file_tests {
     }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod delete_file_with_id_tests {
     use crate::{
         service::file_service::*,
