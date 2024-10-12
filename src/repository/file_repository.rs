@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use chrono::{DateTime, Local, NaiveDateTime};
+use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
 use crate::model::repository::FileRecord;
@@ -10,7 +10,7 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
 
-    match pst.insert(params![file.name]) {
+    match pst.insert(params![file.name, file.size, file.create_date]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
@@ -191,14 +191,15 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
     let name = row.get(1)?;
     // not that I ever think this will be used for files this large - sqlite3 can store up to 8 bytes for a numeric value with a sign, so i64 it is
     let size: i64 = row.get(2)?;
-    // TODO insert needs to insert date time
-    let date_created: NaiveDateTime = row.get(3)?;
+    let create_date: NaiveDateTime = row.get(3)?;
     let file_types: Option<String> = row.get(4)?;
     let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,
         name,
         parent_id,
+        create_date,
+        size: size.try_into().or::<u64>(Ok(0)).unwrap(),
     })
 }
 
@@ -211,7 +212,7 @@ mod get_files_by_all_tags_tests {
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::get_files_by_all_tags;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_tag_files, refresh_db};
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, refresh_db};
 
     #[test]
     fn returns_files_with_all_tags() {
@@ -239,11 +240,15 @@ mod get_files_by_all_tags_tests {
             id: Some(3),
             name: "has all".to_string(),
             parent_id: None,
+            create_date: now(),
+            size: 0
         }));
         assert!(res.contains(&FileRecord {
             id: Some(4),
             name: "also has all".to_string(),
             parent_id: None,
+            create_date: now(),
+            size: 0
         }));
         cleanup();
     }

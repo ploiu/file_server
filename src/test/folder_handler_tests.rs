@@ -688,7 +688,9 @@ fn update_folder_to_file_with_same_name_root() {
         FileRecord {
             id: Some(1),
             name: String::from("file"),
-            parent_id: None
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local()
         }
     );
     let root_folders = folder_repository::get_child_folders(None, &con).unwrap();

@@ -1,5 +1,6 @@
 use std::fs;
 use std::fs::File;
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::string::ToString;
 
@@ -364,7 +365,14 @@ async fn persist_save_file_to_folder(
     let formatted_name = format!("{}/{}/{}", file_dir(), folder.path, file_name);
     match file_input.file.persist_to(&formatted_name).await {
         Ok(_) => {
-            let id = save_file_record(&formatted_name)?;
+            // path function here is guaranteed to return some at this point, according to docs
+            let file_path = file_input.file.path().unwrap();
+            let file_size = if let Ok(metadata) = fs::metadata(file_path) {
+                metadata.size()
+            } else {
+                0
+            };
+            let id = save_file_record(&formatted_name, file_size)?;
             // file and folder are both in repository, now link them
             if link_folder_to_file(id, folder.id).is_err() {
                 return Err(CreateFileError::FailWriteDb);
@@ -386,7 +394,16 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     );
     let file_name = format!("{}/{}", &file_dir(), file_name);
     match file_input.file.persist_to(&file_name).await {
-        Ok(_) => Ok(save_file_record(&file_name)?),
+        Ok(()) => {
+            // path function here is guaranteed to return some at this point, according to docs
+            let file_path = file_input.file.path().unwrap();
+            let file_size = if let Ok(metadata) = fs::metadata(file_path) {
+                metadata.size()
+            } else {
+                0
+            };
+            Ok(save_file_record(&file_name, file_size)?)
+        }
         Err(e) => {
             log::error!("Failed to save file to disk. Nested exception is {:?}", e);
             Err(CreateFileError::FailWriteDisk)
@@ -394,11 +411,12 @@ async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32
     }
 }
 
-fn save_file_record(name: &str) -> Result<u32, CreateFileError> {
+fn save_file_record(name: &str, size: u64) -> Result<u32, CreateFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
-    let file_record = FileRecord::from(formatted_name.to_string());
+    let now = chrono::offset::Local::now();
+    let file_record = FileRecord::create(formatted_name.to_string(), now.naive_local(), size);
     let con = repository::open_connection();
     let res =
         file_repository::create_file(&file_record, &con).map_err(|_| CreateFileError::FailWriteDb);

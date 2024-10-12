@@ -1,4 +1,3 @@
--- TODO extra metadata fields
 select
     f.id,
     f.name,

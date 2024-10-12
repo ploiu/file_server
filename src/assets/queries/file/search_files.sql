@@ -3,7 +3,8 @@ select
     f.name,
     f.fileSize,
     f.dateCreated,
-    group_concat(ft.value)
+    group_concat(ft.value),
+    ff.folderId
 from
     FileRecords f
     left join folder_files ff on ff.fileId = f.id

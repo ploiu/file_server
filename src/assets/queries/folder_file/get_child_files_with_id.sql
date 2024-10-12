@@ -1,8 +1,6 @@
 select
     f.id,
     f.name,
-    f.id,
-    f.name,
     f.fileSize,
     f.dateCreated,
     group_concat(ft.value),

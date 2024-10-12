@@ -384,6 +384,8 @@ mod update_file_tag_test {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                size: 0,
+                create_date: chrono::offset::Local::now().naive_local(),
             },
             &con,
         )
@@ -427,6 +429,8 @@ mod update_file_tag_test {
                 id: None,
                 name: "test".to_string(),
                 parent_id: None,
+                size: 0,
+                create_date: chrono::offset::Local::now().naive_local(),
             },
             &con,
         )

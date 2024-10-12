@@ -41,6 +41,8 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
             id: folder_id,
             name: String::from(name),
             parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
         },
         &connection,
     )
@@ -160,4 +162,19 @@ pub fn cleanup() {
     remove_files();
     remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
     remove_dir_all(Path::new(temp_dir_name.as_str())).unwrap_or(());
+}
+
+#[cfg(test)]
+pub fn now() -> chrono::NaiveDateTime {
+    chrono::offset::Local::now().naive_local()
+}
+
+#[cfg(test)]
+impl PartialEq for FileRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.name == other.name
+            && self.parent_id == other.parent_id
+            && self.size == other.size
+    }
 }

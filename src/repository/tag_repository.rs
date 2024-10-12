@@ -334,6 +334,8 @@ mod get_tag_on_file_tests {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
             },
             &con,
         )
@@ -366,6 +368,8 @@ mod get_tag_on_file_tests {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
             },
             &con,
         )
@@ -383,7 +387,7 @@ mod remove_tag_from_file_tests {
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tags_on_file, remove_tag_from_file};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, now, refresh_db};
 
     #[test]
     fn remove_tag_from_file_works() {
@@ -395,6 +399,8 @@ mod remove_tag_from_file_tests {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
             },
             &con,
         )

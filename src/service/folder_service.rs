@@ -583,6 +583,8 @@ fn does_file_exist(
             id: file.id,
             name: String::from(&file.name),
             parent_id: folder_id,
+            size: file.size,
+            create_date: file.create_date,
         })
         .find(|file| file.name == name.to_lowercase());
     Ok(matching_file.is_some())
