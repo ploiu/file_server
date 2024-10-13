@@ -1,3 +1,4 @@
+use chrono::{NaiveDate, NaiveDateTime};
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
 
@@ -70,7 +71,7 @@ pub struct FileMetadata {
     pub file_types: Vec<FileTypes>,
 }
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
 #[serde(crate = "rocket::serde")]
 pub struct FileApi {
     pub id: u32,
@@ -80,6 +81,23 @@ pub struct FileApi {
     /// this value may be unsafe, see [`FileApi::name`]
     pub name: String,
     pub tags: Vec<TagApi>,
+    // wrapped in option so api consumers don't have to send this field (these fields can't be written to after a file is uploaded)
+    pub size: Option<u64>,
+    pub create_date: Option<NaiveDateTime>,
+    pub file_types: Option<Vec<FileTypes>>,
+}
+
+#[cfg(not(test))]
+impl PartialEq for FileApi {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.folder_id == other.folder_id
+            && self.name == other.name
+            && self.tags == other.tags
+            && self.size == other.size
+            && self.create_date == other.create_date
+            && self.file_types == other.file_types
+    }
 }
 
 impl FileApi {
@@ -112,6 +130,10 @@ impl FileApi {
             id: file.id.unwrap(),
             folder_id: file.parent_id,
             name: file.name,
+            size: Some(file.size),
+            create_date: Some(file.create_date),
+            // TODO file_types
+            file_types: Some(vec![]),
         }
     }
 
@@ -122,6 +144,10 @@ impl FileApi {
             folder_id,
             name,
             tags: Vec::new(),
+            size: None,
+            create_date: None,
+            // TODO file_types
+            file_types: Some(vec![]),
         }
     }
 }

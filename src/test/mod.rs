@@ -2,6 +2,7 @@ use std::fs;
 use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
+use crate::model::api::FileApi;
 use crate::model::repository::{FileRecord, Folder};
 use crate::repository::{
     file_repository, folder_repository, initialize_db, open_connection, tag_repository,
@@ -169,6 +170,7 @@ pub fn now() -> chrono::NaiveDateTime {
     chrono::offset::Local::now().naive_local()
 }
 
+// these partialEq implementations are because NaiveDate generation is too inconsistent to test around, so these test implementations do not test the date
 #[cfg(test)]
 impl PartialEq for FileRecord {
     fn eq(&self, other: &Self) -> bool {
@@ -176,5 +178,17 @@ impl PartialEq for FileRecord {
             && self.name == other.name
             && self.parent_id == other.parent_id
             && self.size == other.size
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for FileApi {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.folder_id == other.folder_id
+            && self.name == other.name
+            && self.tags == other.tags
+            && self.size == other.size
+            && self.file_types == other.file_types
     }
 }

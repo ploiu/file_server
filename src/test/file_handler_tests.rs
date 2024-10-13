@@ -1,4 +1,4 @@
-use std::fs;
+use std::{fs, vec};
 
 use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
@@ -231,15 +231,12 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         .dispatch();
     assert_eq!(res.status(), Status::Created);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test.txt"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test.txt".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.file_types, Some(vec![]));
+    assert_eq!(res_body.size, Some(6));
     cleanup();
 }
 
@@ -305,15 +302,13 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     let status = res.status();
     assert_eq!(status, Status::Created);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.file_types, Some(vec![]));
+    assert_eq!(res_body.size, Some(6));
+
     // make sure that the file comes back with the right name
     let res: FileApi = client
         .get(uri!("/files/metadata/1"))
@@ -321,15 +316,12 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         .dispatch()
         .into_json()
         .unwrap();
-    assert_eq!(
-        res,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res.id, 1);
+    assert_eq!(res.name, "test".to_string());
+    assert_eq!(res.folder_id, None);
+    assert_eq!(res.tags, vec![]);
+    assert_eq!(res.file_types, Some(vec![]));
+    assert_eq!(res.size, Some(6));
     cleanup();
 }
 
@@ -639,15 +631,13 @@ fn update_file_no_extension() {
     let status = res.status();
     assert_eq!(status, Status::Ok);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.size, Some(0));
+    // TODO file_types
+    assert_eq!(res_body.file_types, Some(vec![]));
     cleanup();
 }
 

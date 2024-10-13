@@ -55,6 +55,11 @@ pub fn search_files(
                 folder_id: file.parent_id,
                 name: file.name.clone(),
                 tags: Vec::new(),
+                size: Some(file.size),
+                create_date: Some(file.create_date),
+                // TODO file types
+                // TODO file_types
+                file_types: Some(vec![]),
             });
         }
     }
@@ -165,6 +170,10 @@ fn get_files_by_all_tags(
             folder_id: file.parent_id,
             name: file.name.clone(),
             tags,
+            size: Some(0),
+            create_date: Some(file.create_date),
+            // TODO file_types
+            file_types: Some(vec![]),
         });
     }
     Ok(converted_files)
@@ -206,6 +215,10 @@ fn get_child_files(
             name: file.name.clone(),
             folder_id: file.parent_id,
             tags,
+            size: Some(0),
+            create_date: Some(file.create_date),
+            // TODO file_types
+            file_types: Some(vec![]),
         });
     }
     Ok(converted)
@@ -268,15 +281,14 @@ mod search_files_tests {
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
-        assert_eq!(
-            vec![FileApi {
-                id: 2,
-                name: "test2".to_string(),
-                folder_id: None,
-                tags: vec![],
-            }],
-            res
-        );
+        assert_eq!(1, res.len());
+        let res = &res[0];
+        assert_eq!(res.id, 2);
+        assert_eq!(res.name, "test2".to_string());
+        assert_eq!(res.folder_id, None);
+        assert_eq!(res.tags, vec![]);
+        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.size, Some(0));
         cleanup();
     }
 
@@ -291,25 +303,26 @@ mod search_files_tests {
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
-        // should only return the first one since it has both tags
+        assert_eq!(1, res.len());
+        let res = &res[0];
+        assert_eq!(res.id, 1);
+        assert_eq!(res.name, "first".to_string());
+        assert_eq!(res.folder_id, None);
         assert_eq!(
-            vec![FileApi {
-                id: 1,
-                name: "first".to_string(),
-                folder_id: None,
-                tags: vec![
-                    TagApi {
-                        id: Some(1),
-                        title: "tag1".to_string(),
-                    },
-                    TagApi {
-                        id: Some(2),
-                        title: "tag".to_string(),
-                    },
-                ],
-            }],
-            res
+            res.tags,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "tag1".to_string(),
+                },
+                TagApi {
+                    id: Some(2),
+                    title: "tag".to_string(),
+                }
+            ]
         );
+        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.size, Some(0));
         cleanup();
     }
 
@@ -323,18 +336,20 @@ mod search_files_tests {
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
+        assert_eq!(1, res.len());
+        let res = &res[0];
+        assert_eq!(res.id, 1);
+        assert_eq!(res.name, "first".to_string());
+        assert_eq!(res.folder_id, None);
         assert_eq!(
-            vec![FileApi {
-                id: 1,
-                name: "first".to_string(),
-                folder_id: None,
-                tags: vec![TagApi {
-                    id: Some(1),
-                    title: "tag".to_string(),
-                }],
-            }],
-            res
+            res.tags,
+            vec![TagApi {
+                id: Some(1),
+                title: "tag".to_string(),
+            }]
         );
+        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.size, Some(0));
         cleanup();
     }
 
@@ -350,33 +365,43 @@ mod search_files_tests {
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
                                       // tag1 should retrieve all files
         let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
-        assert_eq!(
-            HashSet::from([
-                FileApi {
-                    id: 1,
-                    name: "top file".to_string(),
-                    folder_id: Some(1),
-                    tags: vec![],
-                },
-                FileApi {
-                    id: 2,
-                    name: "bottom file".to_string(),
-                    folder_id: Some(3),
-                    tags: vec![],
-                }
-            ]),
-            res
-        );
+        // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
+        let res: Vec<FileApi> = res.iter().cloned().collect();
+        println!("{res:?}");
+        assert_eq!(2, res.len());
+        assert!(res.contains(&FileApi {
+            id: 1,
+            name: "top file".to_string(),
+            folder_id: Some(1),
+            tags: vec![],
+            size: Some(0),
+            create_date: None,
+            // TODO file_types
+            file_types: Some(vec![])
+        }));
+        assert!(res.contains(&FileApi {
+            id: 2,
+            name: "bottom file".to_string(),
+            folder_id: Some(3),
+            tags: vec![],
+            size: Some(0),
+            create_date: None,
+            // TODO file_types
+            file_types: Some(vec![])
+        }));
         let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
-        assert_eq!(
-            HashSet::from([FileApi {
-                id: 2,
-                name: "bottom file".to_string(),
-                folder_id: Some(3),
-                tags: vec![],
-            }]),
-            res
-        );
+        let res: Vec<FileApi> = res.iter().cloned().collect();
+        assert!(res.contains(&FileApi {
+            id: 2,
+            name: "bottom file".to_string(),
+            folder_id: Some(3),
+            // TODO file_types
+            tags: vec![],
+            size: Some(0),
+            create_date: None,
+            // TODO file_types
+            file_types: Some(vec![])
+        }));
         cleanup();
     }
 
