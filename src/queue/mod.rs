@@ -176,11 +176,11 @@ impl RabbitProvider {
 static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
     once_cell::sync::Lazy::new(|| {
         let config = FILE_SERVER_CONFIG.clone();
-        return if config.rabbit_mq.enabled {
+        if config.rabbit_mq.enabled {
             Some(RabbitProvider::init())
         } else {
             None
-        };
+        }
     });
 
 // ---------------------------- test implementations that don't start up rabbit

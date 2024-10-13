@@ -67,7 +67,7 @@ pub fn get_tags_on_file(
     con: &Connection,
 ) -> Result<Vec<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
-    let rows = pst.query_map(rusqlite::params![file_id], |row| tag_mapper(row))?;
+    let rows = pst.query_map(rusqlite::params![file_id], tag_mapper)?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
         // I know it's probably bad style, but I'm laughing too hard at the double question mark.
@@ -92,7 +92,7 @@ pub fn get_tags_on_files(
         include_str!("../assets/queries/tags/get_tags_for_files.sql"),
         in_clause
     );
-    let mut pst = con.prepare(&formatted_query.as_str())?;
+    let mut pst = con.prepare(formatted_query.as_str())?;
     let rows = pst.query_map([], |row| {
         let file_id: u32 = row.get(0)?;
         let tag_id: u32 = row.get(1)?;
@@ -106,14 +106,11 @@ pub fn get_tags_on_files(
     let mut mapped: HashMap<u32, Vec<repository::Tag>> = HashMap::new();
     for res in rows {
         let res = res?;
-        if !mapped.contains_key(&res.file_id) {
-            mapped.insert(
-                res.file_id,
-                vec![repository::Tag {
-                    id: res.tag_id,
-                    title: res.tag_title,
-                }],
-            );
+        if let std::collections::hash_map::Entry::Vacant(e) = mapped.entry(res.file_id) {
+            e.insert(vec![repository::Tag {
+                id: res.tag_id,
+                title: res.tag_title,
+            }]);
         } else {
             mapped.get_mut(&res.file_id).unwrap().push(repository::Tag {
                 id: res.tag_id,

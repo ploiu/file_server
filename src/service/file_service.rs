@@ -59,8 +59,7 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", file_dir()).as_str()).unwrap();
     let parent_id = file_input.folder_id();
     let file_id: u32;
-    let resulting_file: FileApi;
-    if parent_id != 0 {
+    let resulting_file = if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
             log::error!(
@@ -77,7 +76,7 @@ pub async fn save_file(
         let created =
             persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
         file_id = created.id.unwrap();
-        resulting_file = FileApi {
+        FileApi {
             id: created.id.unwrap(),
             folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
@@ -96,7 +95,7 @@ pub async fn save_file(
         let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
         let created = persist_save_file(file_input).await?;
         file_id = created.id.unwrap();
-        resulting_file = FileApi {
+        FileApi {
             id: created.id.unwrap(),
             folder_id: None,
             name: String::from(root_regex.replace(&file_name, "")),
@@ -106,7 +105,7 @@ pub async fn save_file(
             // TODO file_types
             file_types: Some(vec![]),
         }
-    }
+    };
     // now publish the file to the rabbit queue so a preview can be generated for it later
     queue::publish_message("icon_gen", &file_id.to_string());
     Ok(resulting_file)
@@ -197,7 +196,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
     }
     let delete_result = file_repository::delete_file(id, con);
     if delete_result.is_ok() {
-        return Ok(());
+        Ok(())
     } else if Err(rusqlite::Error::QueryReturnedNoRows) == delete_result {
         return Err(DeleteFileError::NotFound);
     } else {
@@ -861,9 +860,8 @@ mod delete_file_with_id_tests {
         refresh_db();
         create_file_db_entry("test.txt", None);
         let con = open_connection();
-        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        assert_eq!((), res);
         let file = get_file_metadata(1).unwrap_err();
         assert_eq!(GetFileError::NotFound, file);
         cleanup();
@@ -875,9 +873,8 @@ mod delete_file_with_id_tests {
         create_file_db_entry("test.txt", None);
         create_file_preview(1);
         let con = open_connection();
-        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        assert_eq!((), res);
         let preview = get_file_preview(1).unwrap_err();
         assert_eq!(GetPreviewError::NotFound, preview);
         cleanup();

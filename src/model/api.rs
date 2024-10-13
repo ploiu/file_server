@@ -1,4 +1,4 @@
-use chrono::{NaiveDate, NaiveDateTime};
+use chrono::NaiveDateTime;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
 
@@ -72,6 +72,7 @@ pub struct FileMetadata {
 }
 
 #[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
+#[cfg_attr(not(test), derive(PartialEq))]
 #[serde(crate = "rocket::serde")]
 pub struct FileApi {
     pub id: u32,
@@ -85,19 +86,6 @@ pub struct FileApi {
     pub size: Option<u64>,
     pub create_date: Option<NaiveDateTime>,
     pub file_types: Option<Vec<FileTypes>>,
-}
-
-#[cfg(not(test))]
-impl PartialEq for FileApi {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-            && self.folder_id == other.folder_id
-            && self.name == other.name
-            && self.tags == other.tags
-            && self.size == other.size
-            && self.create_date == other.create_date
-            && self.file_types == other.file_types
-    }
 }
 
 impl FileApi {

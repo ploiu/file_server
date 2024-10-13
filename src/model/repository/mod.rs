@@ -1,7 +1,10 @@
 use chrono::NaiveDateTime;
 use rocket::serde::Serialize;
 
+#[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Serialize, Eq, Hash)]
+// for testing we have to ignore the create_date field when doing equality checking otherwise it's an inconsistent pita
+#[cfg_attr(not(test), derive(PartialEq))]
 #[serde(crate = "rocket::serde")]
 pub struct FileRecord {
     /// the id, will only be populated when pulled from the database
@@ -13,17 +16,6 @@ pub struct FileRecord {
     /// the date the file was uploaded to the server
     pub create_date: NaiveDateTime,
     pub size: u64,
-}
-
-#[cfg(not(test))]
-impl PartialEq for FileRecord {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-            && self.name == other.name
-            && self.parent_id == other.parent_id
-            && self.create_date == other.create_date
-            && self.size == other.size
-    }
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]

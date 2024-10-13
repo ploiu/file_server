@@ -172,6 +172,7 @@ pub fn now() -> chrono::NaiveDateTime {
 
 // these partialEq implementations are because NaiveDate generation is too inconsistent to test around, so these test implementations do not test the date
 #[cfg(test)]
+#[allow(clippy::derived_hash_with_manual_eq)]
 impl PartialEq for FileRecord {
     fn eq(&self, other: &Self) -> bool {
         self.id == other.id

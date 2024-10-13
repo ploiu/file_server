@@ -55,7 +55,7 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
         converted += tags;
         converted_folders.push(converted);
     }
-    let tag_db_id = if let Some(id_res) = id { id_res } else { 0 };
+    let tag_db_id = id.unwrap_or_default();
     let tags = match tag_service::get_tags_on_folder(tag_db_id) {
         Ok(t) => t,
         Err(_) => {
@@ -278,9 +278,9 @@ pub fn reduce_folders_by_tag(
 }
 
 pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
-    let mut con: Connection = open_connection();
+    let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
-    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &mut con) {
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
             con.close().unwrap();
@@ -615,7 +615,7 @@ fn get_files_for_folder(
 ) -> Result<Vec<FileApi>, GetChildFilesError> {
     // now we can retrieve all the file records in this folder
     let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
-    let child_files = match folder_repository::get_child_files(unwrapped_id, &con) {
+    let child_files = match folder_repository::get_child_files(unwrapped_id, con) {
         Ok(files) => files,
         Err(e) => {
             log::error!("Failed to query database for child files. Nested exception is: \n {e:?}");
@@ -626,7 +626,7 @@ fn get_files_for_folder(
         .iter()
         .map(|f| f.id.expect("files pulled from database didn't have ID!"))
         .collect();
-    let file_tags = match tag_repository::get_tags_on_files(file_ids, &con) {
+    let file_tags = match tag_repository::get_tags_on_files(file_ids, con) {
         Ok(res) => res,
         Err(e) => {
             log::error!("Failed to get tags on file {e:?}");

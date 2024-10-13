@@ -199,7 +199,7 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
         name,
         parent_id,
         create_date,
-        size: size.try_into().or::<u64>(Ok(0)).unwrap(),
+        size: size.try_into().unwrap_or(0),
     })
 }
 

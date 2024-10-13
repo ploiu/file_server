@@ -76,14 +76,14 @@ pub async fn generate_preview(message_data: String) -> bool {
 ///
 /// * [image_path] the full file path to the image, relative to where this program is running
 fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
-    let img = match ImageReader::open(&image_path) {
+    let img = match ImageReader::open(image_path) {
         Ok(i) => i,
         Err(e) => {
             log::error!(
                 "Failed to open image at path {image_path}. Exception is {:?}",
                 e
             );
-            return Err(PreviewError::FailedOpen);
+            return Err(PreviewError::Open);
         }
     };
     // this gives better insight if the file extension is wrong
@@ -94,7 +94,7 @@ fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
                 "Failed to guess the format of path {image_path}. Exception is {:?}",
                 e
             );
-            return Err(PreviewError::FailedGuessFormat);
+            return Err(PreviewError::GuessFormat);
         }
     };
     let img: DynamicImage = match img.decode() {
@@ -104,14 +104,14 @@ fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
                 "Failed to decode the image at path {image_path}. Exception is {:?}",
                 e
             );
-            return Err(PreviewError::FailedDecode);
+            return Err(PreviewError::Decode);
         }
     };
     let resized = img.resize(150, 150, image::imageops::FilterType::Gaussian);
     let mut blob = Vec::<u8>::new();
     if let Err(e) = resized.write_to(&mut Cursor::new(&mut blob), image::ImageFormat::Png) {
         log::error!("Failed to write resized image with path [{image_path}] to blob array. Exception is {:?}", e);
-        return Err(PreviewError::FailedEncode);
+        return Err(PreviewError::Encode);
     }
     Ok(blob)
 }
