@@ -2,6 +2,7 @@ use std::fs;
 use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
+use crate::model::api::FileApi;
 use crate::model::repository::{FileRecord, Folder};
 use crate::repository::{
     file_repository, folder_repository, initialize_db, open_connection, tag_repository,
@@ -35,12 +36,17 @@ pub fn remove_files() {
 
 #[cfg(test)]
 pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
+    use crate::model::api::FileTypes;
+
     let connection = open_connection();
     let file_id = file_repository::create_file(
         &FileRecord {
             id: folder_id,
             name: String::from(name),
             parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
         },
         &connection,
     )
@@ -160,4 +166,33 @@ pub fn cleanup() {
     remove_files();
     remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
     remove_dir_all(Path::new(temp_dir_name.as_str())).unwrap_or(());
+}
+
+#[cfg(test)]
+pub fn now() -> chrono::NaiveDateTime {
+    chrono::offset::Local::now().naive_local()
+}
+
+// these partialEq implementations are because NaiveDate generation is too inconsistent to test around, so these test implementations do not test the date
+#[cfg(test)]
+#[allow(clippy::derived_hash_with_manual_eq)]
+impl PartialEq for FileRecord {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.name == other.name
+            && self.parent_id == other.parent_id
+            && self.size == other.size
+    }
+}
+
+#[cfg(test)]
+impl PartialEq for FileApi {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+            && self.folder_id == other.folder_id
+            && self.name == other.name
+            && self.tags == other.tags
+            && self.size == other.size
+            && self.file_type == other.file_type
+    }
 }

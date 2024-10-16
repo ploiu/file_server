@@ -69,10 +69,10 @@ pub fn get_generated_previews_flag(con: &Connection) -> Result<bool, rusqlite::E
     let query_res: Result<String, rusqlite::Error> = statement.query_row([], |it| it.get(0));
     if let Err(rusqlite::Error::QueryReturnedNoRows) = query_res {
         Ok(false)
-    } else if query_res.is_ok() {
-        Ok(true)
+    } else if let Err(e) = query_res {
+        Err(e)
     } else {
-        Err(query_res.unwrap_err())
+        Ok(true)
     }
 }
 

@@ -243,7 +243,7 @@ fn get_child_files_root(con: &Connection) -> Result<Vec<repository::FileRecord>,
     let mut pst = con.prepare(include_str!(
         "../assets/queries/file/get_child_files_without_id.sql"
     ))?;
-    let mapped = pst.query_map([], file_repository::map_file)?;
+    let mapped = pst.query_map([], file_repository::map_file_all_fields)?;
     let mut files: Vec<repository::FileRecord> = Vec::new();
     for file in mapped.into_iter() {
         files.push(file?);
@@ -264,7 +264,7 @@ fn get_child_files_non_root(
         .expect("get_child_files_with_id: failed to reduce id collection");
     let query_string = query_string.replace("?1", joined_ids.as_str());
     let mut pst = con.prepare(query_string.as_str())?;
-    let mapped = pst.query_map([], file_repository::map_file)?;
+    let mapped = pst.query_map([], file_repository::map_file_all_fields)?;
     let mut files: Vec<repository::FileRecord> = Vec::new();
     for file in mapped.into_iter() {
         files.push(file?);

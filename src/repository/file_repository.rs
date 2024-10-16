@@ -1,15 +1,16 @@
 use std::collections::HashSet;
 
+use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
-use crate::model::repository::FileRecord;
+use crate::model::{api::FileTypes, repository::FileRecord};
 
 pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
 
-    match pst.insert(params![file.name]) {
+    match pst.insert(params![file.name, file.size, file.create_date]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
             eprintln!("Failed to save file record. Nested exception is {:?}", e);
@@ -23,7 +24,7 @@ pub fn get_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Error
         .prepare(include_str!("../assets/queries/file/get_file_by_id.sql"))
         .unwrap();
 
-    pst.query_row([id], map_file)
+    pst.query_row([id], map_file_all_fields)
 }
 
 /// returns the full path (excluding root name) of the specified file in the database
@@ -94,7 +95,7 @@ pub fn search_files(
         .prepare(include_str!("../assets/queries/file/search_files.sql"))
         .unwrap();
     let mut results: Vec<FileRecord> = Vec::new();
-    let rows = pst.query_map([&criteria], map_file)?;
+    let rows = pst.query_map([&criteria], map_file_all_fields)?;
     for file in rows.into_iter() {
         results.push(file?);
     }
@@ -118,7 +119,7 @@ pub fn get_files_by_all_tags(
         .replace("?2", tags.len().to_string().as_str());
     let mut pst = con.prepare(replaced_string.as_str())?;
     let mut files: HashSet<FileRecord> = HashSet::new();
-    let res = pst.query_map([], map_file)?;
+    let res = pst.query_map([], map_file_all_fields)?;
     for file in res {
         files.insert(file?);
     }
@@ -185,14 +186,22 @@ pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     Ok(ids)
 }
 
-pub fn map_file(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
+pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
     let id = row.get(0)?;
     let name = row.get(1)?;
-    let parent_id = row.get(2)?;
+    // not that I ever think this will be used for files this large - sqlite3 can store up to 8 bytes for a numeric value with a sign, so i64 it is
+    let size: i64 = row.get(2)?;
+    let create_date: NaiveDateTime = row.get(3)?;
+    let file_type: Option<String> = row.get(4)?;
+    let file_type: FileTypes = file_type.map_or_else(|| FileTypes::Unknown, |t| t.into());
+    let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,
         name,
         parent_id,
+        create_date,
+        size: size.try_into().unwrap_or(0),
+        file_type,
     })
 }
 
@@ -202,10 +211,11 @@ mod get_files_by_all_tags_tests {
 
     use rusqlite::Connection;
 
+    use crate::model::api::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::get_files_by_all_tags;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_tag_files, refresh_db};
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, refresh_db};
 
     #[test]
     fn returns_files_with_all_tags() {
@@ -233,11 +243,17 @@ mod get_files_by_all_tags_tests {
             id: Some(3),
             name: "has all".to_string(),
             parent_id: None,
+            create_date: now(),
+            size: 0,
+            file_type: FileTypes::Unknown
         }));
         assert!(res.contains(&FileRecord {
             id: Some(4),
             name: "also has all".to_string(),
             parent_id: None,
+            create_date: now(),
+            size: 0,
+            file_type: FileTypes::Unknown
         }));
         cleanup();
     }

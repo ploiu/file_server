@@ -125,8 +125,6 @@ pub enum GetMultiPreviewResponse {
     /// takes a json string of Vec<Vec<u8>>
     #[response(status = 200, content_type = "application/json")]
     Success(Json<HashMap<u32, Vec<u8>>>),
-    #[response(status = 404, content_type = "json")]
-    NotFound(Json<BasicMessage>),
     #[response(status = 401)]
     Unauthorized(String),
     #[response(status = 500, content_type = "json")]
