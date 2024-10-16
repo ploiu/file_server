@@ -578,14 +578,7 @@ fn does_file_exist(
     let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
     let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
         .iter()
-        // this is required because apparently the file is dropped immediately when it's used...
-        .map(|file| FileRecord {
-            id: file.id,
-            name: String::from(&file.name),
-            parent_id: folder_id,
-            size: file.size,
-            create_date: file.create_date,
-        })
+        .cloned()
         .find(|file| file.name == name.to_lowercase());
     Ok(matching_file.is_some())
 }

@@ -4,7 +4,7 @@ use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
 use rocket::serde::json::serde_json as serde;
 
-use crate::model::api::FileApi;
+use crate::model::api::{FileApi, FileTypes};
 use crate::model::response::BasicMessage;
 use crate::repository::initialize_db;
 use crate::rocket;
@@ -235,7 +235,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     assert_eq!(res_body.name, "test.txt".to_string());
     assert_eq!(res_body.folder_id, None);
     assert_eq!(res_body.tags, vec![]);
-    assert_eq!(res_body.file_types, Some(vec![]));
+    assert_eq!(res_body.file_type, Some(FileTypes::Text));
     assert_eq!(res_body.size, Some(6));
     cleanup();
 }
@@ -306,7 +306,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     assert_eq!(res_body.name, "test".to_string());
     assert_eq!(res_body.folder_id, None);
     assert_eq!(res_body.tags, vec![]);
-    assert_eq!(res_body.file_types, Some(vec![]));
+    assert_eq!(res_body.file_type, Some(FileTypes::Unknown));
     assert_eq!(res_body.size, Some(6));
 
     // make sure that the file comes back with the right name
@@ -320,7 +320,7 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     assert_eq!(res.name, "test".to_string());
     assert_eq!(res.folder_id, None);
     assert_eq!(res.tags, vec![]);
-    assert_eq!(res.file_types, Some(vec![]));
+    assert_eq!(res.file_type, Some(FileTypes::Unknown));
     assert_eq!(res.size, Some(6));
     cleanup();
 }
@@ -637,7 +637,7 @@ fn update_file_no_extension() {
     assert_eq!(res_body.tags, vec![]);
     assert_eq!(res_body.size, Some(0));
     // TODO file_types
-    assert_eq!(res_body.file_types, Some(vec![]));
+    assert_eq!(res_body.file_type, Some(FileTypes::Text));
     cleanup();
 }
 

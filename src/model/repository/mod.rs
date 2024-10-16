@@ -1,8 +1,10 @@
 use chrono::NaiveDateTime;
 use rocket::serde::Serialize;
 
+use super::api::FileTypes;
+
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Debug, Serialize, Eq, Hash)]
+#[derive(Debug, Serialize, Eq, Hash, Clone)]
 // for testing we have to ignore the create_date field when doing equality checking otherwise it's an inconsistent pita
 #[cfg_attr(not(test), derive(PartialEq))]
 #[serde(crate = "rocket::serde")]
@@ -16,6 +18,7 @@ pub struct FileRecord {
     /// the date the file was uploaded to the server
     pub create_date: NaiveDateTime,
     pub size: u64,
+    pub file_type: FileTypes,
 }
 
 #[derive(Debug, PartialEq, Eq, Hash)]
@@ -53,17 +56,4 @@ pub struct FilePreview {
     /// the binary contents of the file preview.
     /// This is stored in jpeg format
     pub file_preview: Vec<u8>,
-}
-
-// ----------------------------
-impl FileRecord {
-    pub fn create(name: String, create_date: NaiveDateTime, size: u64) -> FileRecord {
-        FileRecord {
-            id: None,
-            name,
-            parent_id: None,
-            create_date,
-            size,
-        }
-    }
 }

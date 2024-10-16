@@ -367,6 +367,7 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod update_file_tag_test {
+    use crate::model::api::FileTypes;
     use crate::model::error::tag_errors::TagRelationError;
     use crate::model::repository::FileRecord;
     use crate::model::response::TagApi;
@@ -386,6 +387,7 @@ mod update_file_tag_test {
                 parent_id: None,
                 size: 0,
                 create_date: chrono::offset::Local::now().naive_local(),
+                file_type: FileTypes::Unknown,
             },
             &con,
         )
@@ -431,6 +433,7 @@ mod update_file_tag_test {
                 parent_id: None,
                 size: 0,
                 create_date: chrono::offset::Local::now().naive_local(),
+                file_type: FileTypes::Unknown,
             },
             &con,
         )

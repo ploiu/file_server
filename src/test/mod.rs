@@ -36,6 +36,8 @@ pub fn remove_files() {
 
 #[cfg(test)]
 pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
+    use crate::model::api::FileTypes;
+
     let connection = open_connection();
     let file_id = file_repository::create_file(
         &FileRecord {
@@ -44,6 +46,7 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
             parent_id: None,
             size: 0,
             create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
         },
         &connection,
     )
@@ -190,6 +193,6 @@ impl PartialEq for FileApi {
             && self.name == other.name
             && self.tags == other.tags
             && self.size == other.size
-            && self.file_types == other.file_types
+            && self.file_type == other.file_type
     }
 }

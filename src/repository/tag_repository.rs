@@ -314,6 +314,7 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod get_tag_on_file_tests {
+    use crate::model::api::FileTypes::{self, Application};
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
@@ -333,6 +334,7 @@ mod get_tag_on_file_tests {
                 parent_id: None,
                 create_date: now(),
                 size: 0,
+                file_type: FileTypes::Unknown,
             },
             &con,
         )
@@ -367,6 +369,7 @@ mod get_tag_on_file_tests {
                 parent_id: None,
                 create_date: now(),
                 size: 0,
+                file_type: FileTypes::Application,
             },
             &con,
         )
@@ -380,6 +383,7 @@ mod get_tag_on_file_tests {
 
 #[cfg(test)]
 mod remove_tag_from_file_tests {
+    use crate::model::api::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
@@ -398,6 +402,7 @@ mod remove_tag_from_file_tests {
                 parent_id: None,
                 create_date: now(),
                 size: 0,
+                file_type: FileTypes::Unknown,
             },
             &con,
         )

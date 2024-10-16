@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
-use crate::model::repository::FileRecord;
+use crate::model::{api::FileTypes, repository::FileRecord};
 
 pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con
@@ -192,7 +192,8 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
     // not that I ever think this will be used for files this large - sqlite3 can store up to 8 bytes for a numeric value with a sign, so i64 it is
     let size: i64 = row.get(2)?;
     let create_date: NaiveDateTime = row.get(3)?;
-    let file_types: Option<String> = row.get(4)?;
+    let file_type: Option<String> = row.get(4)?;
+    let file_type: FileTypes = file_type.map_or_else(|| FileTypes::Unknown, |t| t.into());
     let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,
@@ -200,6 +201,7 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
         parent_id,
         create_date,
         size: size.try_into().unwrap_or(0),
+        file_type,
     })
 }
 
@@ -209,6 +211,7 @@ mod get_files_by_all_tags_tests {
 
     use rusqlite::Connection;
 
+    use crate::model::api::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::get_files_by_all_tags;
     use crate::repository::open_connection;
@@ -241,14 +244,16 @@ mod get_files_by_all_tags_tests {
             name: "has all".to_string(),
             parent_id: None,
             create_date: now(),
-            size: 0
+            size: 0,
+            file_type: FileTypes::Unknown
         }));
         assert!(res.contains(&FileRecord {
             id: Some(4),
             name: "also has all".to_string(),
             parent_id: None,
             create_date: now(),
-            size: 0
+            size: 0,
+            file_type: FileTypes::Unknown
         }));
         cleanup();
     }

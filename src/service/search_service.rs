@@ -59,7 +59,7 @@ pub fn search_files(
                 create_date: Some(file.create_date),
                 // TODO file types
                 // TODO file_types
-                file_types: Some(vec![]),
+                file_type: None,
             });
         }
     }
@@ -173,7 +173,7 @@ fn get_files_by_all_tags(
             size: Some(0),
             create_date: Some(file.create_date),
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         });
     }
     Ok(converted_files)
@@ -218,7 +218,7 @@ fn get_child_files(
             size: Some(0),
             create_date: Some(file.create_date),
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         });
     }
     Ok(converted)
@@ -264,7 +264,7 @@ fn get_all_non_deduped_child_files(
 mod search_files_tests {
     use std::collections::HashSet;
 
-    use crate::model::api::FileApi;
+    use crate::model::api::{FileApi, FileTypes};
     use crate::model::response::TagApi;
     use crate::service::search_service::search_files;
     use crate::test::{
@@ -287,7 +287,7 @@ mod search_files_tests {
         assert_eq!(res.name, "test2".to_string());
         assert_eq!(res.folder_id, None);
         assert_eq!(res.tags, vec![]);
-        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.file_type, Some(FileTypes::Unknown));
         assert_eq!(res.size, Some(0));
         cleanup();
     }
@@ -321,7 +321,7 @@ mod search_files_tests {
                 }
             ]
         );
-        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.file_type, Some(FileTypes::Unknown));
         assert_eq!(res.size, Some(0));
         cleanup();
     }
@@ -348,7 +348,7 @@ mod search_files_tests {
                 title: "tag".to_string(),
             }]
         );
-        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.file_type, Some(FileTypes::Unknown));
         assert_eq!(res.size, Some(0));
         cleanup();
     }
@@ -377,7 +377,7 @@ mod search_files_tests {
             size: Some(0),
             create_date: None,
             // TODO file_types
-            file_types: Some(vec![])
+            file_type: None
         }));
         assert!(res.contains(&FileApi {
             id: 2,
@@ -387,7 +387,7 @@ mod search_files_tests {
             size: Some(0),
             create_date: None,
             // TODO file_types
-            file_types: Some(vec![])
+            file_type: None
         }));
         let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
         let res: Vec<FileApi> = res.iter().cloned().collect();
@@ -400,7 +400,7 @@ mod search_files_tests {
             size: Some(0),
             create_date: None,
             // TODO file_types
-            file_types: Some(vec![])
+            file_type: None
         }));
         cleanup();
     }

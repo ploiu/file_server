@@ -1,15 +1,17 @@
-use std::fs;
+use std::collections::{HashMap, HashSet};
 use std::fs::File;
+use std::fs::{self};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::string::ToString;
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
 use crate::config::FILE_SERVER_CONFIG;
-use crate::model::api::FileApi;
+use crate::model::api::{FileApi, FileTypes};
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
 };
@@ -20,6 +22,108 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, metadata_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
+
+/// mapping of file lowercase file extension => file type
+const FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
+    use FileTypes::*;
+    HashMap::from([
+        ("msi", Application),
+        ("exe", Application),
+        ("sh", Application),
+        ("ps1", Application),
+        ("bin", Application),
+        ("jar", Application),
+        ("bz2", Archive),
+        ("gz", Archive),
+        ("tar", Archive),
+        ("bz", Archive),
+        ("rar", Archive),
+        ("zip", Archive),
+        ("7z", Archive),
+        ("midi", Audio),
+        ("mp3", Audio),
+        ("oga", Audio),
+        ("ogg", Audio),
+        ("opus", Audio),
+        ("3g2", Audio),
+        ("mid", Audio),
+        ("3gp", Audio),
+        ("wav", Audio),
+        ("weba", Audio),
+        ("ogx", Audio),
+        ("aac", Audio),
+        ("cda", Audio),
+        ("f3d", Cad),
+        ("php", Code),
+        ("csh", Code),
+        ("xml", Code),
+        ("htm", Code),
+        ("xhtml", Code),
+        ("mjs", Code),
+        ("jsonc", Code),
+        ("jsonld", Code),
+        ("json", Code),
+        ("js", Code),
+        ("html", Code),
+        ("ts", Code),
+        ("css", Code),
+        ("ini", Configuration),
+        ("toml", Configuration),
+        ("yml", Configuration),
+        ("properties", Configuration),
+        ("vsd", Diagram),
+        ("rtf", Document),
+        ("arc", Document),
+        ("pdf", Document),
+        ("doc", Document),
+        ("odt", Document),
+        ("epub", Document),
+        ("abw", Document),
+        ("md", Document),
+        ("odp", Document),
+        ("azw", Document),
+        ("docx", Document),
+        ("eot", Font),
+        ("otf", Font),
+        ("woff2", Font),
+        ("ttf", Font),
+        ("woff", Font),
+        ("nds", GameRom),
+        ("wux", GameRom),
+        ("xci", GameRom),
+        ("avif", Image),
+        ("apng", Image),
+        ("odg", Image),
+        ("pdn", Image),
+        ("bmp", Image),
+        ("ico", Image),
+        ("jpeg", Image),
+        ("webp", Image),
+        ("png", Image),
+        ("svg", Image),
+        ("jpg", Image),
+        ("tif", Image),
+        ("tiff", Image),
+        ("gif", Image),
+        ("mtl", Material),
+        ("stl", Model),
+        ("obj", Object),
+        ("pptx", Presentation),
+        ("ppt", Presentation),
+        ("odp", Presentation),
+        ("mcworld", SaveFile),
+        ("xls", Spreadsheet),
+        ("csv", Spreadsheet),
+        ("ods", Spreadsheet),
+        ("xlsx", Spreadsheet),
+        ("txt", Text),
+        ("mpeg", Video),
+        ("avi", Video),
+        ("ogv", Video),
+        ("mp4", Video),
+        ("webm", Video),
+    ])
+});
 
 #[inline]
 #[cfg(any(not(test), rust_analyzer))]
@@ -84,7 +188,7 @@ pub async fn save_file(
             size: Some(created.size),
             create_date: Some(created.create_date),
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         }
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
@@ -103,7 +207,7 @@ pub async fn save_file(
             size: Some(created.size),
             create_date: Some(created.create_date),
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         }
     };
     // now publish the file to the rabbit queue so a preview can be generated for it later
@@ -292,7 +396,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         size: Some(repo_file.size),
         create_date: Some(repo_file.create_date),
         // TODO file_types
-        file_types: Some(vec![]),
+        file_type: None,
     })
 }
 
@@ -368,6 +472,11 @@ pub fn generate_all_previews() {
     }
 }
 
+/// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
+pub fn determine_file_types(file_name: &String) -> FileTypes {
+    todo!()
+}
+
 // ==== private functions ==== \\
 
 /// persists the file to the disk and the database
@@ -433,7 +542,15 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
     let now = chrono::offset::Local::now();
-    let mut file_record = FileRecord::create(formatted_name.to_string(), now.naive_local(), size);
+    let mut file_record = FileRecord {
+        id: None,
+        name: formatted_name.to_string(),
+        parent_id: None,
+        create_date: now.naive_local(),
+        size,
+        // TODO determine file type
+        file_type: FileTypes::Unknown,
+    };
     let con = repository::open_connection();
     let res =
         file_repository::create_file(&file_record, &con).map_err(|_| CreateFileError::FailWriteDb);
@@ -523,7 +640,7 @@ mod deterine_file_name_tests {
 mod update_file_tests {
     use std::fs;
 
-    use crate::model::api::FileApi;
+    use crate::model::api::{FileApi, FileTypes};
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
@@ -549,7 +666,7 @@ mod update_file_tests {
             }],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
@@ -563,7 +680,7 @@ mod update_file_tests {
                 title: "tag1".to_string(),
             }]
         );
-        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.file_type, Some(FileTypes::Text));
         assert_eq!(res.size, Some(0));
         cleanup();
     }
@@ -581,7 +698,7 @@ mod update_file_tests {
             tags: vec![],
             size: None,
             create_date: None,
-            file_types: None,
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
@@ -589,7 +706,7 @@ mod update_file_tests {
         assert_eq!(res.name, "test.txt".to_string());
         assert_eq!(res.folder_id, None);
         assert_eq!(res.tags, vec![]);
-        assert_eq!(res.file_types, Some(vec![]));
+        assert_eq!(res.file_type, Some(FileTypes::Text));
         assert_eq!(res.size, Some(0));
         cleanup();
     }
@@ -604,7 +721,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::NotFound, res);
@@ -622,7 +739,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderNotFound, res);
@@ -643,7 +760,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
@@ -670,7 +787,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
@@ -694,7 +811,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
@@ -721,7 +838,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap();
         assert_eq!(1, res.id);
@@ -743,7 +860,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
@@ -755,7 +872,7 @@ mod update_file_tests {
         assert_eq!(file.name, "file".to_string());
         assert_eq!(file.folder_id, None);
         assert_eq!(file.tags, vec![]);
-        assert_eq!(file.file_types, Some(vec![]));
+        assert_eq!(file.file_type, Some(FileTypes::Unknown));
         assert_eq!(file.size, Some(0));
         cleanup();
     }
@@ -773,7 +890,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
@@ -796,7 +913,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
@@ -833,7 +950,7 @@ mod update_file_tests {
             tags: vec![],
             size: Some(0),
             create_date: Some(chrono::offset::Local::now().naive_local()),
-            file_types: Some(vec![]),
+            file_type: None,
         })
         .unwrap();
         let folder_files = folder_service::get_folder(Some(0)).unwrap().files;

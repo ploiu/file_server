@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use chrono::NaiveDateTime;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
@@ -68,7 +70,7 @@ impl From<String> for FileTypes {
 pub struct FileMetadata {
     pub size: u32,
     pub date_created: u64,
-    pub file_types: Vec<FileTypes>,
+    pub file_type: FileTypes,
 }
 
 #[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
@@ -85,7 +87,7 @@ pub struct FileApi {
     // wrapped in option so api consumers don't have to send this field (these fields can't be written to after a file is uploaded)
     pub size: Option<u64>,
     pub create_date: Option<NaiveDateTime>,
-    pub file_types: Option<Vec<FileTypes>>,
+    pub file_type: Option<FileTypes>,
 }
 
 impl FileApi {
@@ -121,7 +123,7 @@ impl FileApi {
             size: Some(file.size),
             create_date: Some(file.create_date),
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         }
     }
 
@@ -135,7 +137,7 @@ impl FileApi {
             size: None,
             create_date: None,
             // TODO file_types
-            file_types: Some(vec![]),
+            file_type: None,
         }
     }
 }
