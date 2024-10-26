@@ -1,4 +1,5 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
 use std::fs::{self};
 use std::os::unix::fs::MetadataExt;
@@ -178,7 +179,7 @@ pub async fn save_file(
         })?;
         // folder exists, now try to create the file
         let created =
-            persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
+            persist_save_file_to_folder(file_input, &folder, file_name.to_string()).await?;
         file_id = created.id.unwrap();
         FileApi {
             id: created.id.unwrap(),
@@ -349,9 +350,9 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     } else {
         file.folder_id
     };
-    if let Err(e) =
-        file_repository::update_file(&file.id, &new_parent_id, &file.name().unwrap(), &con)
-    {
+    let converted_record: FileRecord = (&file).into();
+    if let Err(e) = file_repository::update_file(&converted_record, &con) {
+        println!("{e:?}");
         con.close().unwrap();
         log::error!(
             "Failed to update file record in database. Nested exception is {:?}",
@@ -473,8 +474,16 @@ pub fn generate_all_previews() {
 }
 
 /// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
-pub fn determine_file_types(file_name: &String) -> FileTypes {
-    todo!()
+pub fn determine_file_type(file_name: &str) -> FileTypes {
+    let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
+    if let Some(ext) = extension {
+        FILE_TYPE_MAPPING
+            .get(ext)
+            .copied()
+            .unwrap_or(FileTypes::Unknown)
+    } else {
+        FileTypes::Unknown
+    }
 }
 
 // ==== private functions ==== \\
@@ -542,14 +551,14 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
     let now = chrono::offset::Local::now();
+    let file_type = determine_file_type(name);
     let mut file_record = FileRecord {
         id: None,
         name: formatted_name.to_string(),
         parent_id: None,
         create_date: now.naive_local(),
         size,
-        // TODO determine file type
-        file_type: FileTypes::Unknown,
+        file_type,
     };
     let con = repository::open_connection();
     let res =
@@ -648,7 +657,7 @@ mod update_file_tests {
     use crate::service::folder_service;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, refresh_db,
+        create_folder_disk, create_tag_file, now, refresh_db,
     };
 
     #[test]
@@ -665,7 +674,7 @@ mod update_file_tests {
                 title: "tag1".to_string(),
             }],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            create_date: Some(now()),
             file_type: None,
         })
         .unwrap();

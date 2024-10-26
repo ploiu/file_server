@@ -1,7 +1,7 @@
 use chrono::NaiveDateTime;
 use rocket::serde::Serialize;
 
-use super::api::FileTypes;
+use super::api::{FileApi, FileTypes};
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Serialize, Eq, Hash, Clone)]
@@ -56,4 +56,25 @@ pub struct FilePreview {
     /// the binary contents of the file preview.
     /// This is stored in jpeg format
     pub file_preview: Vec<u8>,
+}
+
+impl From<&FileApi> for FileRecord {
+    fn from(value: &FileApi) -> Self {
+        let create_date = value
+            .create_date
+            .unwrap_or(chrono::offset::Local::now().naive_local());
+        Self {
+            id: if value.id == 0 { None } else { Some(value.id) },
+            name: value.name.clone(),
+            parent_id: if value.folder_id == Some(0) {
+                None
+            } else {
+                value.folder_id
+            },
+            create_date,
+            // will be 0 if a size needs to be set
+            size: value.size.unwrap_or_default(),
+            file_type: value.file_type.unwrap_or(FileTypes::Unknown),
+        }
+    }
 }

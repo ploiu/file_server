@@ -314,7 +314,7 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod get_tag_on_file_tests {
-    use crate::model::api::FileTypes::{self, Application};
+    use crate::model::api::FileTypes::{self};
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;

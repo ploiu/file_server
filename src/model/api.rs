@@ -1,8 +1,8 @@
-use std::collections::HashSet;
 
 use chrono::NaiveDateTime;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
+use rusqlite::ToSql;
 
 use crate::model::repository::FileRecord;
 use crate::model::response::TagApi;
@@ -61,6 +61,33 @@ impl From<String> for FileTypes {
                 );
                 Self::Unknown
             }
+        }
+    }
+}
+
+impl ToSql for FileTypes {
+    fn to_sql(&self) -> rusqlite::Result<rusqlite::types::ToSqlOutput<'_>> {
+        match self {
+            Self::Application => Ok("application".into()),
+            Self::Archive => Ok("archive".into()),
+            Self::Audio => Ok("audio".into()),
+            Self::Cad => Ok("cad".into()),
+            Self::Code => Ok("code".into()),
+            Self::Configuration => Ok("configuration".into()),
+            Self::Diagram => Ok("diagram".into()),
+            Self::Document => Ok("document".into()),
+            Self::Font => Ok("font".into()),
+            Self::GameRom => Ok("game_rom".into()),
+            Self::Image => Ok("image".into()),
+            Self::Material => Ok("material".into()),
+            Self::Model => Ok("model".into()),
+            Self::Object => Ok("object".into()),
+            Self::Presentation => Ok("presentation".into()),
+            Self::SaveFile => Ok("save_file".into()),
+            Self::Spreadsheet => Ok("spreadsheet".into()),
+            Self::Text => Ok("text".into()),
+            Self::Video => Ok("video".into()),
+            Self::Unknown => Ok("unknown".into()),
         }
     }
 }

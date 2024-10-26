@@ -3,13 +3,11 @@ select
     f.name,
     f.fileSize,
     f.dateCreated,
-    group_concat(ft.value),
+    f.type,
     ff.folderId
 from
     FileRecords f
     left join folder_files ff on ff.fileId = f.id
-    left join FileRecordTypes fr on fr.fileId = f.id
-    left join FileTypes ft on ft.id = fr.fileTypeId
 where
     ff.folderId in (?1)
 group by

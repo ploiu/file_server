@@ -20,12 +20,6 @@ update
 set
     dateCreated = datetime(CURRENT_TIMESTAMP, 'localtime');
 
-create table FileRecordTypes (
-    id integer primary key autoincrement,
-    fileId integer references FileRecords(id) on delete cascade,
-    fileTypeId integer references FileTypes(id)
-);
-
 insert into
     FileTypes(value)
 values
@@ -49,6 +43,9 @@ values
     ('text'),
     ('video'),
     ('unknown');
+
+alter table FileRecords
+add column type references FileTypes(value) default 'unknown';
 
 update
     Metadata
