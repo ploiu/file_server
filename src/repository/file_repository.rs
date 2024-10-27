@@ -10,7 +10,12 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
         .prepare(include_str!("../assets/queries/file/create_file.sql"))
         .unwrap();
 
-    match pst.insert(params![file.name, file.size, file.create_date]) {
+    match pst.insert(params![
+        file.name,
+        file.size,
+        file.create_date,
+        file.file_type
+    ]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
             log::error!("Failed to save file record. Nested exception is {:?}", e);
@@ -273,6 +278,44 @@ mod file_preview_tests {
         let err = get_file_preview(1, &con).unwrap_err();
         assert_eq!(rusqlite::Error::QueryReturnedNoRows, err);
 
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod create_file_tests {
+    use crate::{
+        model::{api::FileTypes, repository::FileRecord},
+        repository::open_connection,
+        test::{cleanup, create_folder_db_entry, now, refresh_db},
+    };
+
+    #[test]
+    fn saves_all_fields_to_db() {
+        refresh_db();
+        create_folder_db_entry("whatever", None);
+        let create_date = now();
+        let name = "bg3_bugbear.mp4".to_string();
+        let size = 525600;
+        let file_type = FileTypes::Video;
+        let record = FileRecord {
+            id: None,
+            name: name.clone(),
+            // this creates the file but doesn't handle linking it to the folder
+            parent_id: None,
+            create_date,
+            size,
+            file_type,
+        };
+        let con = open_connection();
+        super::create_file(&record, &con).unwrap();
+        let retrieved = super::get_file(1, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(1, retrieved.id.unwrap());
+        assert_eq!(name, retrieved.name);
+        assert_eq!(create_date, retrieved.create_date);
+        assert_eq!(size, retrieved.size);
+        assert_eq!(file_type, retrieved.file_type);
         cleanup();
     }
 }

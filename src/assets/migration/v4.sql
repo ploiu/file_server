@@ -45,7 +45,10 @@ values
     ('unknown');
 
 alter table FileRecords
-add column type references FileTypes(value) default 'unknown';
+-- sqlite will not let us use a reference with a non-null default value if there are records in the db
+add column type references FileTypes(value) default null;
+
+update FileRecords set type = "unknown";
 
 update
     Metadata

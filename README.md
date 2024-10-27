@@ -35,6 +35,8 @@ A well-documented api will allow anyone to build their own front end for this wi
 doing. I plan to also use this project as an opportunity to write an Android-based application for the first time.
 
 ## building
+supported rustc version: 1.81.0
+
 This project _might_ be able to run on windows, but it is primarily designed to run on a linux installation. No guarantees are made about windows. 
 
 For building on linux, *gcc* is required to build sqlite. You will also need to add the `aarch64-unknown-linux-gnu` target using the command if you want to cross-compile for a raspberry pi.
