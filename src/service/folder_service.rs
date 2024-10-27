@@ -121,7 +121,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         format!("{}/{}", file_dir(), original_folder.name),
         &updated_folder.name,
     ) {
-        eprintln!("Failed to move folder! Nested exception is: \n {:?}", e);
+        log::error!("Failed to move folder! Nested exception is: \n {:?}", e);
         return Err(UpdateFolderError::FileSystemFailure);
     }
     // updated folder name will be a path, so we need to get just the folder name
@@ -171,7 +171,7 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
     // delete went well, now time to actually remove the folder
     let path = format!("{}/{}", file_dir(), deleted_folder.name);
     if let Err(e) = fs::remove_dir_all(path) {
-        eprintln!(
+        log::error!(
             "Failed to recursively delete folder from disk! Nested exception is: \n {:?}",
             e
         );
@@ -388,7 +388,7 @@ fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
         Ok(folder) => Ok(folder),
         Err(rusqlite::Error::QueryReturnedNoRows) => Err(GetFolderError::NotFound),
         Err(err) => {
-            eprintln!(
+            log::error!(
                 "Failed to pull folder info from database! Nested exception is: \n {:?}",
                 err
             );
@@ -437,7 +437,7 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
             })
         }
         Err(e) => {
-            eprintln!("Error trying to save folder!\nException is: {:?}", e);
+            log::error!("Error trying to save folder!\nException is: {:?}", e);
             Err(CreateFolderError::DbFailure)
         }
     };
@@ -540,7 +540,7 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
     );
     if update.is_err() {
         con.close().unwrap();
-        eprintln!(
+        log::error!(
             "Failed to update folder in database. Nested exception is: \n {:?}",
             update.unwrap_err()
         );
@@ -634,7 +634,7 @@ fn get_files_for_folder(
             Vec::new()
         };
         let tags: Vec<TagApi> = tags.iter().map(|it| it.clone().into()).collect();
-        result.push(FileApi::from(file, tags));
+        result.push(FileApi::from_with_tags(file, tags));
     }
     Ok(result)
 }
@@ -642,7 +642,7 @@ fn get_files_for_folder(
 /// the main body of `delete_folder`. Takes a connection so that we're not creating a connection on every stack frame
 fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, DeleteFolderError> {
     let folder = folder_repository::get_by_id(Some(id), con).map_err(|e| {
-        eprintln!(
+        log::error!(
             "Failed to recursively delete folder. Nested exception is {:?}",
             e
         );
@@ -670,7 +670,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     }
     // now that we've deleted everything beneath it, delete the requested folder from the repository
     if let Err(e) = folder_repository::delete_folder(id, con) {
-        eprintln!(
+        log::error!(
             "Failed to delete root folder in recursive folder delete. Nested exception is: \n {:?}",
             e
         );

@@ -144,7 +144,7 @@ pub fn link_folder_to_file(
     match pst.insert([file_id, folder_id]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Failed to link file to folder. Nested exception is {:?}", e);
+            log::error!("Failed to link file to folder. Nested exception is {:?}", e);
             Err(e)
         }
     }

@@ -13,7 +13,7 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
     match pst.insert(params![file.name, file.size, file.create_date]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
-            eprintln!("Failed to save file record. Nested exception is {:?}", e);
+            log::error!("Failed to save file record. Nested exception is {:?}", e);
             Err(e)
         }
     }
@@ -47,7 +47,7 @@ pub fn delete_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Er
     let record = get_file(id, con)?;
 
     if let Err(e) = pst.execute([id]) {
-        eprintln!("Failed to delete file by id. Nested exception is {:?}", e);
+        log::error!("Failed to delete file by id. Nested exception is {:?}", e);
         return Err(e);
     }
     Ok(record)
@@ -74,7 +74,6 @@ pub fn update_file(record: &FileRecord, con: &Connection) -> Result<(), rusqlite
     unlink_file_pst.execute([file_id])?;
     // if we specified a parent id, we need to add a link back
     if parent_id.is_some() {
-        println!("======={file_id:?} - {parent_id:?}");
         let mut add_link_pst = con.prepare(include_str!(
             "../assets/queries/folder_file/create_folder_file.sql"
         ))?;
@@ -146,27 +145,6 @@ pub fn get_file_preview(file_id: u32, con: &Connection) -> Result<Vec<u8>, rusql
     Ok(res)
 }
 
-pub fn get_file_previews(
-    file_ids: Vec<u32>,
-    con: &Connection,
-) -> Result<Vec<Vec<u8>>, rusqlite::Error> {
-    let placeholder: String = file_ids
-        .into_iter()
-        .map(|it| it.to_string())
-        .collect::<Vec<_>>()
-        .join(",");
-    let mut pst = con.prepare(&format!(
-        include_str!("../assets/queries/file/get_file_preview.sql"),
-        placeholder
-    ))?;
-    let mut previews: Vec<Vec<u8>> = vec![];
-    let rows = pst.query_map([], |row| row.get(0))?;
-    for row in rows {
-        previews.push(row?);
-    }
-    Ok(previews)
-}
-
 pub fn delete_file_preview(file_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
         "../assets/queries/file/delete_file_preview.sql"
@@ -191,8 +169,8 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
     // not that I ever think this will be used for files this large - sqlite3 can store up to 8 bytes for a numeric value with a sign, so i64 it is
     let size: i64 = row.get(2)?;
     let create_date: NaiveDateTime = row.get(3)?;
-    let file_type: Option<String> = row.get(4)?;
-    let file_type: FileTypes = file_type.map_or_else(|| FileTypes::Unknown, |t| t.into());
+    let file_type: String = row.get(4)?;
+    let file_type: FileTypes = file_type.into();
     let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,

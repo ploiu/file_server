@@ -50,17 +50,7 @@ pub fn search_files(
             }
         };
         for file in searched {
-            matching_files.insert(FileApi {
-                id: file.id.unwrap(),
-                folder_id: file.parent_id,
-                name: file.name.clone(),
-                tags: Vec::new(),
-                size: Some(file.size),
-                create_date: Some(file.create_date),
-                // TODO file types
-                // TODO file_types
-                file_type: None,
-            });
+            matching_files.insert(file.into());
         }
     }
     con.close().unwrap();
@@ -165,16 +155,8 @@ fn get_files_by_all_tags(
             .into_iter()
             .map(TagApi::from)
             .collect();
-        converted_files.insert(FileApi {
-            id: file.id.unwrap(),
-            folder_id: file.parent_id,
-            name: file.name.clone(),
-            tags,
-            size: Some(0),
-            create_date: Some(file.create_date),
-            // TODO file_types
-            file_type: None,
-        });
+        let api = FileApi::from_with_tags(file, tags);
+        converted_files.insert(api);
     }
     Ok(converted_files)
 }
@@ -210,16 +192,7 @@ fn get_child_files(
             .into_iter()
             .map(TagApi::from)
             .collect();
-        converted.insert(FileApi {
-            id: file.id.unwrap_or(0),
-            name: file.name.clone(),
-            folder_id: file.parent_id,
-            tags,
-            size: Some(0),
-            create_date: Some(file.create_date),
-            // TODO file_types
-            file_type: None,
-        });
+        converted.insert(FileApi::from_with_tags(file, tags));
     }
     Ok(converted)
 }
@@ -239,7 +212,7 @@ fn get_all_non_deduped_child_files(
         .collect();
     let mut final_files: HashSet<FileApi> = HashSet::new();
     for file in remaining_child_files {
-        let parent_id = file.folder_id.unwrap_or(0);
+        let parent_id = file.folder_id.unwrap_or_default();
         let parent_tags: HashSet<String> = folder_index
             .get(&parent_id)
             .unwrap()
@@ -376,8 +349,7 @@ mod search_files_tests {
             tags: vec![],
             size: Some(0),
             create_date: None,
-            // TODO file_types
-            file_type: None
+            file_type: Some(FileTypes::Unknown)
         }));
         assert!(res.contains(&FileApi {
             id: 2,
@@ -386,8 +358,7 @@ mod search_files_tests {
             tags: vec![],
             size: Some(0),
             create_date: None,
-            // TODO file_types
-            file_type: None
+            file_type: Some(FileTypes::Unknown)
         }));
         let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
         let res: Vec<FileApi> = res.iter().cloned().collect();
@@ -395,12 +366,10 @@ mod search_files_tests {
             id: 2,
             name: "bottom file".to_string(),
             folder_id: Some(3),
-            // TODO file_types
             tags: vec![],
             size: Some(0),
             create_date: None,
-            // TODO file_types
-            file_type: None
+            file_type: Some(FileTypes::Unknown)
         }));
         cleanup();
     }

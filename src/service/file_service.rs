@@ -178,19 +178,11 @@ pub async fn save_file(
             }
         })?;
         // folder exists, now try to create the file
-        let created =
+        let mut created =
             persist_save_file_to_folder(file_input, &folder, file_name.to_string()).await?;
+        created.name = String::from(root_regex.replace(&file_name, ""));
         file_id = created.id.unwrap();
-        FileApi {
-            id: created.id.unwrap(),
-            folder_id: None,
-            name: String::from(root_regex.replace(&file_name, "")),
-            tags: Vec::new(),
-            size: Some(created.size),
-            create_date: Some(created.create_date),
-            // TODO file_types
-            file_type: None,
-        }
+        created.into()
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
             format!(".{}", ext)
@@ -198,18 +190,10 @@ pub async fn save_file(
             String::from("")
         };
         let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
-        let created = persist_save_file(file_input).await?;
+        let mut created = persist_save_file(file_input).await?;
+        created.name = String::from(root_regex.replace(&file_name, ""));
         file_id = created.id.unwrap();
-        FileApi {
-            id: created.id.unwrap(),
-            folder_id: None,
-            name: String::from(root_regex.replace(&file_name, "")),
-            tags: Vec::new(),
-            size: Some(created.size),
-            create_date: Some(created.create_date),
-            // TODO file_types
-            file_type: None,
-        }
+        created.into()
     };
     // now publish the file to the rabbit queue so a preview can be generated for it later
     queue::publish_message("icon_gen", &file_id.to_string());
@@ -242,7 +226,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
         }
     };
     con.close().unwrap();
-    Ok(FileApi::from(file, tags))
+    Ok(FileApi::from_with_tags(file, tags))
 }
 
 pub fn check_file_exists(id: u32) -> bool {
@@ -314,6 +298,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
+    let mut file = file;
     // first check if the file exists
     let con: Connection = repository::open_connection();
     let repo_file = file_repository::get_file(file.id, &con);
@@ -350,9 +335,12 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     } else {
         file.folder_id
     };
+    // on migration from v3 to v4, if the file being updated hasn't had its type determined yet (or if rabbit is disabled), we need to ensure the type gets set still
+    if file.file_type.is_none() {
+        file.file_type = Some(determine_file_type(&file.name));
+    }
     let converted_record: FileRecord = (&file).into();
     if let Err(e) = file_repository::update_file(&converted_record, &con) {
-        println!("{e:?}");
         con.close().unwrap();
         log::error!(
             "Failed to update file record in database. Nested exception is {:?}",
@@ -396,8 +384,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         tags,
         size: Some(repo_file.size),
         create_date: Some(repo_file.create_date),
-        // TODO file_types
-        file_type: None,
+        file_type: file.file_type,
     })
 }
 
@@ -482,6 +469,10 @@ pub fn determine_file_type(file_name: &str) -> FileTypes {
             .copied()
             .unwrap_or(FileTypes::Unknown)
     } else {
+        // no extension means it's either a binary file or a text file. We _could_ read the file to determine,
+        // but it looks like that can be tricky as we'd have to scan the entire file no matter how big and even then it might
+        // not be guaranteed. I believe most of the time this would be text file...
+        // but since there's no guarantee I'll leave it as unknown
         FileTypes::Unknown
     }
 }

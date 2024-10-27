@@ -615,7 +615,7 @@ fn update_file_file_already_exists() {
 }
 
 #[test]
-fn update_file_no_extension() {
+fn update_file_no_extension_removes_extension_and_file_type() {
     set_password();
     remove_files();
     create_file_db_entry("test.txt", None);
@@ -636,8 +636,7 @@ fn update_file_no_extension() {
     assert_eq!(res_body.folder_id, None);
     assert_eq!(res_body.tags, vec![]);
     assert_eq!(res_body.size, Some(0));
-    // TODO file_types
-    assert_eq!(res_body.file_type, Some(FileTypes::Text));
+    assert_eq!(res_body.file_type, Some(FileTypes::Unknown));
     cleanup();
 }
 

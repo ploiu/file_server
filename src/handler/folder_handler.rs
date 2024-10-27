@@ -64,7 +64,7 @@ pub async fn create_folder(
             BasicMessage::new("That folder already exists."),
         ),
         Err(e) if e == CreateFolderError::FileSystemFailure => {
-            eprintln!(
+            log::error!(
                 "Failed to save folder to disk! Nested exception is: \n{:?}",
                 e
             );
@@ -73,7 +73,7 @@ pub async fn create_folder(
             ))
         }
         Err(e) => {
-            eprintln!("failed to save folder, nested exception is:\n {:?}", e);
+            log::error!("failed to save folder, nested exception is:\n {:?}", e);
             CreateFolderResponse::FolderDbError(BasicMessage::new(
                 "Failed to save folder info to the database. Check server logs for details",
             ))

@@ -31,16 +31,6 @@ pub struct Folder {
     pub parent_id: Option<u32>,
 }
 
-#[derive(Debug)]
-pub struct FolderFiles {
-    /// will be None unless this is pulled from the repository
-    pub id: Option<u32>,
-    /// the id of the folder containing the files
-    pub folder_id: u32,
-    /// the id of the file in this record
-    pub file_id: u32,
-}
-
 #[derive(Debug, PartialEq, Clone)]
 pub struct Tag {
     /// the id of the tag

@@ -1,4 +1,3 @@
-
 use chrono::NaiveDateTime;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
@@ -141,17 +140,10 @@ impl FileApi {
         Some(replaced)
     }
 
-    pub fn from(file: FileRecord, tags: Vec<TagApi>) -> FileApi {
-        FileApi {
-            tags,
-            id: file.id.unwrap(),
-            folder_id: file.parent_id,
-            name: file.name,
-            size: Some(file.size),
-            create_date: Some(file.create_date),
-            // TODO file_types
-            file_type: None,
-        }
+    pub fn from_with_tags(file: FileRecord, tags: Vec<TagApi>) -> Self {
+        let mut api: Self = file.into();
+        api.tags = tags;
+        api
     }
 
     #[cfg(test)]
@@ -165,6 +157,21 @@ impl FileApi {
             create_date: None,
             // TODO file_types
             file_type: None,
+        }
+    }
+}
+
+impl From<FileRecord> for FileApi {
+    /// This does not handle adding in tags, that will need to be done separately
+    fn from(value: FileRecord) -> Self {
+        Self {
+            id: value.id.unwrap(),
+            folder_id: value.parent_id,
+            name: value.name,
+            tags: Vec::new(),
+            size: Some(value.size),
+            create_date: Some(value.create_date),
+            file_type: Some(value.file_type),
         }
     }
 }

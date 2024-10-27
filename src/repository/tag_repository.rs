@@ -30,7 +30,7 @@ pub fn get_tag_by_title(
             if e == rusqlite::Error::QueryReturnedNoRows {
                 Ok(None)
             } else {
-                eprintln!("Failed to get tag by name, error is {:?}", e);
+                log::error!("Failed to get tag by name, error is {:?}", e);
                 Err(e)
             }
         }

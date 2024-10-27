@@ -35,7 +35,7 @@ pub fn check_auth(auth: HeaderAuth, con: &Connection) -> Result<CheckAuthResult,
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(CheckAuthResult::Missing),
         Err(e) => {
-            eprintln!("Failed to check auth in database: {:?}", e);
+            log::error!("Failed to check auth in database: {:?}", e);
             Err(e)
         }
     }
@@ -48,7 +48,7 @@ pub fn set_auth(auth: HeaderAuth, con: &Connection) -> Result<(), rusqlite::Erro
     match statement.execute([auth.to_string()]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Failed to set password. Nested exception is {:?}", e);
+            log::error!("Failed to set password. Nested exception is {:?}", e);
             Err(e)
         }
     }

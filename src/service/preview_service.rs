@@ -1,7 +1,7 @@
 use std::io::Cursor;
 
-use image::io::Reader as ImageReader;
 use image::DynamicImage;
+use image::ImageReader;
 use rusqlite::Connection;
 
 use crate::model::error::preview_errors::PreviewError;

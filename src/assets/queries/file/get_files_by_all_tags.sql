@@ -2,7 +2,7 @@ select
     f.id,
     f.name,
     f.fileSize,
-    f.dateCreated || '',
+    f.dateCreated,
     f.type,
     ff.folderId,
     group_concat(t.title)
