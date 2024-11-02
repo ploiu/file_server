@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::hash::Hash;
@@ -35,7 +36,10 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let child_folders = match folder_repository::get_child_folders(db_id, &con) {
         Ok(f) => f,
         Err(e) => {
-            log::error!("Failed to pull child folders from database! Nested exception is {e:?}");
+            log::error!(
+                "Failed to pull child folders from database! Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             con.close().unwrap();
             return Err(GetFolderError::DbFailure);
         }
@@ -46,7 +50,10 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
             match tag_repository::get_tags_on_folder(child.id.unwrap_or(0), &con) {
                 Ok(t) => t.into_iter().map(|it| it.into()).collect(),
                 Err(e) => {
-                    log::error!("Failed to retrieve tags for folder. Exception is {e:?}");
+                    log::error!(
+                        "Failed to retrieve tags for folder. Exception is {e:?}\n{}",
+                        Backtrace::force_capture()
+                    );
                     con.close().unwrap();
                     return Err(GetFolderError::TagError);
                 }
@@ -121,7 +128,10 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         format!("{}/{}", file_dir(), original_folder.name),
         &updated_folder.name,
     ) {
-        log::error!("Failed to move folder! Nested exception is: \n {:?}", e);
+        log::error!(
+            "Failed to move folder! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         return Err(UpdateFolderError::FileSystemFailure);
     }
     // updated folder name will be a path, so we need to get just the folder name
@@ -172,8 +182,8 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
     let path = format!("{}/{}", file_dir(), deleted_folder.name);
     if let Err(e) = fs::remove_dir_all(path) {
         log::error!(
-            "Failed to recursively delete folder from disk! Nested exception is: \n {:?}",
-            e
+            "Failed to recursively delete folder from disk! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(DeleteFolderError::FileSystemError);
     };
@@ -188,7 +198,10 @@ pub fn get_folders_by_any_tag(
         Ok(f) => f,
         Err(e) => {
             con.close().unwrap();
-            log::error!("Failed to pull folders by any tag. Exception is {e}");
+            log::error!(
+                "Failed to pull folders by any tag. Exception is {e}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(GetFolderError::DbFailure);
         }
     };
@@ -243,7 +256,10 @@ pub fn reduce_folders_by_tag(
             Ok(p) => p,
             Err(e) => {
                 con.close().unwrap();
-                log::error!("Failed to pull parent folders. Exception is {e}");
+                log::error!(
+                    "Failed to pull parent folders. Exception is {e}\n{}",
+                    Backtrace::force_capture()
+                );
                 return Err(GetFolderError::DbFailure);
             }
         };
@@ -284,7 +300,10 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
             con.close().unwrap();
-            log::error!("Failed to query files for folder {id}. Error is {e:?}");
+            log::error!(
+                "Failed to query files for folder {id}. Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(GetPreviewError::DbFailure);
         }
         Err(_e) => vec![],
@@ -300,7 +319,10 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
             Err(rusqlite::Error::QueryReturnedNoRows) => continue,
             Err(e) => {
                 con.close().unwrap();
-                log::error!("Failed to get preview for file {id}. Error is {e:?}");
+                log::error!(
+                    "Failed to get preview for file {id}. Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 if rusqlite::Error::QueryReturnedNoRows == e {
                     return Err(GetPreviewError::NotFound);
                 } else {
@@ -332,7 +354,8 @@ fn give_children_tags(
             .collect::<Vec<u32>>(),
         Err(e) => {
             log::error!(
-                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}"
+                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}\n{}",
+                Backtrace::force_capture()
             );
             return Err(GetFolderError::DbFailure);
         }
@@ -389,8 +412,8 @@ fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
         Err(rusqlite::Error::QueryReturnedNoRows) => Err(GetFolderError::NotFound),
         Err(err) => {
             log::error!(
-                "Failed to pull folder info from database! Nested exception is: \n {:?}",
-                err
+                "Failed to pull folder info from database! Nested exception is {err:?}\n{}",
+                Backtrace::force_capture()
             );
             Err(GetFolderError::DbFailure)
         }
@@ -437,7 +460,10 @@ fn create_folder_internal(folder: &Folder) -> Result<Folder, CreateFolderError> 
             })
         }
         Err(e) => {
-            log::error!("Error trying to save folder!\nException is: {:?}", e);
+            log::error!(
+                "Error trying to save folder!\nException is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(CreateFolderError::DbFailure)
         }
     };
@@ -541,8 +567,9 @@ fn update_folder_internal(folder: &Folder) -> Result<Folder, UpdateFolderError> 
     if update.is_err() {
         con.close().unwrap();
         log::error!(
-            "Failed to update folder in database. Nested exception is: \n {:?}",
-            update.unwrap_err()
+            "Failed to update folder in database. Nested exception is {:?}\n{}",
+            update.unwrap_err(),
+            Backtrace::force_capture()
         );
         return Err(UpdateFolderError::DbFailure);
     }
@@ -611,7 +638,10 @@ fn get_files_for_folder(
     let child_files = match folder_repository::get_child_files(unwrapped_id, con) {
         Ok(files) => files,
         Err(e) => {
-            log::error!("Failed to query database for child files. Nested exception is: \n {e:?}");
+            log::error!(
+                "Failed to query database for child files. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(GetChildFilesError::DbFailure);
         }
     };
@@ -622,7 +652,10 @@ fn get_files_for_folder(
     let file_tags = match tag_repository::get_tags_on_files(file_ids, con) {
         Ok(res) => res,
         Err(e) => {
-            log::error!("Failed to get tags on file {e:?}");
+            log::error!(
+                "Failed to get tags on file {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(GetChildFilesError::TagError);
         }
     };
@@ -643,8 +676,8 @@ fn get_files_for_folder(
 fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, DeleteFolderError> {
     let folder = folder_repository::get_by_id(Some(id), con).map_err(|e| {
         log::error!(
-            "Failed to recursively delete folder. Nested exception is {:?}",
-            e
+            "Failed to recursively delete folder. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         if e == rusqlite::Error::QueryReturnedNoRows {
             DeleteFolderError::FolderNotFound
@@ -671,8 +704,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     // now that we've deleted everything beneath it, delete the requested folder from the repository
     if let Err(e) = folder_repository::delete_folder(id, con) {
         log::error!(
-            "Failed to delete root folder in recursive folder delete. Nested exception is: \n {:?}",
-            e
+            "Failed to delete root folder in recursive folder delete. Nested exception is {e:?}\n{}", Backtrace::force_capture()
         );
         return Err(DeleteFolderError::DbFailure);
     };

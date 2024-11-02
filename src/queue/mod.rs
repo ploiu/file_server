@@ -110,6 +110,8 @@ where
 /// that aren't strictly necessary for the operation of the file server.
 #[cfg(any(not(test), rust_analyzer))]
 pub fn publish_message(queue_name: &str, message: &String) {
+    use std::backtrace::Backtrace;
+
     use lapin::{options::BasicPublishOptions, BasicProperties};
 
     if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
@@ -128,8 +130,8 @@ pub fn publish_message(queue_name: &str, message: &String) {
     ));
     if let Err(e) = res {
         log::error!(
-            "Failed to publish message {message} to queue {queue_name}. Exception is {:?}",
-            e
+            "Failed to publish message {message} to queue {queue_name}. Exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
     }
 }

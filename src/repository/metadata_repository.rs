@@ -1,3 +1,5 @@
+use std::backtrace::Backtrace;
+
 use rusqlite::Connection;
 
 use crate::guard::HeaderAuth;
@@ -35,7 +37,10 @@ pub fn check_auth(auth: HeaderAuth, con: &Connection) -> Result<CheckAuthResult,
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(CheckAuthResult::Missing),
         Err(e) => {
-            log::error!("Failed to check auth in database: {:?}", e);
+            log::error!(
+                "Failed to check auth in database: {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }
@@ -48,7 +53,10 @@ pub fn set_auth(auth: HeaderAuth, con: &Connection) -> Result<(), rusqlite::Erro
     match statement.execute([auth.to_string()]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            log::error!("Failed to set password. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to set password. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }

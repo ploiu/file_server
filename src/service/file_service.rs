@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -168,8 +169,8 @@ pub async fn save_file(
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
             log::error!(
-                "Save file - failed to retrieve parent folder. Nested exception is {:?}",
-                e
+                "Save file - failed to retrieve parent folder. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             if e == GetFolderError::NotFound {
                 CreateFileError::ParentFolderNotFound
@@ -208,8 +209,8 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
         Err(e) => {
             con.close().unwrap();
             log::error!(
-                "Failed to pull file info from database. Nested exception is {:?}",
-                e
+                "Failed to pull file info from database. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             return if e == rusqlite::Error::QueryReturnedNoRows {
                 Err(GetFileError::NotFound)
@@ -264,9 +265,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     delete_result?;
     fs::remove_file(&file_path).map_err(|e| {
         log::error!(
-            "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
-            file_path,
-            e
+            "Failed to delete file from disk at location {file_path:?}!\n Nested exception is {e:?}\n{}", Backtrace::force_capture()
         );
         DeleteFileError::FileSystemError
     })
@@ -290,8 +289,9 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
         return Err(DeleteFileError::NotFound);
     } else {
         log::error!(
-            "Failed to delete file record from database! Nested exception is: \n {:?}",
-            delete_result.unwrap_err()
+            "Failed to delete file record from database! Nested exception is {:?}\n{}",
+            delete_result.unwrap_err(),
+            Backtrace::force_capture()
         );
         return Err(DeleteFileError::DbError);
     }
@@ -343,8 +343,8 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     if let Err(e) = file_repository::update_file(&converted_record, &con) {
         con.close().unwrap();
         log::error!(
-            "Failed to update file record in database. Nested exception is {:?}",
-            e
+            "Failed to update file record in database. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(UpdateFileError::DbError);
     }
@@ -372,8 +372,8 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
     if let Err(e) = fs::rename(old_path, new_path.to_string()) {
         log::error!(
-            "Failed to move file in the file system. Nested exception is {:?}",
-            e
+            "Failed to move file in the file system. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(UpdateFileError::FileSystemError);
     }
@@ -392,7 +392,10 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
 pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
     let con = repository::open_connection();
     let result = file_repository::get_file_path(id, &con).map_err(|e| {
-        log::error!("Failed to get file path! Nested exception is {:?}", e);
+        log::error!(
+            "Failed to get file path for file id {id}! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         if e == rusqlite::Error::QueryReturnedNoRows {
             GetFileError::NotFound
         } else {
@@ -413,7 +416,10 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let con: Connection = repository::open_connection();
     let result = file_repository::get_file_preview(id, &con).map_err(|e| {
-        log::error!("Failed to get file preview! Nested exception is {:?}", e);
+        log::error!(
+            "Failed to get file preview! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         if e == rusqlite::Error::QueryReturnedNoRows {
             GetPreviewError::NotFound
         } else {
@@ -437,7 +443,10 @@ pub fn generate_all_previews() {
             Ok(ids) => ids,
             Err(e) => {
                 con.close().unwrap();
-                log::error!("Failed to retrieve all file IDs in the database. Error is {e:?}");
+                log::error!(
+                    "Failed to retrieve all file IDs in the database. Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 return;
             }
         };
@@ -447,12 +456,18 @@ pub fn generate_all_previews() {
         let flag_set_result = metadata_repository::set_generated_previews_flag(&con);
         con.close().unwrap();
         if let Err(e) = flag_set_result {
-            log::error!("Failed to set preview flag in database. Exception is {e:?}");
+            log::error!(
+                "Failed to set preview flag in database. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
         } else {
             log::info!("Successfully pushed file IDs to queue")
         }
     } else if let Err(e) = flag_res {
-        log::error!("Failed to get preview flag from database. Error is {e:?}");
+        log::error!(
+            "Failed to get preview flag from database. Error is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         con.close().unwrap();
         return;
     } else {
@@ -504,7 +519,10 @@ async fn persist_save_file_to_folder(
             Ok(res)
         }
         Err(e) => {
-            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to save file to disk. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(CreateFileError::FailWriteDisk)
         }
     }
@@ -531,7 +549,10 @@ async fn persist_save_file(
             save_file_record(&file_name, file_size)
         }
         Err(e) => {
-            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to save file to disk. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(CreateFileError::FailWriteDisk)
         }
     }

@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
 
 use rusqlite::{params, Connection, Rows};
@@ -144,7 +145,10 @@ pub fn link_folder_to_file(
     match pst.insert([file_id, folder_id]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            log::error!("Failed to link file to folder. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to link file to folder. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }

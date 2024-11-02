@@ -1,6 +1,7 @@
+use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
 
-use regex::RegexBuilder;
+use itertools::Itertools;
 use rusqlite::Connection;
 
 use crate::model::api::FileApi;
@@ -17,44 +18,106 @@ pub fn search_files(
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
     let con: Connection = open_connection();
-    let mut matching_files: HashSet<FileApi> = HashSet::new();
+    let mut search_results: Vec<Result<HashSet<FileApi>, SearchFileError>> = vec![];
     if !search_tags.is_empty() {
-        let tag_search_files: HashSet<FileApi> = match search_files_by_tags(&search_tags, &con) {
-            Ok(files) => files,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!("Failed to search files by tags. Exception is {e}");
-                return Err(SearchFileError::DbError);
+        search_results.push(search_files_by_tags(&search_tags, &con).inspect_err(|e| {
+            log::error!(
+                "Failed to search files by tags. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            )
+        }));
+    }
+    if !search_title.is_empty() {
+        search_results.push(search_files_by_title(search_title, &con).inspect_err(|e| {
+            log::error!(
+                "Failed to search files by title. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            )
+        }));
+    }
+
+    // TODO need to modularize this method because will be adding in searching on metadata. My idea is to perform each type of search
+    // individually (tags, then metadata, then text), retain only the ones that intersect between all 3,
+    // but pulling tags for search by tags is NECESSARY, so we can't pull tags at the end.
+    //
+    // I could make the retain function only care about looking at file IDs. idk your tests should cover any mistakes
+    let res: Result<Vec<HashSet<FileApi>>, SearchFileError> = search_results.into_iter().collect();
+    if let Err(e) = res {
+        con.close().unwrap();
+        log::error!(
+            "Failed to search files. Error is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(e);
+    }
+    let condensed: Vec<HashSet<FileApi>> = res.into_iter().flatten().collect();
+    // compare all the files and only include the ones in all the returned lists
+    let all_files: HashSet<FileApi> = condensed.iter().cloned().flatten().collect();
+    let mut final_set: HashSet<FileApi> = HashSet::new();
+    for file in all_files {
+        let mut all_match = true;
+        for file_set in condensed.iter() {
+            if !file_set.iter().find(|f| f.id == file.id).is_some() {
+                all_match = false;
+                break;
             }
-        };
-        for file in tag_search_files {
-            matching_files.insert(file);
         }
-        if !search_title.is_empty() {
-            let search_gex = RegexBuilder::new(search_title.as_str())
-                .case_insensitive(true)
-                .build()
-                .unwrap_or_else(|_| {
-                    panic!("Failed to build regex for search term [{search_title}]")
-                });
-            matching_files.retain(|file| search_gex.is_match(file.name.as_str()));
-        }
-    } else {
-        // search text isn't empty
-        let searched = match file_repository::search_files(search_title, &con) {
-            Ok(f) => f,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!("Failed to search files. Exception is {e}");
-                return Err(SearchFileError::DbError);
-            }
-        };
-        for file in searched {
-            matching_files.insert(file.into());
+        if all_match {
+            final_set.insert(file.clone());
         }
     }
+    final_set = final_set.into_iter().unique_by(|f| f.id).collect();
+    // now make sure all files have their tags or else we'll get inconsistent response bodies
+    let tag_mapping =
+        match tag_repository::get_tags_on_files(final_set.iter().map(|f| f.id).collect(), &con) {
+            Ok(tags) => tags,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!(
+                "Failed to search files - failed to retrieve tags on all files. Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+                return Err(SearchFileError::DbError);
+            }
+        };
+    // using a normal for loop here confuses the rust compiler, and it offers suggestions that just further breaks things.
+    // am I doing this wrong? probably...but it works
+    let final_set: HashSet<FileApi> = final_set
+        .into_iter()
+        .map(|mut file| {
+            let tags = tag_mapping
+                .get(&file.id)
+                // not all files here will have tags, especially if the search didn't specify any tags
+                .unwrap_or(&Vec::new())
+                .iter()
+                .cloned()
+                .map_into()
+                .collect();
+            file.tags = tags;
+            file
+        })
+        .collect();
     con.close().unwrap();
-    Ok(matching_files)
+
+    Ok(final_set)
+}
+
+fn search_files_by_title(
+    search_title: String,
+    con: &Connection,
+) -> Result<HashSet<FileApi>, SearchFileError> {
+    // search text isn't empty
+    let searched = match file_repository::search_files(search_title, &con) {
+        Ok(f) => f,
+        Err(e) => {
+            log::error!(
+                "Failed to search files by title. Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return Err(SearchFileError::DbError);
+        }
+    };
+    Ok(searched.into_iter().map(|it| it.into()).collect())
 }
 
 fn search_files_by_tags(
@@ -66,7 +129,10 @@ fn search_files_by_tags(
     let files_with_all_tags: HashSet<FileApi> = match get_files_by_all_tags(search_tags, con) {
         Ok(f) => f,
         Err(e) => {
-            log::error!("File search: Failed to retrieve all files by tags. Exception is {e}");
+            log::error!(
+                "File search: Failed to retrieve all files by tags. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(SearchFileError::DbError);
         }
     };
@@ -89,7 +155,7 @@ fn search_files_by_tags(
     let reduced = match folder_service::reduce_folders_by_tag(&folders_with_any_tag, search_tags) {
         Ok(folders) => folders,
         Err(_) => {
-            log::error!("Failed to search files!");
+            log::error!("Failed to search files!\n{}", Backtrace::force_capture());
             return Err(SearchFileError::DbError);
         }
     };
@@ -97,7 +163,10 @@ fn search_files_by_tags(
     let deduped_child_files: HashSet<FileApi> = match get_deduped_child_files(&reduced, con) {
         Ok(files) => files,
         Err(e) => {
-            log::error!("Failed to retrieve deduped child files. Exception is {e}");
+            log::error!(
+                "Failed to retrieve deduped child files. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(SearchFileError::DbError);
         }
     };
@@ -111,7 +180,10 @@ fn search_files_by_tags(
     ) {
         Ok(files) => files,
         Err(e) => {
-            log::error!("Failed to get child files for non-deduped folders. Exception is {e}");
+            log::error!(
+                "Failed to get child files for non-deduped folders. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             return Err(SearchFileError::DbError);
         }
     };
@@ -213,6 +285,7 @@ fn get_all_non_deduped_child_files(
     let mut final_files: HashSet<FileApi> = HashSet::new();
     for file in remaining_child_files {
         let parent_id = file.folder_id.unwrap_or_default();
+        println!("{parent_id}\n{folder_index:?}");
         let parent_tags: HashSet<String> = folder_index
             .get(&parent_id)
             .unwrap()
@@ -309,6 +382,7 @@ mod search_files_tests {
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
+        println!("{res:?}");
         assert_eq!(1, res.len());
         let res = &res[0];
         assert_eq!(res.id, 1);

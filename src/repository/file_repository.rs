@@ -1,4 +1,4 @@
-use std::collections::HashSet;
+use std::{backtrace::Backtrace, collections::HashSet};
 
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
@@ -18,7 +18,10 @@ pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite:
     ]) {
         Ok(id) => Ok(id as u32),
         Err(e) => {
-            log::error!("Failed to save file record. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to save file record. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }
@@ -52,7 +55,10 @@ pub fn delete_file(id: u32, con: &Connection) -> Result<FileRecord, rusqlite::Er
     let record = get_file(id, con)?;
 
     if let Err(e) = pst.execute([id]) {
-        log::error!("Failed to delete file by id. Nested exception is {:?}", e);
+        log::error!(
+            "Failed to delete file by id. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         return Err(e);
     }
     Ok(record)

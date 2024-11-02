@@ -34,6 +34,8 @@ pub fn remove_files() {
     }
 }
 
+/// for quick and easy storing of a basic file in the database without any extra fields
+/// see also [`FileRecord::save_to_db`]
 #[cfg(test)]
 pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
     use crate::model::api::FileTypes;
@@ -45,7 +47,7 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
             name: String::from(name),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         },
         &connection,
@@ -194,5 +196,26 @@ impl PartialEq for FileApi {
             && self.tags == other.tags
             && self.size == other.size
             && self.file_type == other.file_type
+    }
+}
+
+#[cfg(test)]
+impl FileRecord {
+    /// to be used when [`create_file_db_entry`] doesn't work for all the fields being set. This gives more granular control.
+    pub fn save_to_db(self) -> Self {
+        let con = open_connection();
+        let file_id = file_repository::create_file(&self, &con).unwrap();
+        if let Some(id) = self.parent_id {
+            folder_repository::link_folder_to_file(file_id, id, &con).unwrap();
+        }
+        con.close().unwrap();
+        Self {
+            id: Some(file_id),
+            name: self.name.clone(),
+            parent_id: self.parent_id,
+            create_date: self.create_date,
+            size: self.size,
+            file_type: self.file_type,
+        }
     }
 }

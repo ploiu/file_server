@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{backtrace::Backtrace, collections::HashMap};
 
 use rusqlite::Connection;
 
@@ -30,7 +30,10 @@ pub fn get_tag_by_title(
             if e == rusqlite::Error::QueryReturnedNoRows {
                 Ok(None)
             } else {
-                log::error!("Failed to get tag by name, error is {:?}", e);
+                log::error!(
+                    "Failed to get tag by name, error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 Err(e)
             }
         }

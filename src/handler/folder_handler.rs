@@ -1,3 +1,4 @@
+use std::backtrace::Backtrace;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
@@ -65,15 +66,18 @@ pub async fn create_folder(
         ),
         Err(e) if e == CreateFolderError::FileSystemFailure => {
             log::error!(
-                "Failed to save folder to disk! Nested exception is: \n{:?}",
-                e
+                "Failed to save folder to disk! Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             CreateFolderResponse::FileSystemError(BasicMessage::new(
                 "Failed to save folder to the file system. See server logs for details.",
             ))
         }
         Err(e) => {
-            log::error!("failed to save folder, nested exception is:\n {:?}", e);
+            log::error!(
+                "failed to save folder, nested exception is: {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             CreateFolderResponse::FolderDbError(BasicMessage::new(
                 "Failed to save folder info to the database. Check server logs for details",
             ))
