@@ -435,7 +435,6 @@ mod search_files_tests {
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
-        println!("{res:?}");
         assert_eq!(1, res.len());
         let res = &res[0];
         assert_eq!(res.id, 1);
@@ -467,7 +466,6 @@ mod search_files_tests {
         let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
         // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
         let res: Vec<FileApi> = res.iter().cloned().collect();
-        println!("{res:?}");
         assert_eq!(2, res.len());
         assert!(res.contains(&FileApi {
             id: 1,

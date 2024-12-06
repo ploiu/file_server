@@ -196,7 +196,6 @@ mod update_file_request_tests {
         ];
         for name in invalid_names.iter() {
             let req = FileApi::new(1, None, name.to_string());
-            println!("Testing {}", name);
             assert_eq!(None, req.name());
         }
     }
