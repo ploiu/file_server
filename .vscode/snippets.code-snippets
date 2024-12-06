@@ -21,6 +21,7 @@
 		"body": [
 			"#[test]",
 			"fn $1() {",
+			"use crate::test::fail;",
 			"\trefresh_db();",
 			"\tfail();",
 			"\tcleanup();",

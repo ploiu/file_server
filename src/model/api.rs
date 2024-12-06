@@ -91,6 +91,12 @@ impl ToSql for FileTypes {
     }
 }
 
+impl Default for FileTypes {
+    fn default() -> Self {
+        Self::Unknown
+    }
+}
+
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(crate = "rocket::serde")]
 pub struct FileMetadata {

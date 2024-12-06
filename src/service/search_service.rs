@@ -7,7 +7,7 @@ use rusqlite::Connection;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::SearchFileError;
 use crate::model::repository::FileRecord;
-use crate::model::response::folder_responses::FolderResponse;
+use crate::model::response::folder_responses::{FolderResponse};
 use crate::model::response::TagApi;
 use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::folder_service;
@@ -159,7 +159,7 @@ fn search_files_by_tags(
             return Err(SearchFileError::DbError);
         }
     };
-    // 4): get all child files of all deduped folders and their children
+    // 4): get all child files of all reduced folders and their children, because reduced folders have all the tags
     let deduped_child_files: HashSet<FileApi> = match get_deduped_child_files(&reduced, con) {
         Ok(files) => files,
         Err(e) => {
@@ -170,8 +170,8 @@ fn search_files_by_tags(
             return Err(SearchFileError::DbError);
         }
     };
-    // 5: for each folder not deduplicated, retrieve all child files in all child folders that contain the remaining tags
-    let non_deduped_child_files: HashSet<FileApi> = match get_all_non_deduped_child_files(
+    // 5: for each folder not in reduced, retrieve all child files in all child folders that contain the remaining tags
+    let non_deduped_child_files: HashSet<FileApi> = match get_all_non_reduced_child_files(
         search_tags,
         &folder_index,
         &folders_with_any_tag,
@@ -269,7 +269,8 @@ fn get_child_files(
     Ok(converted)
 }
 
-fn get_all_non_deduped_child_files(
+/// recursively retrieves all child files with the remaining tags in `search_tags` for each folder in `folders_with_any_tag`
+fn get_all_non_reduced_child_files(
     search_tags: &HashSet<String>,
     folder_index: &HashMap<u32, &FolderResponse>,
     folders_with_any_tag: &HashSet<FolderResponse>,
@@ -284,15 +285,33 @@ fn get_all_non_deduped_child_files(
         .collect();
     let mut final_files: HashSet<FileApi> = HashSet::new();
     for file in remaining_child_files {
+        // TODO the file might not have a direct parent folder in the index, but could still have an ancestor folder in the index
+        // TODO is_ancestor_of method in repository layer, that takes a folder id and file id, and returns true if folder is an ancestor of the file
         let parent_id = file.folder_id.unwrap_or_default();
-        println!("{parent_id}\n{folder_index:?}");
-        let parent_tags: HashSet<String> = folder_index
-            .get(&parent_id)
-            .unwrap()
-            .tags
-            .iter()
-            .map(|it| it.title.clone())
-            .collect();
+        let parent_tags: HashSet<String> = if let Some(parent_folder) = folder_index.get(&parent_id)
+        {
+            parent_folder
+                .tags
+                .iter()
+                .map(|it| it.title.clone())
+                .collect()
+        } else {
+            // direct parent isn't in the index, meaning this file has a searched tag but a grandparent has other searched tags. We need to find which parent that was and return those tags
+            let parent_ids = folder_index.keys();
+            let mut all_ancestor_tags: HashSet<String> = HashSet::new();
+            for parent_id in parent_ids {
+                if is_ancestor_of(*parent_id, &file, con)? {
+                    let tag_titles = folder_index
+                        .get(parent_id)
+                        .expect("parent id somehow disappeared from map")
+                        .tags
+                        .iter()
+                        .map(|it| it.title.clone());
+                    all_ancestor_tags.extend(tag_titles);
+                }
+            }
+            all_ancestor_tags
+        };
         // parent folder has all the tags, we don't need to check further files
         if &parent_tags == search_tags {
             continue;
@@ -306,9 +325,43 @@ fn get_all_non_deduped_child_files(
     Ok(final_files)
 }
 
+/// Checks if the passed `potential_ancestor_id` is a parent/grandparent/great grandparent/etc of the passed `file`
+/// If the file has no parent id or `potential_ancestor_id` == `file.folder_id`, no database call is made. Otherwise, the database is
+/// checked to see if `potential_ancestor_id` is an ancestor.
+///
+/// This function does not close the connection passed to it.
+fn is_ancestor_of(
+    potential_ancestor_id: u32,
+    file: &FileApi,
+    con: &Connection,
+) -> Result<bool, rusqlite::Error> {
+    return if let Some(direct_parent_id) = file.folder_id {
+        // avoid having to make a db call if the potential ancestor is a direct parent
+        if direct_parent_id == potential_ancestor_id {
+            Ok(true)
+        } else {
+            match folder_repository::get_ancestor_folder_ids(direct_parent_id, con) {
+                Ok(parent_ids) => Ok(parent_ids.contains(&potential_ancestor_id)),
+                Err(e) => {
+                    log::error!(
+                        "Failed to get ancestor folder ids. Exception is {e}\n{}",
+                        Backtrace::force_capture()
+                    );
+                    Err(e)
+                }
+            }
+        }
+    } else {
+        // file is at root, so no folder will ever be its parent unless the ancestor id is also root
+        return Ok(potential_ancestor_id == 0);
+    };
+}
+
 #[cfg(test)]
 mod search_files_tests {
     use std::collections::HashSet;
+
+    use chrono::NaiveDateTime;
 
     use crate::model::api::{FileApi, FileTypes};
     use crate::model::response::TagApi;
@@ -463,6 +516,44 @@ mod search_files_tests {
                 .map(|it| it.name)
                 .collect();
         assert_eq!(HashSet::from(["good".to_string()]), res);
+        cleanup();
+    }
+
+    #[test]
+    fn search_files_handles_folder_tag_and_file_tag_with_folder_separate() {
+        refresh_db();
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_tag_folder("top", 1);
+        let good_file = FileApi {
+            id: 1,
+            folder_id: Some(2),
+            name: "good".to_string(),
+            tags: vec![TagApi {
+                id: None,
+                title: "file".to_string(),
+            }],
+            size: Some(0),
+            create_date: Some(NaiveDateTime::default()),
+            file_type: Some(FileTypes::Unknown),
+        }
+        .save_to_db();
+        FileApi {
+            id: 2,
+            folder_id: Some(2),
+            name: "bad".to_string(),
+            tags: vec![TagApi {
+                id: None,
+                title: "something_else".to_string(),
+            }],
+            size: None,
+            create_date: None,
+            file_type: None,
+        }
+        .save_to_db();
+        let res = search_files(String::new(), vec!["top".to_string(), "file".to_string()]).unwrap();
+        let expected = HashSet::from_iter(vec![good_file].into_iter());
+        assert_eq!(expected, res);
         cleanup();
     }
 }

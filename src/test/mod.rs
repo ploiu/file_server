@@ -3,7 +3,7 @@ use std::fs::{remove_dir_all, remove_file};
 use std::path::Path;
 
 use crate::model::api::FileApi;
-use crate::model::repository::{FileRecord, Folder};
+use crate::model::repository::{FileRecord, Folder, Tag};
 use crate::repository::{
     file_repository, folder_repository, initialize_db, open_connection, tag_repository,
 };
@@ -196,6 +196,40 @@ impl PartialEq for FileApi {
             && self.tags == other.tags
             && self.size == other.size
             && self.file_type == other.file_type
+    }
+}
+
+#[cfg(test)]
+impl FileApi {
+    pub fn save_to_db(mut self) -> Self {
+        let con = open_connection();
+        let record = FileRecord {
+            id: None,
+            name: self.name.clone(),
+            parent_id: self.folder_id,
+            create_date: self.create_date.unwrap_or_default(),
+            size: self.size.unwrap_or_default(),
+            file_type: self.file_type.unwrap_or_default(),
+        };
+        let file_id = file_repository::create_file(&record, &con).unwrap();
+        for tag in &mut self.tags {
+            let Tag { id, title: _ } = tag_repository::create_tag(&tag.title, &con).unwrap();
+            tag_repository::add_tag_to_file(file_id, id, &con).unwrap();
+            tag.id = Some(id);
+        }
+        if let Some(folder_id) = self.folder_id {
+            folder_repository::link_folder_to_file(file_id, folder_id, &con).unwrap();
+        }
+        con.close().unwrap();
+        Self {
+            id: file_id,
+            folder_id: self.folder_id,
+            name: self.name.clone(),
+            tags: self.tags.clone(),
+            size: self.size,
+            create_date: self.create_date,
+            file_type: self.file_type,
+        }
     }
 }
 

@@ -70,7 +70,7 @@ pub fn create_folder(
             let folder_id = pst.insert(rusqlite::params![folder.name, id])? as u32;
             Ok(repository::Folder {
                 id: Some(folder_id),
-                name: String::from(&folder.name),
+                name: folder.name.clone(),
                 parent_id: folder.parent_id,
             })
         }
@@ -79,7 +79,7 @@ pub fn create_folder(
                 pst.insert(rusqlite::params![folder.name, rusqlite::types::Null])? as u32;
             Ok(repository::Folder {
                 id: Some(folder_id),
-                name: String::from(&folder.name),
+                name: folder.name.clone(),
                 parent_id: folder.parent_id,
             })
         }
@@ -154,7 +154,7 @@ pub fn link_folder_to_file(
     }
 }
 
-/// returns all the ids of all child folders
+/// returns all the ids of all child folders recursively for the passed input_ids
 pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
     input_ids: &T,
     con: &Connection,
@@ -230,6 +230,23 @@ pub fn get_parent_folders_by_tag<'a, T: IntoIterator<Item = &'a String> + Clone>
         pairs.insert(folder_id, split_tags);
     }
     Ok(pairs)
+}
+
+/// returns a recursive list of ancestor (parent/grandparent/great grandparent/etc) folder IDs for the passed `folder_id`
+/// This does not include the root folder id of `None`/`0`
+pub fn get_ancestor_folder_ids(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/folder/get_parent_folders_with_id.sql"
+    ))?;
+    let mut rows = pst.query([folder_id])?;
+    let mut ids: Vec<u32> = Vec::new();
+    while let Some(row) = rows.next()? {
+        ids.push(row.get(0)?);
+    }
+    Ok(ids)
 }
 
 fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
@@ -394,6 +411,60 @@ mod get_child_files_tests {
             HashSet::from(["good".to_string(), "good2".to_string()]),
             res
         );
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_ancestor_folder_ids_tests {
+    use super::get_ancestor_folder_ids;
+    use crate::{
+        repository::open_connection,
+        test::{
+            cleanup, create_folder_db_entry, refresh_db,
+        },
+    };
+
+    #[test]
+    fn returns_all_parents() {
+        refresh_db();
+        create_folder_db_entry("1", None);
+        create_folder_db_entry("2", Some(1));
+        create_folder_db_entry("3", Some(2));
+        create_folder_db_entry("4", Some(3));
+        create_folder_db_entry("5", Some(4));
+        let expected = vec![1, 2, 3, 4];
+        let con = open_connection();
+        let actual = get_ancestor_folder_ids(5, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(actual, expected);
+        cleanup();
+    }
+
+    #[test]
+    fn does_not_return_non_parents() {
+        refresh_db();
+        create_folder_db_entry("good", None); // 1
+        create_folder_db_entry("good", Some(1)); // 2
+        create_folder_db_entry("bad", Some(1)); // 3
+        create_folder_db_entry("good", Some(2)); // 4
+        create_folder_db_entry("base", Some(4)); // 5
+        let con = open_connection();
+        let expected = vec![1, 2, 4];
+        let actual = get_ancestor_folder_ids(5, &con).unwrap();
+        assert_eq!(actual, expected);
+        cleanup();
+    }
+
+    #[test]
+    fn does_not_panic_when_no_parents() {
+        
+        refresh_db();
+        let con = open_connection();
+        create_folder_db_entry("test", None);
+        let res = get_ancestor_folder_ids(1, &con);
+        con.close().unwrap();
+        res.expect("no error should be returned if the folder does not have a parent");
         cleanup();
     }
 }

@@ -101,10 +101,7 @@ fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
     let img: DynamicImage = match img.decode() {
         Ok(i) => i,
         Err(e) => {
-            log::error!(
-                "Failed to decode the image at path {image_path}. Exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
+            log::error!("Failed to decode the image at path {image_path}. Exception is {e:?}");
             return Err(PreviewError::Decode);
         }
     };

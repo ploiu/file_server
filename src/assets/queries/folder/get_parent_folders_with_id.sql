@@ -4,7 +4,7 @@ with recursive query(id) as (
     select parentId from Folders, query
                     where Folders.id = query.id
 )
-select parentId from Folders
+select distinct parentId from Folders
 where Folders.parentId in query
 and parentId <> ?1;
 
