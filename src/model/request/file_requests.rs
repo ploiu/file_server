@@ -2,6 +2,8 @@ use core::option::Option;
 
 use rocket::fs::TempFile;
 
+use crate::model::api::FileTypes;
+
 #[derive(FromForm)]
 #[allow(non_snake_case)] // cannot serde rename the field, and it's better to have camel case for the api
 pub struct CreateFileRequest<'a> {

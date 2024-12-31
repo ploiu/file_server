@@ -7,7 +7,7 @@ use rusqlite::Connection;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::SearchFileError;
 use crate::model::repository::FileRecord;
-use crate::model::response::folder_responses::{FolderResponse};
+use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
 use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::folder_service;

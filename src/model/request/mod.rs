@@ -6,6 +6,7 @@ use sha2::{Digest, Sha256};
 
 use crate::guard::HeaderAuth;
 
+pub mod attributes;
 pub mod file_requests;
 pub mod folder_requests;
 

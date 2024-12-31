@@ -12,6 +12,7 @@ use crate::model::error::file_errors::{
     UpdateFileError,
 };
 use crate::model::guard::auth::ValidateResult;
+use crate::model::request::attributes::AttributeSearch;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
@@ -79,10 +80,11 @@ pub fn get_file(
     }
 }
 
-#[get("/metadata?<search>&<tags>")]
+#[get("/metadata?<search>&<tags>&<attributes>")]
 pub fn search_files(
     search: Option<String>,
     tags: Option<Vec<String>>,
+    attributes: Vec<String>,
     auth: HeaderAuth,
     last_request_time: &State<Arc<Mutex<Instant>>>,
 ) -> SearchFileResponse {
@@ -91,6 +93,7 @@ pub fn search_files(
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
+    println!("{attributes:?}");
     update_last_request_time(last_request_time);
     let search = search.unwrap_or("".to_string());
     let tags = tags.unwrap_or_default();

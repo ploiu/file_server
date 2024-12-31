@@ -420,9 +420,7 @@ mod get_ancestor_folder_ids_tests {
     use super::get_ancestor_folder_ids;
     use crate::{
         repository::open_connection,
-        test::{
-            cleanup, create_folder_db_entry, refresh_db,
-        },
+        test::{cleanup, create_folder_db_entry, refresh_db},
     };
 
     #[test]
@@ -458,7 +456,6 @@ mod get_ancestor_folder_ids_tests {
 
     #[test]
     fn does_not_panic_when_no_parents() {
-        
         refresh_db();
         let con = open_connection();
         create_folder_db_entry("test", None);
