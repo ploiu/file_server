@@ -71,8 +71,6 @@ pub struct AliasedAttribute {
 /// instance of the [EqualityOperator] to search on them
 /// - file type is a `named attributed`, where the list of allowed search values are determined by a specific list.
 /// - size can also be an `aliased attribute`, where specific values have titles (see [FileSize])
-/// TODO think on this: 3 different attribute search objects with only the fields each type needs, and each enum variant for [AttributeTypes]
-/// TODO gets its corresponding AttributeSearch thing. Makes the code cleaner, prevents a bunch of optional fields, and allows us to do pattern matching
 pub struct AttributeSearch {
     pub attributes: Vec<AttributeTypes>,
 }
@@ -111,6 +109,15 @@ fn parse_equality_operator(attr_string: &str) -> Result<EqualityOperator, ParseE
     let op = &attr_string[period + 1..semicolon];
     println!("{op}");
     Ok(EqualityOperator::Eq)
+}
+
+/// parses and validates the passed `attr_string` into a valid [AttributeTypes] instance
+///
+///  - size and date are `full comparison attributes`, where we can use every instance of the [EqualityOperator] to search on them
+/// - file type is a `named attributed`, where the list of allowed search values are determined by a specific list.
+/// - size can also be an `aliased attribute`, where specific values have titles (see [FileSize])
+fn parse_attribute(attr_string: &str) -> Result<AttributeTypes, ParseError> {
+    todo!()
 }
 
 #[cfg(test)]
