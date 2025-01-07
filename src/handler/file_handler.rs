@@ -12,6 +12,7 @@ use crate::model::error::file_errors::{
     UpdateFileError,
 };
 use crate::model::guard::auth::ValidateResult;
+use crate::model::request::attributes::{self, AttributeSearch};
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
@@ -92,13 +93,32 @@ pub fn search_files(
         ValidateResult::NoPasswordSet => return SearchFileResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
         ValidateResult::Invalid => return SearchFileResponse::Unauthorized("Bad Credentials".to_string())
     }
-    println!("{attributes:?}");
     update_last_request_time(last_request_time);
     let search = search.unwrap_or("".to_string());
     let tags = tags.unwrap_or_default();
-    if search.is_empty() && tags.is_empty() {
+    let attributes = AttributeSearch::try_from(attributes);
+    let attributes = attributes.map_err(|e| match e {
+        attributes::ParseError::BadEqualityOperator(er) => {
+            SearchFileResponse::BadRequest(BasicMessage::new(er.as_str()))
+        }
+        attributes::ParseError::MissingValue(er) => {
+            SearchFileResponse::BadRequest(BasicMessage::new(er.as_str()))
+        }
+        attributes::ParseError::BadValue(er) => {
+            SearchFileResponse::BadRequest(BasicMessage::new(er.as_str()))
+        }
+        attributes::ParseError::InvalidSearch(er) => {
+            SearchFileResponse::BadRequest(BasicMessage::new(er.as_str()))
+        }
+    });
+    println!("{attributes:?}");
+    if let Err(e) = attributes {
+        return e;
+    }
+    let attributes = attributes.unwrap();
+    if search.is_empty() && tags.is_empty() && attributes.is_empty() {
         return SearchFileResponse::BadRequest(BasicMessage::new(
-            "Search string or tags are required.",
+            "Search string, attributes, or tags are required.",
         ));
     }
     match search_service::search_files(search, tags) {

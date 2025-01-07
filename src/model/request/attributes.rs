@@ -1,4 +1,4 @@
-use std::str::FromStr;
+use std::{fmt, str::FromStr};
 
 /// represents equality operators for searching (e.g. ==, >, and <)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -69,7 +69,7 @@ pub enum AttributeTypes {
     FullComp(FullComparisonAttribute),
     /// attributes whose values can be one of a specific name
     Named(NamedComparisonAttribute),
-    /// attributes with values that are aliased to a specific name (e.g. 1Gb being [FileSize::ExtraLarge])
+    /// attributes with values that are aliased to a specific name (e.g. 1Gb being [FileSizes::ExtraLarge])
     Aliased(AliasedAttribute),
 }
 
@@ -118,19 +118,31 @@ pub struct AliasedAttribute {
 /// - size and date are `full comparison attributes`, where we can use every
 /// instance of the [EqualityOperator] to search on them
 /// - file type is a `named attributed`, where the list of allowed search values are determined by a specific list.
-/// - size can also be an `aliased attribute`, where specific values have titles (see [FileSize])
+/// - size can also be an `aliased attribute`, where specific values have titles (see [FileSizes])
+#[derive(Debug)]
 pub struct AttributeSearch {
     pub attributes: Vec<AttributeTypes>,
 }
 
-impl From<Vec<String>> for AttributeSearch {
-    ///
+impl TryFrom<Vec<String>> for AttributeSearch {
+    type Error = ParseError;
+    /// attempts to parse the entire vec into an AttributeSearch
     /// format for param:
     /// - full comparison: `<field>.<op>;<value>`
     /// - named attribute: `<field>;<value>`
     /// - aliased attribute: `<field>;<value>`
-    fn from(value: Vec<String>) -> Self {
-        todo!()
+    fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
+        let mut attributes: Vec<AttributeTypes> = Vec::new();
+        for val in value {
+            attributes.push(parse_attribute(val)?);
+        }
+        Ok(Self { attributes })
+    }
+}
+
+impl AttributeSearch {
+    pub fn is_empty(&self) -> bool {
+        self.attributes.is_empty()
     }
 }
 
@@ -143,6 +155,8 @@ pub enum ParseError {
     MissingValue(String),
     /// (for named values) a bad value was passed
     BadValue(String),
+    /// no search is allowed for that field name
+    InvalidSearch(String),
 }
 
 // we don't care about the error message when dealing with equality for error messages
@@ -152,6 +166,7 @@ impl PartialEq<ParseError> for ParseError {
             (Self::BadEqualityOperator(_), Self::BadEqualityOperator(_)) => true,
             (Self::MissingValue(_), Self::MissingValue(_)) => true,
             (Self::BadValue(_), Self::BadValue(_)) => true,
+            (Self::InvalidSearch(_), Self::InvalidSearch(_)) => true,
             _ => false,
         }
     }
@@ -186,29 +201,41 @@ fn validate_format(attr_string: &str) -> Result<(), ParseError> {
 ///
 /// - fileSize and dateCreated are [FullComparisonAttribute]s, where we can use every instance of the [EqualityOperator] to search on them
 /// - fileType is a [NamedComparisonAttribute]s, where the list of allowed search values are determined by a specific list.
-/// - fileSize can also be an [AliasedAttribute]s, where specific values have titles (see [FileSize])
-fn parse_attribute(attr_string: &str) -> Result<AttributeTypes, ParseError> {
+/// - fileSize can also be an [AliasedAttribute]s, where specific values have titles (see [FileSizes])
+fn parse_attribute(attr_string: String) -> Result<AttributeTypes, ParseError> {
+    let attr_string = attr_string.as_str();
     validate_format(attr_string)?;
-    let field_name = parse_field(attr_string);
+    let field_name = parse_field(attr_string).to_ascii_lowercase();
     let op = parse_operator(attr_string)?;
     let value = parse_value(attr_string);
+
     // Since size can be shared between 2 different search types, we might have to do some stupid/ugly stuff. I want a clean way though...
-    todo!()
+    if field_name == "filesize".to_string() {
+        parse_file_size(op, value)
+    } else if field_name == "datecreated".to_string() {
+        todo!()
+    } else if field_name == "filetype".to_string() {
+        todo!()
+    } else {
+        Err(ParseError::InvalidSearch(format!(
+            "{attr_string} searches an invalid search term"
+        )))
+    }
 }
 
 /// parses an attribute search for either a [FullComparisonAttribute] or an [AliasedAttribute]
 fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
-    if operator != EqualityOperator::Eq {
-        return Err(ParseError::BadEqualityOperator(format!(
-            "{operator:?} is not a valid operator when comparing fileSize to an alias"
-        )));
-    }
-
     if FileSizes::try_from(value).is_ok() {
-        Ok(AttributeTypes::Aliased(AliasedAttribute {
-            field: AliasedComparisonTypes::FileSize,
-            value: value.to_string(),
-        }))
+        if operator != EqualityOperator::Eq {
+            Err(ParseError::BadEqualityOperator(format!(
+                "{operator:?} is not a valid operator when comparing fileSize to an alias"
+            )))
+        } else {
+            Ok(AttributeTypes::Aliased(AliasedAttribute {
+                field: AliasedComparisonTypes::FileSize,
+                value: value.to_string(),
+            }))
+        }
     } else if usize::from_str(value).is_ok() {
         Ok(AttributeTypes::FullComp(FullComparisonAttribute {
             comparison_type: FullComparisonTypes::FileSize,
@@ -295,18 +322,14 @@ mod parse_file_size_tests {
     use super::*;
 
     #[test]
-    fn requires_op_to_be_eq() {
+    fn requires_op_to_be_eq_if_aliased() {
         for op in [EqualityOperator::Lt, EqualityOperator::Gt] {
-            assert_eq!(
-                ParseError::BadEqualityOperator(String::new()),
-                parse_file_size(op, "5").unwrap_err()
-            );
             assert_eq!(
                 ParseError::BadEqualityOperator(String::new()),
                 parse_file_size(op, "small").unwrap_err()
             );
         }
-        assert!(parse_file_size(EqualityOperator::Eq, "5").is_ok());
+        assert!(!parse_file_size(EqualityOperator::Lt, "medium").is_ok());
         assert!(parse_file_size(EqualityOperator::Eq, "small").is_ok());
     }
 
@@ -326,13 +349,19 @@ mod parse_file_size_tests {
 
     #[test]
     fn successfully_returns_full_comp_if_no_name_is_passed() {
-        use crate::test::fail;
-        fail();
+        let res = parse_file_size(EqualityOperator::Gt, "5000").unwrap();
+        assert_eq!(
+            AttributeTypes::FullComp(FullComparisonAttribute {
+                comparison_type: FullComparisonTypes::FileSize,
+                operator: EqualityOperator::Gt,
+                value: "5000".to_string()
+            }),
+            res
+        );
     }
 
     #[test]
-    fn full_comp_requires_numeric_byte_value() {
-        use crate::test::fail;
-        fail();
+    fn full_comp_requires_positive_numeric_byte_value() {
+        assert!(parse_file_size(EqualityOperator::Gt, "-1").is_err());
     }
 }
