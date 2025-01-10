@@ -7,6 +7,7 @@ use rusqlite::Connection;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::SearchFileError;
 use crate::model::repository::FileRecord;
+use crate::model::request::attributes::AttributeSearch;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
 use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
@@ -15,6 +16,7 @@ use crate::service::folder_service;
 pub fn search_files(
     search_title: String,
     search_tags: Vec<String>,
+    search_attributes: AttributeSearch,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
     let con: Connection = open_connection();
@@ -221,7 +223,7 @@ fn get_files_by_all_tags(
     con: &Connection,
 ) -> Result<HashSet<FileApi>, rusqlite::Error> {
     let mut converted_files: HashSet<FileApi> = HashSet::new();
-    let files = file_repository::get_files_by_all_tags(search_tags, con)?;
+    let files = file_repository::search_files_by_tags(search_tags, con)?;
     for file in files {
         let tags: Vec<TagApi> = tag_repository::get_tags_on_file(file.id.unwrap(), con)?
             .into_iter()

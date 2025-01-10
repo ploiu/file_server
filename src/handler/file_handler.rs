@@ -120,7 +120,7 @@ pub fn search_files(
             "Search string, attributes, or tags are required.",
         ));
     }
-    match search_service::search_files(search, tags) {
+    match search_service::search_files(search, tags, attributes) {
         Ok(files) => {
             SearchFileResponse::Success(Json::from(files.into_iter().collect::<Vec<FileApi>>()))
         }
