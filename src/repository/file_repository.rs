@@ -448,3 +448,49 @@ mod convert_aliased_attribute_to_where_clause {
         assert_eq!("fileSize = ?23".to_string(), sql);
     }
 }
+
+#[cfg(test)]
+mod convert_named_comp_attribute_to_where_clause {
+    use super::*;
+
+    #[test]
+    fn maps_field_name_properly() {
+        let attr = NamedComparisonAttribute {
+            field: NamedAttributes::FileType,
+            value: "test".to_string(),
+        };
+        let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 23);
+        assert!(sql.starts_with("type"));
+    }
+
+    #[test]
+    fn uses_proper_variable_counter() {
+        let attr = NamedComparisonAttribute {
+            field: NamedAttributes::FileType,
+            value: "test".to_string(),
+        };
+        let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 24);
+        assert!(sql.ends_with("?24"));
+    }
+
+    #[test]
+    fn returns_proper_variable_value() {
+        let attr = NamedComparisonAttribute {
+            field: NamedAttributes::FileType,
+            value: "test".to_string(),
+        };
+        let (_sql, var) = convert_named_comp_attribute_to_where_clause(attr, 23);
+        assert_eq!("test".to_string(), var);
+    }
+
+    #[test]
+    fn builds_full_clause() {
+        let attr = NamedComparisonAttribute {
+            field: NamedAttributes::FileType,
+            value: "test".to_string(),
+        };
+        let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 23);
+        assert_eq!("type = ?23".to_string(), sql);
+    }
+}
+
