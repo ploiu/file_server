@@ -378,7 +378,7 @@ mod search_files_tests {
         refresh_db();
         create_file_db_entry("test", None);
         create_file_db_entry("test2", None);
-        let res = search_files("test2".to_string(), vec![])
+        let res = search_files("test2".to_string(), vec![], vec![].try_into().unwrap())
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
@@ -400,10 +400,14 @@ mod search_files_tests {
         create_file_db_entry("second", None);
         create_tag_file("tag1", 1);
         create_tag_files("tag", vec![1, 2]);
-        let res = search_files("".to_string(), vec!["tag1".to_string(), "tag".to_string()])
-            .unwrap()
-            .into_iter()
-            .collect::<Vec<FileApi>>();
+        let res = search_files(
+            "".to_string(),
+            vec!["tag1".to_string(), "tag".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap()
+        .into_iter()
+        .collect::<Vec<FileApi>>();
         assert_eq!(1, res.len());
         let res = &res[0];
         assert_eq!(res.id, 1);
@@ -433,10 +437,14 @@ mod search_files_tests {
         create_file_db_entry("first", None);
         create_file_db_entry("second", None);
         create_tag_files("tag", vec![1, 2]);
-        let res = search_files("first".to_string(), vec!["tag".to_string()])
-            .unwrap()
-            .into_iter()
-            .collect::<Vec<FileApi>>();
+        let res = search_files(
+            "first".to_string(),
+            vec!["tag".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap()
+        .into_iter()
+        .collect::<Vec<FileApi>>();
         assert_eq!(1, res.len());
         let res = &res[0];
         assert_eq!(res.id, 1);
@@ -465,7 +473,12 @@ mod search_files_tests {
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
                                       // tag1 should retrieve all files
-        let res = search_files("".to_string(), vec!["tag1".to_string()]).unwrap();
+        let res = search_files(
+            "".to_string(),
+            vec!["tag1".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap();
         // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
         let res: Vec<FileApi> = res.iter().cloned().collect();
         assert_eq!(2, res.len());
@@ -487,7 +500,12 @@ mod search_files_tests {
             create_date: None,
             file_type: Some(FileTypes::Unknown)
         }));
-        let res = search_files("".to_string(), vec!["tag2".to_string()]).unwrap();
+        let res = search_files(
+            "".to_string(),
+            vec!["tag2".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap();
         let res: Vec<FileApi> = res.iter().cloned().collect();
         assert!(res.contains(&FileApi {
             id: 2,
@@ -509,12 +527,15 @@ mod search_files_tests {
         create_file_db_entry("bad", Some(1));
         create_tag_folders("tag1", vec![1]);
         create_tag_file("tag2", 1);
-        let res: HashSet<String> =
-            search_files(String::new(), vec!["tag1".to_string(), "tag2".to_string()])
-                .unwrap()
-                .into_iter()
-                .map(|it| it.name)
-                .collect();
+        let res: HashSet<String> = search_files(
+            String::new(),
+            vec!["tag1".to_string(), "tag2".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap()
+        .into_iter()
+        .map(|it| it.name)
+        .collect();
         assert_eq!(HashSet::from(["good".to_string()]), res);
         cleanup();
     }
@@ -551,7 +572,12 @@ mod search_files_tests {
             file_type: None,
         }
         .save_to_db();
-        let res = search_files(String::new(), vec!["top".to_string(), "file".to_string()]).unwrap();
+        let res = search_files(
+            String::new(),
+            vec!["top".to_string(), "file".to_string()],
+            vec![].try_into().unwrap(),
+        )
+        .unwrap();
         let expected = HashSet::from_iter(vec![good_file].into_iter());
         assert_eq!(expected, res);
         cleanup();
