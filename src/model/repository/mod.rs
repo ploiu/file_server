@@ -1,7 +1,8 @@
 use chrono::NaiveDateTime;
 use rocket::serde::Serialize;
 
-use super::api::{FileApi, FileTypes};
+use super::api::FileApi;
+use super::file_types::FileTypes;
 
 #[allow(clippy::derived_hash_with_manual_eq)]
 #[derive(Debug, Serialize, Eq, Hash, Clone)]
