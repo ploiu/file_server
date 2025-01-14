@@ -129,12 +129,12 @@ const FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
 });
 
 #[inline]
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 pub fn file_dir() -> String {
     "./files".to_string()
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 pub fn file_dir() -> String {
     let thread_name = crate::test::current_thread_name();
     let dir_name = format!("./{}", thread_name);
@@ -637,7 +637,7 @@ fn determine_file_name(root_name: &String, extension: &Option<String>) -> String
     }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod deterine_file_name_tests {
     use super::determine_file_name;
 

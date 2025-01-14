@@ -9,7 +9,7 @@ pub enum EqualityOperator {
     Eq,
     Gt,
     Lt,
-    Neq
+    Neq,
 }
 
 impl TryFrom<&str> for EqualityOperator {
@@ -37,7 +37,7 @@ impl Into<&str> for EqualityOperator {
             Self::Eq => "=",
             Self::Lt => "<",
             Self::Gt => ">",
-            Self::Neq => "<>"
+            Self::Neq => "<>",
         }
     }
 }
@@ -427,5 +427,4 @@ mod quality_operator_into_tests {
         assert_eq!(">", gt);
         assert_eq!("<>", neq);
     }
-    
 }

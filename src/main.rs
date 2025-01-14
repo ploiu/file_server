@@ -35,7 +35,7 @@ fn temp_dir() -> String {
     format!("./.{}_temp", thread_name)
 }
 
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 fn init_log() -> Result<(), fern::InitError> {
     // cargo fix keeps removing this if it's outside the function
     use std::time::SystemTime;
