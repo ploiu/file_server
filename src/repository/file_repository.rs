@@ -223,8 +223,7 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
 /// The first part of the returned tuple is the sql query with parameter placeholders.
 /// The second part of the returned tuple is the collection of parameters to be used for those placeholders
 fn build_search_attribute_sql(attributes: AttributeSearch) -> (String, Vec<(String, String)>) {
-    let base_sql = r"
-    select
+    let base_sql = r"select
     f.id,
     f.name,
     f.fileSize,
@@ -237,17 +236,16 @@ from
 where ";
     let mut where_clause = base_sql.to_string();
     let mut params: Vec<(String, String)> = Vec::with_capacity(attributes.len());
-    let mut counter: usize = 0;
+    let mut arg_count: usize = 0;
     for attr in attributes.clone() {
-        let (sql, (param_name, param)) = convert_attribute_to_where_clause(attr, counter);
-        params.push((param_name, param));
+        let (sql, param_data) = convert_attribute_to_where_clause(attr, arg_count);
+        params.push(param_data);
         where_clause += sql.as_str();
-        if counter < params.len() {
+        if arg_count < attributes.len() - 1 {
             where_clause += " AND ";
         }
-        counter += 1;
+        arg_count += 1;
     }
-    println!("{where_clause}");
     (where_clause, params)
 }
 
@@ -292,8 +290,9 @@ fn convert_named_comp_attribute_to_where_clause(
     let field_name = match attr.field {
         NamedAttributes::FileType => "type",
     };
+    let op: &str = attr.operator.into();
     let field_placeholder = format!(":{field_name}{counter}");
-    let sql = format!("{field_name} = {field_placeholder}");
+    let sql = format!("{field_name} {op} {field_placeholder}");
     (sql, (field_placeholder, attr.value))
 }
 
@@ -493,6 +492,8 @@ mod convert_aliased_attribute_to_where_clause {
 
 #[cfg(test)]
 mod convert_named_comp_attribute_to_where_clause {
+    use crate::model::request::attributes::EqualityOperator;
+
     use super::*;
 
     #[test]
@@ -500,6 +501,7 @@ mod convert_named_comp_attribute_to_where_clause {
         let attr = NamedComparisonAttribute {
             field: NamedAttributes::FileType,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 23);
         assert!(sql.starts_with("type"));
@@ -510,6 +512,7 @@ mod convert_named_comp_attribute_to_where_clause {
         let attr = NamedComparisonAttribute {
             field: NamedAttributes::FileType,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 24);
         assert!(sql.ends_with(":type24"));
@@ -520,6 +523,7 @@ mod convert_named_comp_attribute_to_where_clause {
         let attr = NamedComparisonAttribute {
             field: NamedAttributes::FileType,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (_sql, (_, var)) = convert_named_comp_attribute_to_where_clause(attr, 23);
         assert_eq!("test".to_string(), var);
@@ -530,9 +534,10 @@ mod convert_named_comp_attribute_to_where_clause {
         let attr = NamedComparisonAttribute {
             field: NamedAttributes::FileType,
             value: "test".to_string(),
+            operator: EqualityOperator::Neq,
         };
         let (sql, _) = convert_named_comp_attribute_to_where_clause(attr, 23);
-        assert_eq!("type = :type23".to_string(), sql);
+        assert_eq!("type <> :type23".to_string(), sql);
     }
 
     #[test]
@@ -540,6 +545,7 @@ mod convert_named_comp_attribute_to_where_clause {
         let attr = NamedComparisonAttribute {
             field: NamedAttributes::FileType,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (_, (var_name, _)) = convert_named_comp_attribute_to_where_clause(attr, 10);
         assert_eq!(var_name, ":type10".to_string());
@@ -549,6 +555,7 @@ mod convert_named_comp_attribute_to_where_clause {
 #[cfg(test)]
 mod convert_full_comp_attribute_to_where_clause {
     use super::*;
+    use crate::model::request::attributes::*;
 
     #[test]
     fn maps_field_name_properly() {
@@ -599,24 +606,54 @@ mod convert_full_comp_attribute_to_where_clause {
 mod build_search_attribute_sql {
     use super::*;
     use crate::model::request::attributes::*;
-    use crate::test::*;
 
     #[test]
-    fn test() {
-        use crate::test::fail;
-        let attrs: Vec<AttributeTypes> = vec![
-            AttributeTypes::FullComp(FullComparisonAttribute {
-                field: FullComparisonTypes::FileSize,
-                operator: EqualityOperator::Neq,
-                value: "test".to_string(),
-            }),
+    fn handles_single_param() {
+        let attributes = vec![AttributeTypes::FullComp(FullComparisonAttribute {
+            field: FullComparisonTypes::FileSize,
+            operator: EqualityOperator::Eq,
+            value: "5000".to_string(),
+        })];
+        let expected = r"select
+    f.id,
+    f.name,
+    f.fileSize,
+    f.dateCreated,
+    f.type,
+    ff.folderId
+from
+    FileRecords f
+    left join folder_files ff on ff.fileId = f.id
+where fileSize = :fileSize0";
+        let (actual, _) = build_search_attribute_sql(AttributeSearch { attributes });
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_multiple_params() {
+        let attributes = vec![
             AttributeTypes::Aliased(AliasedAttribute {
                 field: AliasedComparisonTypes::FileSize,
-                value: "small".to_string(),
+                value: "large".to_string(),
+            }),
+            AttributeTypes::Named(NamedComparisonAttribute {
+                field: NamedAttributes::FileType,
+                value: "image".to_string(),
+                operator: EqualityOperator::Neq,
             }),
         ];
-        let attribute = AttributeSearch { attributes: attrs };
-        build_search_attribute_sql(attribute);
-        fail();
+        let expected = r"select
+    f.id,
+    f.name,
+    f.fileSize,
+    f.dateCreated,
+    f.type,
+    ff.folderId
+from
+    FileRecords f
+    left join folder_files ff on ff.fileId = f.id
+where fileSize = :fileSize0 AND type <> :type1";
+        let (actual, _) = build_search_attribute_sql(AttributeSearch { attributes });
+        assert_eq!(expected, actual);
     }
 }
