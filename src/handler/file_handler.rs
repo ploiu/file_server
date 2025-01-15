@@ -111,7 +111,6 @@ pub fn search_files(
             SearchFileResponse::BadRequest(BasicMessage::new(er.as_str()))
         }
     });
-    println!("{attributes:?}");
     if let Err(e) = attributes {
         return e;
     }

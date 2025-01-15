@@ -1,4 +1,7 @@
-use std::{fmt, str::FromStr};
+use std::str::FromStr;
+
+use once_cell::sync::Lazy;
+use regex::Regex;
 
 /// represents equality operators for searching (e.g. ==, >, and <)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -213,13 +216,33 @@ fn parse_attribute(attr_string: String) -> Result<AttributeTypes, ParseError> {
     if field_name == "filesize".to_string() {
         parse_file_size(op, value)
     } else if field_name == "datecreated".to_string() {
-        todo!()
+        parse_date_created(op, value)
     } else if field_name == "filetype".to_string() {
         todo!()
     } else {
         Err(ParseError::InvalidSearch(format!(
             "{attr_string} searches an invalid search term"
         )))
+    }
+}
+
+/// parses a date from `value` as a `yyyy-MM-dd` format as a [FullComparisonAttribute]
+fn parse_date_created(
+    operator: EqualityOperator,
+    value: &str,
+) -> Result<AttributeTypes, ParseError> {
+    // large number of dates being passed probably won't happen, but just in case someone decides to do something stupid, we don't want to lag the search on low-powered raspi
+    static FORMAT: Lazy<Regex> = Lazy::new(|| Regex::new(r"^[0-9]{4}(-[0-9]{2}){2}$").unwrap());
+    if !FORMAT.is_match(value) {
+        Err(ParseError::BadValue(format!(
+            "{value} is not a valid yyyy-MM-dd date format"
+        )))
+    } else {
+        Ok(AttributeTypes::FullComp(FullComparisonAttribute {
+            comparison_type: FullComparisonTypes::DateCreated,
+            operator,
+            value: value.to_string(),
+        }))
     }
 }
 

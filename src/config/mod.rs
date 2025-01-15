@@ -6,31 +6,32 @@ use rocket::form::validate::Contains;
 use rocket::serde::Deserialize;
 
 /// config properties for the rabbit queue
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct RabbitMqConfig {
     pub address: Option<String>,
     pub enabled: bool,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct DbConfig {
     pub location: String,
 }
 
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct FilePreviewConfig {
     /// The amount of time to wait since the last request to process each preview
-    #[serde(rename = "sleeptimemillis")]
+    #[serde(rename = "sleepTimeMillis")]
     pub sleep_time_millis: u32,
 }
 
 /// config properties for the whole of this application
-#[derive(Deserialize, Clone)]
+#[derive(Deserialize, Clone, Debug)]
 pub struct FileServerConfig {
-    #[serde(rename = "rabbitmq")]
+    #[serde(rename = "RabbitMq")]
     pub rabbit_mq: RabbitMqConfig,
-    #[serde(rename = "filepreview")]
+    #[serde(rename = "FilePreview")]
     pub file_preview: FilePreviewConfig,
+    #[serde(rename = "Database")]
     pub database: DbConfig,
 }
 
@@ -54,9 +55,14 @@ pub fn parse_config() -> FileServerConfig {
         panic!("Failed to parse config file. Exception is {e}");
     }
     let settings = builder.unwrap();
-    settings
-        .try_deserialize()
-        .unwrap_or(FS_CONFIG_DEFAULT.clone())
+    let deserialized = settings.try_deserialize();
+    return match deserialized {
+        Ok(conf) => conf,
+        Err(e) => {
+            log::warn!("Failed to read config file: {e:?}");
+            return FS_CONFIG_DEFAULT.clone();
+        }
+    };
 }
 
 /// global variable for config, that way it doesn't need to be repeatedly parsed
