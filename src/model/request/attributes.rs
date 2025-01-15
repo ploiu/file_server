@@ -91,7 +91,7 @@ pub enum AliasedComparisonTypes {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullComparisonAttribute {
-    pub comparison_type: FullComparisonTypes,
+    pub field: FullComparisonTypes,
     pub operator: EqualityOperator,
     pub value: String,
 }
@@ -132,8 +132,8 @@ impl TryFrom<Vec<String>> for AttributeSearch {
     /// attempts to parse the entire vec into an AttributeSearch
     /// format for param:
     /// - full comparison: `<field>.<op>;<value>`
-    /// - named attribute: `<field>;<value>`
-    /// - aliased attribute: `<field>;<value>`
+    /// - named attribute: `<field>.eq;<value>`
+    /// - aliased attribute: `<field>.eq;<value>`
     fn try_from(value: Vec<String>) -> Result<Self, Self::Error> {
         let mut attributes: Vec<AttributeTypes> = Vec::new();
         for val in value {
@@ -239,7 +239,7 @@ fn parse_date_created(
         )))
     } else {
         Ok(AttributeTypes::FullComp(FullComparisonAttribute {
-            comparison_type: FullComparisonTypes::DateCreated,
+            field: FullComparisonTypes::DateCreated,
             operator,
             value: value.to_string(),
         }))
@@ -261,7 +261,7 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
         }
     } else if usize::from_str(value).is_ok() {
         Ok(AttributeTypes::FullComp(FullComparisonAttribute {
-            comparison_type: FullComparisonTypes::FileSize,
+            field: FullComparisonTypes::FileSize,
             operator,
             value: value.to_string(),
         }))
@@ -375,7 +375,7 @@ mod parse_file_size_tests {
         let res = parse_file_size(EqualityOperator::Gt, "5000").unwrap();
         assert_eq!(
             AttributeTypes::FullComp(FullComparisonAttribute {
-                comparison_type: FullComparisonTypes::FileSize,
+                field: FullComparisonTypes::FileSize,
                 operator: EqualityOperator::Gt,
                 value: "5000".to_string()
             }),
