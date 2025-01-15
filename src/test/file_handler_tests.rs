@@ -399,7 +399,7 @@ fn search_files_bad_search_query() {
     let body: BasicMessage = res.into_json().unwrap();
     assert_eq!(
         body.message,
-        String::from("Search string or tags are required.")
+        String::from("Search string, attributes, or tags are required.")
     );
     cleanup();
 }

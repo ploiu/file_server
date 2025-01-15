@@ -3,7 +3,14 @@ use std::{backtrace::Backtrace, collections::HashSet};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
-use crate::model::{api::FileTypes, repository::FileRecord};
+use crate::model::{
+    api::FileTypes,
+    repository::FileRecord,
+    request::attributes::{
+        AliasedAttribute, AttributeSearch, AttributeTypes, FullComparisonAttribute,
+        NamedComparisonAttribute,
+    },
+};
 
 pub fn create_file(file: &FileRecord, con: &Connection) -> Result<u32, rusqlite::Error> {
     let mut pst = con
@@ -111,7 +118,7 @@ pub fn search_files(
     Ok(results)
 }
 
-pub fn get_files_by_all_tags(
+pub fn search_files_by_tags(
     tags: &HashSet<String>,
     con: &Connection,
 ) -> Result<HashSet<FileRecord>, rusqlite::Error> {
@@ -133,6 +140,12 @@ pub fn get_files_by_all_tags(
         files.insert(file?);
     }
     Ok(files)
+}
+
+pub fn search_files_by_attributes(
+    attributes: &AttributeSearch,
+    con: &Connection,
+) -> Result<HashSet<FileRecord>, rusqlite::Error> {
 }
 
 pub fn create_file_preview(
@@ -193,6 +206,51 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
     })
 }
 
+/// converts the passed attr to a tuple with both the where clause part and the parameters needed to populate
+/// that where clause in a parameterized sql query
+/// * `attr` the attribute to generate parameters for
+/// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
+fn convert_attribute_to_where_clause(attr: &AttributeTypes, counter: u32) -> (String, Vec<String>) {
+    match attr {
+        AttributeTypes::FullComp(at) => convert_full_comp_attribute_to_where_clause(at, counter),
+        AttributeTypes::Named(at) => convert_named_comp_attribute_to_where_clause(at, counter),
+        AttributeTypes::Aliased(at) => convert_aliased_attribute_to_where_clause(at, counter),
+    }
+}
+
+/// converts the passed `attr` to a string that can be used in a sql where clause and the parameters needed to populate
+/// that where clause in a parameterized sql query
+/// * `attr` the attribute to generate parameters for
+/// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
+fn convert_full_comp_attribute_to_where_clause(
+    attr: &FullComparisonAttribute,
+    counter: u32,
+) -> (String, Vec<String>) {
+    todo!();
+}
+
+/// converts the passed `attr` to a string that can be used in a sql where clause and the parameters needed to populate
+/// that where clause in a parameterized sql query
+/// * `attr` the attribute to generate parameters for
+/// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
+fn convert_named_comp_attribute_to_where_clause(
+    attr: &NamedComparisonAttribute,
+    counter: u32,
+) -> (String, Vec<String>) {
+    todo!();
+}
+
+/// converts the passed `attr` to a string that can be used in a sql where clause and the parameters needed to populate
+/// that where clause in a parameterized sql query
+/// * `attr` the attribute to generate parameters for
+/// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
+fn convert_aliased_attribute_to_where_clause(
+    attr: &AliasedAttribute,
+    counter: u32,
+) -> (String, Vec<String>) {
+    todo!()
+}
+
 #[cfg(test)]
 mod get_files_by_all_tags_tests {
     use std::collections::HashSet;
@@ -201,7 +259,7 @@ mod get_files_by_all_tags_tests {
 
     use crate::model::api::FileTypes;
     use crate::model::repository::FileRecord;
-    use crate::repository::file_repository::get_files_by_all_tags;
+    use crate::repository::file_repository::search_files_by_tags;
     use crate::repository::open_connection;
     use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, refresh_db};
 
@@ -218,7 +276,7 @@ mod get_files_by_all_tags_tests {
         create_tag_files("asdf", vec![3, 4]);
         create_tag_files("fda", vec![2, 3, 4]);
 
-        let res = get_files_by_all_tags(
+        let res = search_files_by_tags(
             &HashSet::from(["tag1".to_string(), "fda".to_string(), "asdf".to_string()]),
             &con,
         )
