@@ -56,7 +56,7 @@ impl Into<&str> for EqualityOperator {
 }
 
 /// represents different general file size descriptors
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileSizes {
     Tiny,
     Small,
