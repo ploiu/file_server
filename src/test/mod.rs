@@ -134,7 +134,7 @@ macro_rules! fail {
         panic!("unimplemented test")
     };
     ($msg:literal) => {
-        panic!("{}", stringify!($msg))
+        panic!($msg)
     };
 }
 
