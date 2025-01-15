@@ -12,7 +12,7 @@ pub mod tag_responses;
 #[derive(Responder, Serialize, Deserialize, Debug, PartialEq)]
 #[serde(crate = "rocket::serde")]
 pub struct BasicMessage {
-    pub(crate) message: String,
+    pub message: String,
 }
 
 /// this will be the same no matter if it's a request or a response. This is a bit
@@ -32,6 +32,20 @@ impl BasicMessage {
         Json::from(BasicMessage {
             message: message.to_string(),
         })
+    }
+}
+
+impl From<&str> for BasicMessage {
+    fn from(value: &str) -> Self {
+        Self {
+            message: value.to_string(),
+        }
+    }
+}
+
+impl From<String> for BasicMessage {
+    fn from(value: String) -> Self {
+        Self { message: value }
     }
 }
 
