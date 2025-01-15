@@ -10,7 +10,7 @@ use crate::model::{
     file_types::FileTypes,
     repository::FileRecord,
     request::attributes::{
-        AliasedAttribute, AliasedComparisonTypes, AttributeSearch, AttributeTypes,
+        AliasedAttribute, AliasedComparisonTypes, AttributeSearch, AttributeTypes, FileSizes,
         FullComparisonAttribute, FullComparisonTypes, NamedAttributes, NamedComparisonAttribute,
     },
 };
@@ -312,6 +312,43 @@ fn convert_aliased_attribute_to_where_clause(
     (sql, (field_placeholder, attr.value))
 }
 
+fn convert_aliased_file_size_to_where_clause(
+    attr: AliasedAttribute,
+    counter: usize,
+) -> WhereClause {
+    // at this point the attr value should be validated, but just in case we need a default
+    let size = FileSizes::try_from(&attr.value).unwrap_or(FileSizes::ExtraLarge);
+    // lt - less than min bound (except for tiny in which case it gets clamped down to the max tiny value)
+    // gt - greater than max bound (except for ExtraLarge in which case it gets clamped down to the min extra large value)
+    // eq - min <= value < max
+    // neq - value < min || value >= max (probably not gonna be used much, but still need to fulfill all ops)
+    let field_name = "fileSize";
+    let field_placeholder = format!(":{field_name}{counter}");
+    let (min, max) = determine_file_size_range(size);
+    todo!();
+}
+
+/// determines a range of positive integers for a give [FileSizes] alias. These ranges are as follows:
+/// - [FileSizes::Tiny]: 0B - 500KiB
+/// - [FileSizes::Small]: 500KiB - 10MiB
+/// - [FileSizes::Medium]: 10MiB - 100MiB
+/// - [FileSizes::Large]: 100MiB - 1GiB
+/// - [FileSizes::ExtraLarge]: 1GiB - u64 max
+///
+/// u64 is used because that is the sqlite max integer value (https://www.sqlite.org/datatype3.html#storage_classes_and_datatypes)
+fn determine_file_size_range(size: FileSizes) -> (u64, u64) {
+    static KIB: u64 = 1024;
+    static MIB: u64 = 1024 * 1024;
+    static GIB: u64 = 1024 * 1024 * 1024;
+    match size {
+        FileSizes::Tiny => (0, 500 * KIB),
+        FileSizes::Small => (500 * KIB, 10 * MIB),
+        FileSizes::Medium => (10 * MIB, 100 * MIB),
+        FileSizes::Large => (100 * MIB, 1 * GIB),
+        FileSizes::ExtraLarge => (1 * GIB, u64::MAX),
+    }
+}
+
 #[cfg(test)]
 mod get_files_by_all_tags_tests {
     use std::collections::HashSet;
@@ -447,6 +484,8 @@ mod create_file_tests {
 
 #[cfg(test)]
 mod convert_aliased_attribute_to_where_clause {
+    use crate::model::request::attributes::EqualityOperator;
+
     use super::*;
 
     #[test]
@@ -454,6 +493,7 @@ mod convert_aliased_attribute_to_where_clause {
         let attr = AliasedAttribute {
             field: AliasedComparisonTypes::FileSize,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (sql, _var) = convert_aliased_attribute_to_where_clause(attr, 23);
         assert!(sql.starts_with("fileSize"));
@@ -464,6 +504,7 @@ mod convert_aliased_attribute_to_where_clause {
         let attr = AliasedAttribute {
             field: AliasedComparisonTypes::FileSize,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (sql, _var) = convert_aliased_attribute_to_where_clause(attr, 23);
         assert!(sql.ends_with(":fileSize23"));
@@ -474,6 +515,7 @@ mod convert_aliased_attribute_to_where_clause {
         let attr = AliasedAttribute {
             field: AliasedComparisonTypes::FileSize,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (_sql, (_, var)) = convert_aliased_attribute_to_where_clause(attr, 23);
         assert_eq!("test".to_string(), var);
@@ -484,9 +526,15 @@ mod convert_aliased_attribute_to_where_clause {
         let attr = AliasedAttribute {
             field: AliasedComparisonTypes::FileSize,
             value: "test".to_string(),
+            operator: EqualityOperator::Eq,
         };
         let (sql, _var) = convert_aliased_attribute_to_where_clause(attr, 23);
         assert_eq!("fileSize = :fileSize23".to_string(), sql);
+    }
+
+    #[test]
+    fn properly_uses_alias_for_file_size() {
+        crate::fail!();
     }
 }
 
@@ -635,6 +683,7 @@ where fileSize = :fileSize0";
             AttributeTypes::Aliased(AliasedAttribute {
                 field: AliasedComparisonTypes::FileSize,
                 value: "large".to_string(),
+                operator: EqualityOperator::Eq,
             }),
             AttributeTypes::Named(NamedComparisonAttribute {
                 field: NamedAttributes::FileType,
@@ -654,6 +703,128 @@ from
     left join folder_files ff on ff.fileId = f.id
 where fileSize = :fileSize0 AND type <> :type1";
         let (actual, _) = build_search_attribute_sql(AttributeSearch { attributes });
+        assert_eq!(expected, actual);
+    }
+}
+
+#[cfg(test)]
+mod search_files_by_attributes {
+    use super::*;
+    use crate::{
+        model::request::attributes::*,
+        repository::open_connection,
+        test::{cleanup, now, refresh_db},
+    };
+
+    #[test]
+    fn properly_retrieves_files_with_1_attr() {
+        refresh_db();
+        let good = FileRecord {
+            id: None,
+            name: "good.txt".to_string(),
+            parent_id: None,
+            create_date: now(),
+            size: 5 * 1024 * 1024 * 1024,
+            file_type: FileTypes::Text,
+        }
+        .save_to_db();
+        let bad = FileRecord {
+            id: None,
+            name: "bad.gif".to_string(),
+            parent_id: None,
+            create_date: now(),
+            size: 5 * 1024,
+            file_type: FileTypes::Image,
+        }
+        .save_to_db();
+        let attributes = vec![AttributeTypes::FullComp(FullComparisonAttribute {
+            field: FullComparisonTypes::FileSize,
+            operator: EqualityOperator::Gt,
+            value: "1073741824".to_string(),
+        })];
+        let con = open_connection();
+        let res = search_files_by_attributes(AttributeSearch { attributes }, &con);
+        con.close().unwrap();
+        let expected: HashSet<FileRecord> = [good].into_iter().collect();
+        assert_eq!(Ok(expected), res);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod convert_aliased_file_size_to_where_clause {
+    use super::*;
+    use crate::model::request::attributes::*;
+
+    #[test]
+    fn handles_lt() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::Medium.to_string(),
+            operator: EqualityOperator::Lt,
+        };
+        let expected = ":fileSize0 < 10485760";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_lt_for_tiny() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::Tiny.to_string(),
+            operator: EqualityOperator::Lt,
+        };
+        let expected = ":fileSize0 <= 512000";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_gt() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::Medium.to_string(),
+            operator: EqualityOperator::Gt,
+        };
+        let expected = ":fileSize0 > 104857600";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_gt_for_extra_large() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::ExtraLarge.to_string(),
+            operator: EqualityOperator::Gt,
+        };
+        let expected = ":fileSize0 >= 104857600";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_eq_for_range() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::Medium.to_string(),
+            operator: EqualityOperator::Eq,
+        };
+        let expected = "(:fileSize0 >= 10485760 AND :fileSize0 < 104857600)";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
+        assert_eq!(expected, actual);
+    }
+
+    #[test]
+    fn handles_neq_for_outside_range() {
+        let attr = AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: FileSizes::Medium.to_string(),
+            operator: EqualityOperator::Neq,
+        };
+        let expected = "(:fileSize0 < 10485760 OR :fileSize0 >= 104857600)";
+        let (actual, _) = convert_aliased_attribute_to_where_clause(attr, 0);
         assert_eq!(expected, actual);
     }
 }

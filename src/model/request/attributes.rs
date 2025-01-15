@@ -58,6 +58,7 @@ impl Into<&str> for EqualityOperator {
 /// represents different general file size descriptors
 #[derive(Clone, Copy, Debug)]
 pub enum FileSizes {
+    Tiny,
     Small,
     Medium,
     Large,
@@ -70,6 +71,7 @@ impl TryFrom<&str> for FileSizes {
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let value = value.to_ascii_lowercase();
         match value.as_str() {
+            "tiny" => Ok(Self::Tiny),
             "small" => Ok(Self::Small),
             "medium" => Ok(Self::Medium),
             "large" => Ok(Self::Large),
@@ -82,9 +84,17 @@ impl TryFrom<&str> for FileSizes {
     }
 }
 
+impl TryFrom<&String> for FileSizes {
+    type Error = ParseError;
+    fn try_from(value: &String) -> Result<Self, Self::Error> {
+        Self::try_from(value.as_str())
+    }
+}
+
 impl ToString for FileSizes {
     fn to_string(&self) -> String {
         String::from(match self {
+            Self::Tiny => "tiny",
             Self::Small => "small",
             Self::Medium => "medium",
             Self::Large => "large",
@@ -121,6 +131,7 @@ pub enum AliasedComparisonTypes {
 pub struct FullComparisonAttribute {
     pub field: FullComparisonTypes,
     pub operator: EqualityOperator,
+    /// might be annoying that it's a string here, but we just need to be sure we validate the value when parsing. Not like we have to deal with it being a string outside of tests
     pub value: String,
 }
 
@@ -142,6 +153,7 @@ pub struct NamedComparisonAttribute {
 pub struct AliasedAttribute {
     pub field: AliasedComparisonTypes,
     pub value: String,
+    pub operator: EqualityOperator,
 }
 
 /// represents an attribute search feature.
@@ -280,16 +292,11 @@ fn parse_date_created(
 /// parses an attribute search for either a [FullComparisonAttribute] or an [AliasedAttribute]
 fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
     if FileSizes::try_from(value).is_ok() {
-        if operator != EqualityOperator::Eq {
-            Err(ParseError::BadEqualityOperator(format!(
-                "{operator} is not a valid operator when comparing fileSize to an alias"
-            )))
-        } else {
-            Ok(AttributeTypes::Aliased(AliasedAttribute {
-                field: AliasedComparisonTypes::FileSize,
-                value: value.to_string(),
-            }))
-        }
+        Ok(AttributeTypes::Aliased(AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: value.to_string(),
+            operator,
+        }))
     } else if usize::from_str(value).is_ok() {
         Ok(AttributeTypes::FullComp(FullComparisonAttribute {
             field: FullComparisonTypes::FileSize,
@@ -397,18 +404,6 @@ mod parse_file_size_tests {
     use super::*;
 
     #[test]
-    fn requires_op_to_be_eq_if_aliased() {
-        for op in [EqualityOperator::Lt, EqualityOperator::Gt] {
-            assert_eq!(
-                ParseError::BadEqualityOperator(String::new()),
-                parse_file_size(op, "small").unwrap_err()
-            );
-        }
-        assert!(!parse_file_size(EqualityOperator::Lt, "medium").is_ok());
-        assert!(parse_file_size(EqualityOperator::Eq, "small").is_ok());
-    }
-
-    #[test]
     fn succesfully_returns_aliased_if_size_name_is_passed() {
         use super::FileSizes::*;
         for size in [Small, Medium, Large, ExtraLarge] {
@@ -416,7 +411,8 @@ mod parse_file_size_tests {
                 parse_file_size(EqualityOperator::Eq, size.to_string().as_str()).unwrap(),
                 AttributeTypes::Aliased(AliasedAttribute {
                     field: AliasedComparisonTypes::FileSize,
-                    value: size.to_string()
+                    value: size.to_string(),
+                    operator: EqualityOperator::Eq
                 })
             );
         }
@@ -443,18 +439,15 @@ mod parse_file_size_tests {
 
 #[cfg(test)]
 mod parse_file_type {
-    
 
     #[test]
     fn accepts_eq_or_neq() {
-        use crate::test::fail;
-        fail();
+        crate::fail!();
     }
 
     #[test]
     fn rejects_lt_or_gt() {
-        use crate::test::fail;
-        fail();
+        crate::fail!();
     }
 }
 
