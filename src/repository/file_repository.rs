@@ -4,7 +4,7 @@ use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
 use crate::model::{
-    api::FileTypes,
+    file_types::FileTypes,
     repository::FileRecord,
     request::attributes::{
         AliasedAttribute, AliasedComparisonTypes, AttributeSearch, AttributeTypes,
@@ -277,7 +277,7 @@ mod get_files_by_all_tags_tests {
 
     use rusqlite::Connection;
 
-    use crate::model::api::FileTypes;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::search_files_by_tags;
     use crate::repository::open_connection;
@@ -369,7 +369,7 @@ mod file_preview_tests {
 #[cfg(test)]
 mod create_file_tests {
     use crate::{
-        model::{api::FileTypes, repository::FileRecord},
+        model::{file_types::FileTypes, repository::FileRecord},
         repository::open_connection,
         test::{cleanup, create_folder_db_entry, now, refresh_db},
     };
@@ -493,4 +493,3 @@ mod convert_named_comp_attribute_to_where_clause {
         assert_eq!("type = ?23".to_string(), sql);
     }
 }
-

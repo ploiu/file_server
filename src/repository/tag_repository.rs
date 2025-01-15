@@ -317,11 +317,11 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod get_tag_on_file_tests {
-    use crate::model::api::FileTypes::{self};
+    use super::*;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::repository::tag_repository::{add_tag_to_file, create_tag, get_tags_on_file};
     use crate::test::*;
 
     #[test]
@@ -386,11 +386,11 @@ mod get_tag_on_file_tests {
 
 #[cfg(test)]
 mod remove_tag_from_file_tests {
-    use crate::model::api::FileTypes;
+    use super::*;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::repository::tag_repository::{create_tag, get_tags_on_file, remove_tag_from_file};
     use crate::test::{cleanup, now, refresh_db};
 
     #[test]

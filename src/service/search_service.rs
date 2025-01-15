@@ -365,9 +365,10 @@ mod search_files_tests {
 
     use chrono::NaiveDateTime;
 
-    use crate::model::api::{FileApi, FileTypes};
+    use super::search_files;
+    use crate::model::api::FileApi;
+    use crate::model::file_types::FileTypes;
     use crate::model::response::TagApi;
-    use crate::service::search_service::search_files;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
         create_tag_folder, create_tag_folders, refresh_db,

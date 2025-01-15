@@ -5,7 +5,7 @@ use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
 use rocket::serde::json::serde_json as serde;
 
-use crate::model::api::FileTypes;
+use crate::model::file_types::FileTypes;
 use crate::model::repository::{FileRecord, Folder};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;

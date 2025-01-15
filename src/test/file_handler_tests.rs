@@ -4,7 +4,8 @@ use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
 use rocket::serde::json::serde_json as serde;
 
-use crate::model::api::{FileApi, FileTypes};
+use crate::model::api::FileApi;
+use crate::model::file_types::FileTypes;
 use crate::model::response::BasicMessage;
 use crate::repository::initialize_db;
 use crate::rocket;

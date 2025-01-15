@@ -13,11 +13,12 @@ use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
 use crate::config::FILE_SERVER_CONFIG;
-use crate::model::api::{FileApi, FileTypes};
+use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
+use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
@@ -661,8 +662,9 @@ mod deterine_file_name_tests {
 mod update_file_tests {
     use std::fs;
 
-    use crate::model::api::{FileApi, FileTypes};
+    use crate::model::api::FileApi;
     use crate::model::error::file_errors::UpdateFileError;
+    use crate::model::file_types::FileTypes;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};

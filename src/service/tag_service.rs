@@ -420,8 +420,8 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod update_file_tag_test {
-    use crate::model::api::FileTypes;
     use crate::model::error::tag_errors::TagRelationError;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::model::response::TagApi;
     use crate::repository::{file_repository, open_connection};

@@ -38,7 +38,7 @@ pub fn remove_files() {
 /// see also [`FileRecord::save_to_db`]
 #[cfg(test)]
 pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
-    use crate::model::api::FileTypes;
+    use crate::model::file_types::FileTypes;
 
     let connection = open_connection();
     let file_id = file_repository::create_file(
