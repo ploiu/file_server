@@ -3,6 +3,8 @@ use std::{backtrace::Backtrace, collections::HashSet};
 use chrono::NaiveDateTime;
 use rusqlite::{params, Connection};
 
+type WhereClause = (String, String);
+
 use crate::model::{
     file_types::FileTypes,
     repository::FileRecord,
@@ -109,8 +111,7 @@ pub fn search_files(
 ) -> Result<Vec<FileRecord>, rusqlite::Error> {
     let criteria = format!("%{}%", criteria);
     let mut pst = con
-        .prepare(include_str!("../assets/queries/file/search_files.sql"))
-        .unwrap();
+        .prepare(include_str!("../assets/queries/file/search_files.sql"))?;
     let mut results: Vec<FileRecord> = Vec::new();
     let rows = pst.query_map([&criteria], map_file_all_fields)?;
     for file in rows.into_iter() {
@@ -144,10 +145,36 @@ pub fn search_files_by_tags(
 }
 
 pub fn search_files_by_attributes(
-    attributes: &AttributeSearch,
+    attributes: AttributeSearch,
     con: &Connection,
 ) -> Result<HashSet<FileRecord>, rusqlite::Error> {
-    todo!()
+    let base_sql = r"
+    select
+    f.id,
+    f.name,
+    f.fileSize,
+    f.dateCreated,
+    f.type,
+    ff.folderId
+from
+    FileRecords f
+    left join folder_files ff on ff.fileId = f.id
+where ";
+    let mut where_clause = base_sql.to_string();
+    let mut params: Vec<String> = Vec::with_capacity(attributes.len());
+    let mut counter: usize = 0;
+    for attr in attributes.clone() {
+        let (sql, var) = convert_attribute_to_where_clause(attr, counter);
+        params[counter] = var;
+        where_clause += sql.as_str();
+        if counter < params.len() {
+            where_clause += " AND ";
+        }
+        counter += 1;
+    };
+    let mut pst = con.prepare(&where_clause)?;
+    let res = pst.query_map(params, map_file_all_fields)?;
+    todo!();
 }
 
 pub fn create_file_preview(
@@ -212,7 +239,7 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
 /// that where clause in a parameterized sql query
 /// * `attr` the attribute to generate parameters for
 /// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
-fn convert_attribute_to_where_clause(attr: AttributeTypes, counter: u32) -> (String, String) {
+fn convert_attribute_to_where_clause(attr: AttributeTypes, counter: usize) -> (String, String) {
     match attr {
         AttributeTypes::FullComp(at) => convert_full_comp_attribute_to_where_clause(at, counter),
         AttributeTypes::Named(at) => convert_named_comp_attribute_to_where_clause(at, counter),
@@ -226,17 +253,13 @@ fn convert_attribute_to_where_clause(attr: AttributeTypes, counter: u32) -> (Str
 /// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
 fn convert_full_comp_attribute_to_where_clause(
     attr: FullComparisonAttribute,
-    counter: u32,
-) -> (String, String) {
+    counter: usize,
+) -> WhereClause {
     let field_name = match attr.field {
         FullComparisonTypes::FileSize => "fileSize",
         FullComparisonTypes::DateCreated => "dateCreated",
     };
-    let op = match attr.operator {
-        EqualityOperator::Eq => "=",
-        EqualityOperator::Gt => ">",
-        EqualityOperator::Lt => "<",
-    };
+    let op: &str = attr.operator.into();
     let sql = format!("{field_name} {op} ?{counter}");
     (sql, attr.value)
 }
@@ -247,8 +270,8 @@ fn convert_full_comp_attribute_to_where_clause(
 /// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
 fn convert_named_comp_attribute_to_where_clause(
     attr: NamedComparisonAttribute,
-    counter: u32,
-) -> (String, String) {
+    counter: usize,
+) -> WhereClause {
     let field_name = match attr.field {
         NamedAttributes::FileType => "type",
     };
@@ -260,10 +283,7 @@ fn convert_named_comp_attribute_to_where_clause(
 /// that where clause in a parameterized sql query
 /// * `attr` the attribute to generate parameters for
 /// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
-fn convert_aliased_attribute_to_where_clause(
-    attr: AliasedAttribute,
-    counter: u32,
-) -> (String, String) {
+fn convert_aliased_attribute_to_where_clause(attr: AliasedAttribute, counter: usize) -> WhereClause {
     let field_name = match attr.field {
         AliasedComparisonTypes::FileSize => "fileSize",
     };
@@ -491,5 +511,54 @@ mod convert_named_comp_attribute_to_where_clause {
         };
         let (sql, _var) = convert_named_comp_attribute_to_where_clause(attr, 23);
         assert_eq!("type = ?23".to_string(), sql);
+    }
+}
+
+#[cfg(test)]
+mod convert_full_comp_attribute_to_where_clause {
+    use super::*;
+
+    #[test]
+    fn maps_field_name_properly() {
+        let attr = FullComparisonAttribute {
+            field: FullComparisonTypes::FileSize,
+            value: "test".to_string(),
+            operator: EqualityOperator::Eq,
+        };
+        let (sql, _var) = convert_full_comp_attribute_to_where_clause(attr, 23);
+        assert!(sql.starts_with("fileSize"));
+    }
+
+    #[test]
+    fn uses_proper_variable_counter() {
+        let attr = FullComparisonAttribute {
+            field: FullComparisonTypes::DateCreated,
+            value: "test".to_string(),
+            operator: EqualityOperator::Gt,
+        };
+        let (sql, _var) = convert_full_comp_attribute_to_where_clause(attr, 38);
+        assert!(sql.ends_with("?38"));
+    }
+
+    #[test]
+    fn returns_proper_variable_value() {
+        let attr = FullComparisonAttribute {
+            field: FullComparisonTypes::FileSize,
+            value: "test".to_string(),
+            operator: EqualityOperator::Eq,
+        };
+        let (_sql, var) = convert_full_comp_attribute_to_where_clause(attr, 23);
+        assert_eq!("test".to_string(), var);
+    }
+
+    #[test]
+    fn builds_full_clause() {
+        let attr = FullComparisonAttribute {
+            field: FullComparisonTypes::DateCreated,
+            value: "test".to_string(),
+            operator: EqualityOperator::Neq,
+        };
+        let (sql, _var) = convert_full_comp_attribute_to_where_clause(attr, 23);
+        assert_eq!("dateCreated <> ?23".to_string(), sql);
     }
 }

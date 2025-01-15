@@ -9,20 +9,35 @@ pub enum EqualityOperator {
     Eq,
     Gt,
     Lt,
+    Neq
 }
 
 impl TryFrom<&str> for EqualityOperator {
     type Error = ParseError;
 
+    // for use in parsing from query params
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         let value = value.to_ascii_lowercase();
         match value.as_str() {
             "eq" => Ok(Self::Eq),
             "lt" => Ok(Self::Lt),
             "gt" => Ok(Self::Gt),
+            "neq" => Ok(Self::Neq),
             _ => Err(ParseError::BadEqualityOperator(format!(
                 "{value} is not a valid equality operator. Valid ops are `eq`, `lt`, and `gt`"
             ))),
+        }
+    }
+}
+
+// for use in converting an equality operator to sql
+impl Into<&str> for EqualityOperator {
+    fn into(self) -> &'static str {
+        match self {
+            Self::Eq => "=",
+            Self::Lt => "<",
+            Self::Gt => ">",
+            Self::Neq => "<>"
         }
     }
 }
@@ -125,6 +140,14 @@ pub struct AliasedAttribute {
 #[derive(Debug)]
 pub struct AttributeSearch {
     pub attributes: Vec<AttributeTypes>,
+}
+
+impl std::ops::Deref for AttributeSearch {
+    type Target = Vec<AttributeTypes>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.attributes
+    }
 }
 
 impl TryFrom<Vec<String>> for AttributeSearch {
@@ -387,4 +410,22 @@ mod parse_file_size_tests {
     fn full_comp_requires_positive_numeric_byte_value() {
         assert!(parse_file_size(EqualityOperator::Gt, "-1").is_err());
     }
+}
+
+#[cfg(test)]
+mod quality_operator_into_tests {
+    use crate::model::request::attributes::EqualityOperator;
+
+    #[test]
+    fn works() {
+        let eq: &str = EqualityOperator::Eq.into();
+        let lt: &str = EqualityOperator::Lt.into();
+        let gt: &str = EqualityOperator::Gt.into();
+        let neq: &str = EqualityOperator::Neq.into();
+        assert_eq!("=", eq);
+        assert_eq!("<", lt);
+        assert_eq!(">", gt);
+        assert_eq!("<>", neq);
+    }
+    
 }
