@@ -1,7 +1,9 @@
-use std::str::FromStr;
+use std::{fmt::Display, str::FromStr};
 
 use once_cell::sync::Lazy;
 use regex::Regex;
+
+use crate::model::file_types::FileTypes;
 
 /// represents equality operators for searching (e.g. ==, >, and <)
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -26,6 +28,17 @@ impl TryFrom<&str> for EqualityOperator {
             _ => Err(ParseError::BadEqualityOperator(format!(
                 "{value} is not a valid equality operator. Valid ops are `eq`, `lt`, and `gt`"
             ))),
+        }
+    }
+}
+
+impl Display for EqualityOperator {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            EqualityOperator::Eq => f.write_str("eq"),
+            EqualityOperator::Gt => f.write_str("gt"),
+            EqualityOperator::Lt => f.write_str("lt"),
+            EqualityOperator::Neq => f.write_str("neq"),
         }
     }
 }
@@ -122,6 +135,7 @@ pub enum NamedAttributes {
 pub struct NamedComparisonAttribute {
     pub field: NamedAttributes,
     pub value: String,
+    pub operator: EqualityOperator,
 }
 
 #[derive(Debug, Clone, Eq, PartialEq)]
@@ -163,12 +177,6 @@ impl TryFrom<Vec<String>> for AttributeSearch {
             attributes.push(parse_attribute(val)?);
         }
         Ok(Self { attributes })
-    }
-}
-
-impl AttributeSearch {
-    pub fn is_empty(&self) -> bool {
-        self.attributes.is_empty()
     }
 }
 
@@ -241,7 +249,7 @@ fn parse_attribute(attr_string: String) -> Result<AttributeTypes, ParseError> {
     } else if field_name == "datecreated".to_string() {
         parse_date_created(op, value)
     } else if field_name == "filetype".to_string() {
-        todo!()
+        parse_file_type(op, value)
     } else {
         Err(ParseError::InvalidSearch(format!(
             "{attr_string} searches an invalid search term"
@@ -274,7 +282,7 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
     if FileSizes::try_from(value).is_ok() {
         if operator != EqualityOperator::Eq {
             Err(ParseError::BadEqualityOperator(format!(
-                "{operator:?} is not a valid operator when comparing fileSize to an alias"
+                "{operator} is not a valid operator when comparing fileSize to an alias"
             )))
         } else {
             Ok(AttributeTypes::Aliased(AliasedAttribute {
@@ -291,6 +299,27 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
     } else {
         Err(ParseError::BadValue(format!(
             "{value} is not a valid byte size for files"
+        )))
+    }
+}
+
+/// parses an attribute search for a [NamedComparisonAttribute]
+fn parse_file_type(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
+    if FileTypes::from(value.to_string()) != FileTypes::Unknown {
+        if operator != EqualityOperator::Eq && operator != EqualityOperator::Neq {
+            Err(ParseError::BadEqualityOperator(format!(
+                "{operator} is not a valid equality operator for fileType"
+            )))
+        } else {
+            Ok(AttributeTypes::Named(NamedComparisonAttribute {
+                field: NamedAttributes::FileType,
+                value: value.to_string(),
+                operator,
+            }))
+        }
+    } else {
+        Err(ParseError::BadValue(format!(
+            "{value} is not a valid file type"
         )))
     }
 }
@@ -409,6 +438,23 @@ mod parse_file_size_tests {
     #[test]
     fn full_comp_requires_positive_numeric_byte_value() {
         assert!(parse_file_size(EqualityOperator::Gt, "-1").is_err());
+    }
+}
+
+#[cfg(test)]
+mod parse_file_type {
+    
+
+    #[test]
+    fn accepts_eq_or_neq() {
+        use crate::test::fail;
+        fail();
+    }
+
+    #[test]
+    fn rejects_lt_or_gt() {
+        use crate::test::fail;
+        fail();
     }
 }
 
