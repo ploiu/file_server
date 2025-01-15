@@ -42,6 +42,7 @@ impl TryFrom<&str> for FileSizes {
             "small" => Ok(Self::Small),
             "medium" => Ok(Self::Medium),
             "large" => Ok(Self::Large),
+            // normally I'd like to use "extra_large", but these are being parsed from query parameters in camel case. to prevent confusion, I'm opting to keep parity between toString / parseString
             "extralarge" => Ok(Self::ExtraLarge),
             default => Err(ParseError::BadValue(format!(
                 "{default} is not a valid file size name"
@@ -50,7 +51,19 @@ impl TryFrom<&str> for FileSizes {
     }
 }
 
-#[derive(Debug, Clone)]
+impl ToString for FileSizes {
+    fn to_string(&self) -> String {
+        String::from(match self {
+            Self::Small => "small",
+            Self::Medium => "medium",
+            Self::Large => "large",
+            // normally I'd like to use "extra_large", but these are being parsed from query parameters in camel case. to prevent confusion, I'm opting to keep parity between toString / parseString
+            Self::ExtraLarge => "extraLarge",
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AttributeTypes {
     /// full comparison attribute
     FullComp(FullComparisonAttribute),
@@ -60,7 +73,7 @@ pub enum AttributeTypes {
     Aliased(AliasedAttribute),
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FullComparisonTypes {
     FileSize,
     DateCreated,
@@ -68,12 +81,12 @@ pub enum FullComparisonTypes {
 
 /// used to force compile-time handling of all aliased attributes. Not useful right now, but if we ever get another field to search on
 /// we can guarantee it's covered
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AliasedComparisonTypes {
     FileSize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FullComparisonAttribute {
     pub comparison_type: FullComparisonTypes,
     pub operator: EqualityOperator,
@@ -82,18 +95,18 @@ pub struct FullComparisonAttribute {
 
 /// used to force compile-time handling of all named attributes. Not useful right now, but if we ever get another field to search on
 /// we can guarantee it's covered
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum NamedAttributes {
     FileType,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct NamedComparisonAttribute {
     pub field: NamedAttributes,
     pub value: String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq)]
 pub struct AliasedAttribute {
     pub field: AliasedComparisonTypes,
     pub value: String,
@@ -121,6 +134,7 @@ impl From<Vec<String>> for AttributeSearch {
     }
 }
 
+// TODO every time you add an entry here, you need to update the PartialEq implementation
 #[derive(Debug)]
 pub enum ParseError {
     /// no matching equality operator found where one is expected
@@ -137,6 +151,7 @@ impl PartialEq<ParseError> for ParseError {
         match (self, other) {
             (Self::BadEqualityOperator(_), Self::BadEqualityOperator(_)) => true,
             (Self::MissingValue(_), Self::MissingValue(_)) => true,
+            (Self::BadValue(_), Self::BadValue(_)) => true,
             _ => false,
         }
     }
@@ -183,17 +198,17 @@ fn parse_attribute(attr_string: &str) -> Result<AttributeTypes, ParseError> {
 
 /// parses an attribute search for either a [FullComparisonAttribute] or an [AliasedAttribute]
 fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
-    return if FileSizes::try_from(value).is_ok() {
-        if operator == EqualityOperator::Eq {
-            Ok(AttributeTypes::Aliased(AliasedAttribute {
-                field: AliasedComparisonTypes::FileSize,
-                value: value.to_string(),
-            }))
-        } else {
-            Err(ParseError::BadEqualityOperator(format!(
-                "{operator:?} is not a valid operator when comparing fileSize to an alias"
-            )))
-        }
+    if operator != EqualityOperator::Eq {
+        return Err(ParseError::BadEqualityOperator(format!(
+            "{operator:?} is not a valid operator when comparing fileSize to an alias"
+        )));
+    }
+
+    if FileSizes::try_from(value).is_ok() {
+        Ok(AttributeTypes::Aliased(AliasedAttribute {
+            field: AliasedComparisonTypes::FileSize,
+            value: value.to_string(),
+        }))
     } else if usize::from_str(value).is_ok() {
         Ok(AttributeTypes::FullComp(FullComparisonAttribute {
             comparison_type: FullComparisonTypes::FileSize,
@@ -204,7 +219,7 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
         Err(ParseError::BadValue(format!(
             "{value} is not a valid byte size for files"
         )))
-    };
+    }
 }
 
 /// returns the field name part of the passed `attr_string`.
@@ -281,14 +296,32 @@ mod parse_file_size_tests {
 
     #[test]
     fn requires_op_to_be_eq() {
-        use crate::test::fail;
-        fail();
+        for op in [EqualityOperator::Lt, EqualityOperator::Gt] {
+            assert_eq!(
+                ParseError::BadEqualityOperator(String::new()),
+                parse_file_size(op, "5").unwrap_err()
+            );
+            assert_eq!(
+                ParseError::BadEqualityOperator(String::new()),
+                parse_file_size(op, "small").unwrap_err()
+            );
+        }
+        assert!(parse_file_size(EqualityOperator::Eq, "5").is_ok());
+        assert!(parse_file_size(EqualityOperator::Eq, "small").is_ok());
     }
 
     #[test]
     fn succesfully_returns_aliased_if_size_name_is_passed() {
-        use crate::test::fail;
-        fail();
+        use super::FileSizes::*;
+        for size in [Small, Medium, Large, ExtraLarge] {
+            assert_eq!(
+                parse_file_size(EqualityOperator::Eq, size.to_string().as_str()).unwrap(),
+                AttributeTypes::Aliased(AliasedAttribute {
+                    field: AliasedComparisonTypes::FileSize,
+                    value: size.to_string()
+                })
+            );
+        }
     }
 
     #[test]

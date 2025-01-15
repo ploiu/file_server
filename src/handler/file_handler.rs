@@ -12,7 +12,6 @@ use crate::model::error::file_errors::{
     UpdateFileError,
 };
 use crate::model::guard::auth::ValidateResult;
-use crate::model::request::attributes::AttributeSearch;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
