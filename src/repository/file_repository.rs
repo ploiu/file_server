@@ -110,8 +110,7 @@ pub fn search_files(
     con: &Connection,
 ) -> Result<Vec<FileRecord>, rusqlite::Error> {
     let criteria = format!("%{}%", criteria);
-    let mut pst = con
-        .prepare(include_str!("../assets/queries/file/search_files.sql"))?;
+    let mut pst = con.prepare(include_str!("../assets/queries/file/search_files.sql"))?;
     let mut results: Vec<FileRecord> = Vec::new();
     let rows = pst.query_map([&criteria], map_file_all_fields)?;
     for file in rows.into_iter() {
@@ -171,10 +170,14 @@ where ";
             where_clause += " AND ";
         }
         counter += 1;
-    };
+    }
     let mut pst = con.prepare(&where_clause)?;
-    let res = pst.query_map(params, map_file_all_fields)?;
-    todo!();
+    let values = rusqlite::params_from_iter(params.into_iter());
+    let res: Result<HashSet<FileRecord>, rusqlite::Error> = pst
+        .query_map(values, map_file_all_fields)?
+        .into_iter()
+        .collect();
+    res
 }
 
 pub fn create_file_preview(
@@ -283,7 +286,10 @@ fn convert_named_comp_attribute_to_where_clause(
 /// that where clause in a parameterized sql query
 /// * `attr` the attribute to generate parameters for
 /// * `counter` the counter used to keep track of how many parameters there are. This is _only_ used to make sure parameter names are unique, and is not updated by this function
-fn convert_aliased_attribute_to_where_clause(attr: AliasedAttribute, counter: usize) -> WhereClause {
+fn convert_aliased_attribute_to_where_clause(
+    attr: AliasedAttribute,
+    counter: usize,
+) -> WhereClause {
     let field_name = match attr.field {
         AliasedComparisonTypes::FileSize => "fileSize",
     };

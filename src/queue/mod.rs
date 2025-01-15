@@ -20,7 +20,7 @@ struct RabbitProvider {
 /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
 ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
 ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 pub fn file_preview_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
@@ -108,7 +108,7 @@ where
 /// failing to publish a message will not return an error, but will log the
 /// reason for failure. This is because rabbit is used to offload smaller tasks
 /// that aren't strictly necessary for the operation of the file server.
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 pub fn publish_message(queue_name: &str, message: &String) {
     use std::backtrace::Backtrace;
 
@@ -137,7 +137,7 @@ pub fn publish_message(queue_name: &str, message: &String) {
 }
 
 /// should only be called if RabbitConfig.enabled = true
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 impl RabbitProvider {
     fn init() -> Self {
         use lapin::options::QueueDeclareOptions;
@@ -174,7 +174,7 @@ impl RabbitProvider {
     }
 }
 
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
     once_cell::sync::Lazy::new(|| {
         let config = FILE_SERVER_CONFIG.clone();
@@ -187,7 +187,7 @@ static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
 
 // ---------------------------- test implementations that don't start up rabbit
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
@@ -195,5 +195,5 @@ where
 {
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 pub fn publish_message(_: &str, _: &String) {}
