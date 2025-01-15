@@ -126,9 +126,16 @@ pub fn create_tag_files(name: &str, file_ids: Vec<u32>) {
     connection.close().unwrap();
 }
 
+/// fails a test. macro instead of a function so that the stack shows the line in the test instead of where this is declared
 #[cfg(test)]
-pub fn fail() {
-    panic!("unimplemented test");
+#[macro_export]
+macro_rules! fail {
+    () => {
+        panic!("unimplemented test")
+    };
+    ($msg:literal) => {
+        panic!("{}", stringify!($msg))
+    };
 }
 
 #[cfg(test)]

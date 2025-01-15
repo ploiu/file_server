@@ -6,9 +6,8 @@
 		"body": [
 			"#[test]",
 			"fn $1() {",
-			"use crate::test::fail;",
 			"\trefresh_db();",
-			"\tfail();",
+			"\tcrate::fail!();",
 			"\tcleanup();",
 			"}"
 		]
@@ -20,8 +19,7 @@
 		"body": [
 			"#[test]",
 			"fn $1() {",
-			"\tuse crate::test::fail;",
-			"\tfail();",
+			"\tcrate::fail!();",
 			"}",
 			""
 		]

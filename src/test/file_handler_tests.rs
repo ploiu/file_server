@@ -524,7 +524,7 @@ fn delete_file() {
     assert_eq!(res.status(), Status::NoContent);
     // make sure the file was removed from the disk and db
     if fs::read(format!("{}/{}", file_dir(), "test.txt")).is_ok() {
-        fail()
+        crate::fail!("file still exists even though it should have been removed!");
     };
     let get_res = client
         .get(uri!("/files/1"))
