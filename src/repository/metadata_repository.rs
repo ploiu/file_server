@@ -92,14 +92,34 @@ pub fn set_generated_previews_flag(con: &Connection) -> Result<(), rusqlite::Err
     Ok(())
 }
 
+pub fn get_generated_file_types_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
+    let mut check_flag_statement = con.prepare(include_str!(
+        "../assets/queries/metadata/get_preview_generated_flag.sql"
+    ))?;
+    let query_res: Result<(), rusqlite::Error> = check_flag_statement.query_row([], |_| Ok(()));
+    match query_res {
+        Ok(()) => Ok(true),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn set_generated_file_types_flag(con: &Connection) -> Result<(), rusqlite::Error> {
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/set_file_types_generated_flag.sql"
+    ))?;
+    statement.execute([])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
 
+    use super::{check_auth, set_auth, update_auth};
     use crate::guard::HeaderAuth;
     use crate::model::request::BodyAuth;
     use crate::model::service::metadata::CheckAuthResult;
-    use crate::repository::metadata_repository::{check_auth, set_auth, update_auth};
     use crate::repository::open_connection;
     use crate::test::{cleanup, refresh_db};
 

@@ -1,4 +1,4 @@
-use std::backtrace::Backtrace;
+use std::backtrace::{self, Backtrace};
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -437,7 +437,7 @@ pub fn generate_all_previews() {
         return;
     }
     log::info!("Starting to generate previews for existing files...");
-    let con: Connection = open_connection();
+    let con = open_connection();
     let flag_res = metadata_repository::get_generated_previews_flag(&con);
     if Ok(false) == flag_res {
         let file_ids = match file_repository::get_all_file_ids(&con) {
@@ -473,6 +473,24 @@ pub fn generate_all_previews() {
         return;
     } else {
         log::info!("Not generating file previews because the db flag is already set.")
+    }
+}
+
+pub fn generate_all_file_types() {
+    log::info!("Starting to generate file types for all existing files...");
+    let con = open_connection();
+    let flag = metadata_repository::get_generated_file_types_flag(&con);
+    if let Err(e) = flag {
+        con.close().unwrap();
+        log::error!(
+            "Failed to check database: {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        return;
+    }
+    let flag = flag.unwrap();
+    if !flag {
+        file_repository::g
     }
 }
 

@@ -170,6 +170,10 @@ pub fn create_file_preview(
     Ok(())
 }
 
+pub fn get_all_files(con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
+    todo!("get all files, determine file types, dynamically-generated update statements in a loop")
+}
+
 pub fn get_file_preview(file_id: u32, con: &Connection) -> Result<Vec<u8>, rusqlite::Error> {
     let mut pst = con.prepare(&format!(
         include_str!("../assets/queries/file/get_file_preview.sql"),
