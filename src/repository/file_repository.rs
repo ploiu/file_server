@@ -207,7 +207,7 @@ pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::
     let size: i64 = row.get(2)?;
     let create_date: NaiveDateTime = row.get(3)?;
     let file_type: String = row.get(4)?;
-    let file_type: FileTypes = file_type.into();
+    let file_type: FileTypes = FileTypes::from(&file_type as &str);
     let parent_id = row.get(5)?;
     Ok(FileRecord {
         id,

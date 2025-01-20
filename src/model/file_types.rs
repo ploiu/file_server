@@ -25,9 +25,8 @@ pub enum FileTypes {
     Unknown,
 }
 
-impl From<String> for FileTypes {
-    fn from(value: String) -> Self {
-        let value = value.as_str();
+impl From<&str> for FileTypes {
+    fn from(value: &str) -> Self {
         match value.to_ascii_lowercase().as_str() {
             "application" => Self::Application,
             "archive" => Self::Archive,

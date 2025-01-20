@@ -312,7 +312,8 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
 
 /// parses an attribute search for a [NamedComparisonAttribute]
 fn parse_file_type(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
-    if FileTypes::from(value.to_string()) != FileTypes::Unknown {
+    // reason "unknown" is checked here is because I don't want both a `try_from` and a `from` for FileTypes
+    if value.to_ascii_lowercase() != "unknown" && FileTypes::from(value) != FileTypes::Unknown {
         if operator != EqualityOperator::Eq && operator != EqualityOperator::Neq {
             Err(ParseError::BadEqualityOperator(format!(
                 "{operator} is not a valid equality operator for fileType"
@@ -439,15 +440,24 @@ mod parse_file_size_tests {
 
 #[cfg(test)]
 mod parse_file_type {
+    use super::*;
 
     #[test]
     fn accepts_eq_or_neq() {
-        crate::fail!();
+        assert!(parse_file_type(EqualityOperator::Eq, "image").is_ok());
+        assert!(parse_file_type(EqualityOperator::Neq, "image").is_ok());
     }
 
     #[test]
     fn rejects_lt_or_gt() {
-        crate::fail!();
+        assert_eq!(
+            Err(ParseError::BadEqualityOperator("".to_string())),
+            parse_file_type(EqualityOperator::Lt, "image")
+        );
+        assert_eq!(
+            Err(ParseError::BadEqualityOperator("".to_string())),
+            parse_file_type(EqualityOperator::Gt, "image")
+        );
     }
 }
 
