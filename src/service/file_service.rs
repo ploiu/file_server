@@ -431,69 +431,6 @@ pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     result
 }
 
-/// checks the database and generates previews for all files if the database doesn't have the flag `generated_previews` in the metadata table
-pub fn generate_all_previews() {
-    if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
-        return;
-    }
-    log::info!("Starting to generate previews for existing files...");
-    let con = open_connection();
-    let flag_res = metadata_repository::get_generated_previews_flag(&con);
-    if Ok(false) == flag_res {
-        let file_ids = match file_repository::get_all_file_ids(&con) {
-            Ok(ids) => ids,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to retrieve all file IDs in the database. Error is {e:?}\n{}",
-                    Backtrace::force_capture()
-                );
-                return;
-            }
-        };
-        for id in file_ids {
-            queue::publish_message("icon_gen", &id.to_string());
-        }
-        let flag_set_result = metadata_repository::set_generated_previews_flag(&con);
-        con.close().unwrap();
-        if let Err(e) = flag_set_result {
-            log::error!(
-                "Failed to set preview flag in database. Exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-        } else {
-            log::info!("Successfully pushed file IDs to queue")
-        }
-    } else if let Err(e) = flag_res {
-        log::error!(
-            "Failed to get preview flag from database. Error is {e:?}\n{}",
-            Backtrace::force_capture()
-        );
-        con.close().unwrap();
-        return;
-    } else {
-        log::info!("Not generating file previews because the db flag is already set.")
-    }
-}
-
-pub fn generate_all_file_types() {
-    log::info!("Starting to generate file types for all existing files...");
-    let con = open_connection();
-    let flag = metadata_repository::get_generated_file_types_flag(&con);
-    if let Err(e) = flag {
-        con.close().unwrap();
-        log::error!(
-            "Failed to check database: {e:?}\n{}",
-            Backtrace::force_capture()
-        );
-        return;
-    }
-    let flag = flag.unwrap();
-    if !flag {
-        file_repository::g
-    }
-}
-
 /// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
 pub fn determine_file_type(file_name: &str) -> FileTypes {
     let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
@@ -551,10 +488,7 @@ async fn persist_save_file_to_folder(
 async fn persist_save_file(
     file_input: &mut CreateFileRequest<'_>,
 ) -> Result<FileRecord, CreateFileError> {
-    let file_name = determine_file_name(
-        &String::from(file_input.file.name().unwrap()),
-        &file_input.extension,
-    );
+    let file_name = determine_file_name(file_input.file.name().unwrap(), &file_input.extension);
     let file_name = format!("{}/{}", &file_dir(), file_name);
     match file_input.file.persist_to(&file_name).await {
         Ok(()) => {
@@ -613,7 +547,7 @@ fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderErr
 /// checks the db to see if we have a record of the passed file
 fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
-    file_name: &String,
+    file_name: &str,
 ) -> Result<(), CreateFileError> {
     log::warn!("{file_name}{:?}", &file_input.extension);
     let full_file_name = determine_file_name(file_name, &file_input.extension);
@@ -647,7 +581,7 @@ fn check_file_in_dir(
 /// let file_name = determine_file_name(&root_name, &extension);
 /// assert_eq!(file_name, String::from("test.txt"));
 /// ```
-fn determine_file_name(root_name: &String, extension: &Option<String>) -> String {
+fn determine_file_name(root_name: &str, extension: &Option<String>) -> String {
     if let Some(ext) = extension {
         format!("{}.{}", root_name, ext)
     } else {

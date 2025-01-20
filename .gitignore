@@ -13,3 +13,4 @@ FileServer.toml
 dumped.sql
 # failed test folders and files stick around for debugging, and have `::` in them because of how threads are named in rust
 *::*
+*.bak

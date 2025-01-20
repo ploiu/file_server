@@ -6,12 +6,12 @@ use crate::model::repository;
 
 /// creates a new tag in the database. This does not check if the tag already exists,
 /// so the caller must check that themselves
-pub fn create_tag(title: &String, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
+pub fn create_tag(title: &str, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/create_tag.sql"))?;
     let id = pst.insert(rusqlite::params![title])? as u32;
     Ok(repository::Tag {
         id,
-        title: title.clone(),
+        title: title.to_string(),
     })
 }
 
@@ -19,7 +19,7 @@ pub fn create_tag(title: &String, con: &Connection) -> Result<repository::Tag, r
 ///
 /// if `None` is returned, that means there was no match
 pub fn get_tag_by_title(
-    title: &String,
+    title: &str,
     con: &Connection,
 ) -> Result<Option<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_title.sql"))?;

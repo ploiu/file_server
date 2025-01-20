@@ -76,7 +76,7 @@ pub async fn generate_preview(message_data: String) -> bool {
 /// # Params
 ///
 /// * [image_path] the full file path to the image, relative to where this program is running
-fn resize_image(image_path: &String) -> Result<Vec<u8>, PreviewError> {
+fn resize_image(image_path: &str) -> Result<Vec<u8>, PreviewError> {
     let img = match ImageReader::open(image_path) {
         Ok(i) => i,
         Err(e) => {

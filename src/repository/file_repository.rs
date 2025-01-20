@@ -109,12 +109,8 @@ pub fn update_file(record: &FileRecord, con: &Connection) -> Result<(), rusqlite
 pub fn search_files(criteria: &str, con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
     let criteria = format!("%{}%", criteria);
     let mut pst = con.prepare(include_str!("../assets/queries/file/search_files.sql"))?;
-    let mut results: Vec<FileRecord> = Vec::new();
     let rows = pst.query_map([&criteria], map_file_all_fields)?;
-    for file in rows.into_iter() {
-        results.push(file?);
-    }
-    Ok(results)
+    rows.into_iter().collect()
 }
 
 pub fn search_files_by_tags(
@@ -133,12 +129,8 @@ pub fn search_files_by_tags(
         .replace("?1", joined_tags.as_str())
         .replace("?2", tags.len().to_string().as_str());
     let mut pst = con.prepare(replaced_string.as_str())?;
-    let mut files: HashSet<FileRecord> = HashSet::new();
     let res = pst.query_map([], map_file_all_fields)?;
-    for file in res {
-        files.insert(file?);
-    }
-    Ok(files)
+    res.into_iter().collect()
 }
 
 pub fn search_files_by_attributes(
@@ -151,11 +143,8 @@ pub fn search_files_by_attributes(
         .map(|(pname, pvalue)| (pname.as_str(), pvalue as &dyn ToSql))
         .collect();
     let mut pst = con.prepare(&where_clause)?;
-    let res: Result<HashSet<FileRecord>, rusqlite::Error> = pst
-        .query_map(&params[..], map_file_all_fields)?
-        .into_iter()
-        .collect();
-    res
+    let res = pst.query_map(&params[..], map_file_all_fields)?;
+    res.into_iter().collect()
 }
 
 pub fn create_file_preview(
@@ -170,8 +159,11 @@ pub fn create_file_preview(
     Ok(())
 }
 
+/// retrieves all [FileRecord]s from the database
 pub fn get_all_files(con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
-    todo!("get all files, determine file types, dynamically-generated update statements in a loop")
+    let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_files.sql"))?;
+    let rows = pst.query_map([], map_file_all_fields)?;
+    rows.into_iter().collect()
 }
 
 pub fn get_file_preview(file_id: u32, con: &Connection) -> Result<Vec<u8>, rusqlite::Error> {
@@ -193,12 +185,8 @@ pub fn delete_file_preview(file_id: u32, con: &Connection) -> Result<(), rusqlit
 
 pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_file_ids.sql"))?;
-    let mut ids: Vec<u32> = vec![];
     let res = pst.query_map([], |row| row.get(0))?;
-    for row in res {
-        ids.push(row?);
-    }
-    Ok(ids)
+    res.into_iter().collect()
 }
 
 pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {

@@ -109,7 +109,7 @@ where
 /// reason for failure. This is because rabbit is used to offload smaller tasks
 /// that aren't strictly necessary for the operation of the file server.
 #[cfg(not(test))]
-pub fn publish_message(queue_name: &str, message: &String) {
+pub fn publish_message(queue_name: &str, message: &str) {
     use std::backtrace::Backtrace;
 
     use lapin::{options::BasicPublishOptions, BasicProperties};
@@ -196,4 +196,4 @@ where
 }
 
 #[cfg(test)]
-pub fn publish_message(_: &str, _: &String) {}
+pub fn publish_message(_: &str, _: &str) {}

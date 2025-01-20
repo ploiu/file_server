@@ -94,7 +94,7 @@ pub fn set_generated_previews_flag(con: &Connection) -> Result<(), rusqlite::Err
 
 pub fn get_generated_file_types_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
     let mut check_flag_statement = con.prepare(include_str!(
-        "../assets/queries/metadata/get_preview_generated_flag.sql"
+        "../assets/queries/metadata/get_file_types_generated_flag.sql"
     ))?;
     let query_res: Result<(), rusqlite::Error> = check_flag_statement.query_row([], |_| Ok(()));
     match query_res {
