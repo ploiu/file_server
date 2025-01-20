@@ -14,7 +14,7 @@ use crate::repository::{file_repository, folder_repository, open_connection, tag
 use crate::service::folder_service;
 
 pub fn search_files(
-    search_title: String,
+    search_title: &str,
     search_tags: Vec<String>,
     search_attributes: AttributeSearch,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
@@ -37,7 +37,9 @@ pub fn search_files(
             )
         }));
     }
-
+    if !search_attributes.is_empty() {
+        search_results.push(search_files_by_attributes(search_attributes, &con));
+    }
     // TODO need to modularize this method because will be adding in searching on metadata. My idea is to perform each type of search
     // individually (tags, then metadata, then text), retain only the ones that intersect between all 3,
     // but pulling tags for search by tags is NECESSARY, so we can't pull tags at the end.
@@ -105,21 +107,19 @@ pub fn search_files(
 }
 
 fn search_files_by_title(
-    search_title: String,
+    search_title: &str,
     con: &Connection,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     // search text isn't empty
-    let searched = match file_repository::search_files(search_title, &con) {
-        Ok(f) => f,
-        Err(e) => {
+    file_repository::search_files(search_title, &con)
+        .map(|it| it.into_iter().map(FileApi::from).collect())
+        .map_err(|e| {
             log::error!(
                 "Failed to search files by title. Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            return Err(SearchFileError::DbError);
-        }
-    };
-    Ok(searched.into_iter().map(|it| it.into()).collect())
+            SearchFileError::DbError
+        })
 }
 
 fn search_files_by_tags(
@@ -327,6 +327,21 @@ fn get_all_non_reduced_child_files(
     Ok(final_files)
 }
 
+fn search_files_by_attributes(
+    attributes: AttributeSearch,
+    con: &Connection,
+) -> Result<HashSet<FileApi>, SearchFileError> {
+    file_repository::search_files_by_attributes(attributes, con)
+        .map(|it| it.into_iter().map(FileApi::from).collect())
+        .map_err(|it| {
+            log::error!(
+                "failed to search file attributes; {it:?}\n{}",
+                Backtrace::force_capture()
+            );
+            SearchFileError::DbError
+        })
+}
+
 /// Checks if the passed `potential_ancestor_id` is a parent/grandparent/great grandparent/etc of the passed `file`
 /// If the file has no parent id or `potential_ancestor_id` == `file.folder_id`, no database call is made. Otherwise, the database is
 /// checked to see if `potential_ancestor_id` is an ancestor.
@@ -363,11 +378,16 @@ fn is_ancestor_of(
 mod search_files_tests {
     use std::collections::HashSet;
 
-    use chrono::NaiveDateTime;
+    use chrono::{NaiveDate, NaiveDateTime, NaiveTime};
 
     use super::search_files;
     use crate::model::api::FileApi;
     use crate::model::file_types::FileTypes;
+    use crate::model::repository::FileRecord;
+    use crate::model::request::attributes::{
+        AttributeSearch, AttributeTypes, EqualityOperator, NamedAttributes,
+        NamedComparisonAttribute,
+    };
     use crate::model::response::TagApi;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
@@ -379,7 +399,7 @@ mod search_files_tests {
         refresh_db();
         create_file_db_entry("test", None);
         create_file_db_entry("test2", None);
-        let res = search_files("test2".to_string(), vec![], vec![].try_into().unwrap())
+        let res = search_files("test2", vec![], vec![].try_into().unwrap())
             .unwrap()
             .into_iter()
             .collect::<Vec<FileApi>>();
@@ -402,7 +422,7 @@ mod search_files_tests {
         create_tag_file("tag1", 1);
         create_tag_files("tag", vec![1, 2]);
         let res = search_files(
-            "".to_string(),
+            "",
             vec!["tag1".to_string(), "tag".to_string()],
             vec![].try_into().unwrap(),
         )
@@ -438,14 +458,10 @@ mod search_files_tests {
         create_file_db_entry("first", None);
         create_file_db_entry("second", None);
         create_tag_files("tag", vec![1, 2]);
-        let res = search_files(
-            "first".to_string(),
-            vec!["tag".to_string()],
-            vec![].try_into().unwrap(),
-        )
-        .unwrap()
-        .into_iter()
-        .collect::<Vec<FileApi>>();
+        let res = search_files("first", vec!["tag".to_string()], vec![].try_into().unwrap())
+            .unwrap()
+            .into_iter()
+            .collect::<Vec<FileApi>>();
         assert_eq!(1, res.len());
         let res = &res[0];
         assert_eq!(res.id, 1);
@@ -474,12 +490,7 @@ mod search_files_tests {
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
                                       // tag1 should retrieve all files
-        let res = search_files(
-            "".to_string(),
-            vec!["tag1".to_string()],
-            vec![].try_into().unwrap(),
-        )
-        .unwrap();
+        let res = search_files("", vec!["tag1".to_string()], vec![].try_into().unwrap()).unwrap();
         // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
         let res: Vec<FileApi> = res.iter().cloned().collect();
         assert_eq!(2, res.len());
@@ -501,12 +512,7 @@ mod search_files_tests {
             create_date: None,
             file_type: Some(FileTypes::Unknown)
         }));
-        let res = search_files(
-            "".to_string(),
-            vec!["tag2".to_string()],
-            vec![].try_into().unwrap(),
-        )
-        .unwrap();
+        let res = search_files("", vec!["tag2".to_string()], vec![].try_into().unwrap()).unwrap();
         let res: Vec<FileApi> = res.iter().cloned().collect();
         assert!(res.contains(&FileApi {
             id: 2,
@@ -529,7 +535,7 @@ mod search_files_tests {
         create_tag_folders("tag1", vec![1]);
         create_tag_file("tag2", 1);
         let res: HashSet<String> = search_files(
-            String::new(),
+            "",
             vec!["tag1".to_string(), "tag2".to_string()],
             vec![].try_into().unwrap(),
         )
@@ -574,13 +580,126 @@ mod search_files_tests {
         }
         .save_to_db();
         let res = search_files(
-            String::new(),
+            "",
             vec!["top".to_string(), "file".to_string()],
             vec![].try_into().unwrap(),
         )
         .unwrap();
         let expected = HashSet::from_iter(vec![good_file].into_iter());
         assert_eq!(expected, res);
+        cleanup();
+    }
+
+    #[test]
+    fn search_attributes() {
+        refresh_db();
+        let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
+        let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
+        let good = FileRecord {
+            id: None,
+            name: "test".to_string(),
+            parent_id: None,
+            create_date: NaiveDateTime::new(day, time),
+            size: 9087239875,
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+        FileRecord {
+            id: None,
+            name: "bad".to_string(),
+            parent_id: None,
+            create_date: crate::test::now(),
+            size: 0,
+            file_type: FileTypes::Application,
+        }
+        .save_to_db();
+        let attributes = AttributeSearch {
+            attributes: vec![AttributeTypes::Named(NamedComparisonAttribute {
+                field: NamedAttributes::FileType,
+                value: "unknown".to_string(),
+                operator: EqualityOperator::Eq,
+            })],
+        };
+        let expected: HashSet<FileApi> = [good].into_iter().map(FileApi::from).collect();
+        let actual = search_files("", vec![], attributes);
+        assert_eq!(Ok(expected), actual);
+        cleanup();
+    }
+
+    #[test]
+    fn search_title_and_attributes() {
+        refresh_db();
+        let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
+        let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
+        let good = FileRecord {
+            id: None,
+            name: "good".to_string(),
+            parent_id: None,
+            create_date: NaiveDateTime::new(day, time),
+            size: 9087239875,
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+        FileRecord {
+            id: None,
+            name: "bad".to_string(),
+            parent_id: None,
+            create_date: crate::test::now(),
+            size: 0,
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+        let attributes = AttributeSearch {
+            attributes: vec![AttributeTypes::Named(NamedComparisonAttribute {
+                field: NamedAttributes::FileType,
+                value: "unknown".to_string(),
+                operator: EqualityOperator::Eq,
+            })],
+        };
+        let expected: HashSet<FileApi> = [good].into_iter().map(FileApi::from).collect();
+        let actual = search_files("good", vec![], attributes);
+        assert_eq!(Ok(expected), actual);
+        cleanup();
+    }
+
+    #[test]
+    fn search_tags_and_attributes() {
+        refresh_db();
+        let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
+        let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
+        FileRecord {
+            id: None,
+            name: "good".to_string(),
+            parent_id: None,
+            create_date: NaiveDateTime::new(day, time),
+            size: 9087239875,
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+        create_tag_file("good", 1);
+        FileRecord {
+            id: None,
+            name: "bad".to_string(),
+            parent_id: None,
+            create_date: crate::test::now(),
+            size: 0,
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+        create_tag_file("bad", 2);
+        let attributes = AttributeSearch {
+            attributes: vec![AttributeTypes::Named(NamedComparisonAttribute {
+                field: NamedAttributes::FileType,
+                value: "unknown".to_string(),
+                operator: EqualityOperator::Eq,
+            })],
+        };
+        let actual: Vec<FileApi> = search_files("good", vec![], attributes)
+            .unwrap()
+            .into_iter()
+            .collect();
+        assert_eq!(1, actual[0].id);
+        assert_eq!(1, actual.len());
         cleanup();
     }
 }
