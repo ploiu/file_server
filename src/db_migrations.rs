@@ -134,7 +134,6 @@ pub fn generate_all_file_types_and_sizes() {
                 res.unwrap_err(),
                 Backtrace::force_capture()
             );
-            return;
         }
     } else {
         log::info!("Not generating file types and sizes because flag is already set...");

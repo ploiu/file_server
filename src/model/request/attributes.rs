@@ -44,13 +44,13 @@ impl Display for EqualityOperator {
 }
 
 // for use in converting an equality operator to sql
-impl Into<&str> for EqualityOperator {
-    fn into(self) -> &'static str {
-        match self {
-            Self::Eq => "=",
-            Self::Lt => "<",
-            Self::Gt => ">",
-            Self::Neq => "<>",
+impl From<EqualityOperator> for &str {
+    fn from(val: EqualityOperator) -> Self {
+        match val {
+            EqualityOperator::Eq => "=",
+            EqualityOperator::Lt => "<",
+            EqualityOperator::Gt => ">",
+            EqualityOperator::Neq => "<>",
         }
     }
 }
@@ -91,16 +91,16 @@ impl TryFrom<&String> for FileSizes {
     }
 }
 
-impl ToString for FileSizes {
-    fn to_string(&self) -> String {
-        String::from(match self {
-            Self::Tiny => "tiny",
-            Self::Small => "small",
-            Self::Medium => "medium",
-            Self::Large => "large",
+impl Display for FileSizes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Tiny => write!(f, "tiny"),
+            Self::Small => write!(f, "small"),
+            Self::Medium => write!(f, "medium"),
+            Self::Large => write!(f, "large"),
             // normally I'd like to use "extra_large", but these are being parsed from query parameters in camel case. to prevent confusion, I'm opting to keep parity between toString / parseString
-            Self::ExtraLarge => "extraLarge",
-        })
+            Self::ExtraLarge => write!(f, "extraLarge"),
+        }
     }
 }
 
@@ -160,7 +160,7 @@ pub struct AliasedAttribute {
 ///
 /// There are multiple attribute search types.
 /// - size and date are `full comparison attributes`, where we can use every
-/// instance of the [EqualityOperator] to search on them
+///     instance of the [EqualityOperator] to search on them
 /// - file type is a `named attributed`, where the list of allowed search values are determined by a specific list.
 /// - size can also be an `aliased attribute`, where specific values have titles (see [FileSizes])
 #[derive(Debug)]
@@ -208,13 +208,13 @@ pub enum ParseError {
 // we don't care about the error message when dealing with equality for error messages
 impl PartialEq<ParseError> for ParseError {
     fn eq(&self, other: &ParseError) -> bool {
-        match (self, other) {
-            (Self::BadEqualityOperator(_), Self::BadEqualityOperator(_)) => true,
-            (Self::MissingValue(_), Self::MissingValue(_)) => true,
-            (Self::BadValue(_), Self::BadValue(_)) => true,
-            (Self::InvalidSearch(_), Self::InvalidSearch(_)) => true,
-            _ => false,
-        }
+        matches!(
+            (self, other),
+            (Self::BadEqualityOperator(_), Self::BadEqualityOperator(_))
+                | (Self::MissingValue(_), Self::MissingValue(_))
+                | (Self::BadValue(_), Self::BadValue(_))
+                | (Self::InvalidSearch(_), Self::InvalidSearch(_))
+        )
     }
 }
 
@@ -230,7 +230,7 @@ fn parse_operator(attr_string: &str) -> Result<EqualityOperator, ParseError> {
 }
 
 fn validate_format(attr_string: &str) -> Result<(), ParseError> {
-    return if !attr_string.contains('.') {
+    if !attr_string.contains('.') {
         Err(ParseError::BadEqualityOperator(format!(
             "invalid attribute search {attr_string}: must contain . to separate field from op"
         )))
@@ -240,7 +240,7 @@ fn validate_format(attr_string: &str) -> Result<(), ParseError> {
         )))
     } else {
         Ok(())
-    };
+    }
 }
 
 /// parses and validates the passed `attr_string` into a valid [AttributeTypes] instance
@@ -256,11 +256,11 @@ fn parse_attribute(attr_string: String) -> Result<AttributeTypes, ParseError> {
     let value = parse_value(attr_string);
 
     // Since size can be shared between 2 different search types, we might have to do some stupid/ugly stuff. I want a clean way though...
-    if field_name == "filesize".to_string() {
+    if field_name == *"filesize" {
         parse_file_size(op, value)
-    } else if field_name == "datecreated".to_string() {
+    } else if field_name == *"datecreated" {
         parse_date_created(op, value)
-    } else if field_name == "filetype".to_string() {
+    } else if field_name == *"filetype" {
         parse_file_type(op, value)
     } else {
         Err(ParseError::InvalidSearch(format!(
@@ -334,14 +334,14 @@ fn parse_file_type(operator: EqualityOperator, value: &str) -> Result<AttributeT
 
 /// returns the field name part of the passed `attr_string`.
 /// This does not do any validation, and assumes that the str has been validated beforehand
-fn parse_field<'a>(attr_string: &'a str) -> &'a str {
+fn parse_field(attr_string: &str) -> &str {
     let period = attr_string.find('.').unwrap();
     &attr_string[0..period]
 }
 
 /// returns the value part of the passed `attr_string`.
 /// This does not do any validation, and assumes that the str ahs been validated beforehand
-fn parse_value<'a>(attr_string: &'a str) -> &'a str {
+fn parse_value(attr_string: &str) -> &str {
     let semicolon = attr_string.find(';').unwrap();
     &attr_string[semicolon + 1..]
 }

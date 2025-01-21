@@ -26,7 +26,7 @@ use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
 
 /// mapping of file lowercase file extension => file type
-const FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
+static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
     use FileTypes::*;
     HashMap::from([
         ("msi", Application),

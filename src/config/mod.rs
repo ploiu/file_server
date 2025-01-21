@@ -56,13 +56,13 @@ pub fn parse_config() -> FileServerConfig {
     }
     let settings = builder.unwrap();
     let deserialized = settings.try_deserialize();
-    return match deserialized {
+    match deserialized {
         Ok(conf) => conf,
         Err(e) => {
             log::warn!("Failed to read config file: {e:?}");
-            return FS_CONFIG_DEFAULT.clone();
+            FS_CONFIG_DEFAULT.clone()
         }
-    };
+    }
 }
 
 /// global variable for config, that way it doesn't need to be repeatedly parsed

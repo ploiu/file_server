@@ -56,12 +56,12 @@ pub fn search_files(
     }
     let condensed: Vec<HashSet<FileApi>> = res.into_iter().flatten().collect();
     // compare all the files and only include the ones in all the returned lists
-    let all_files: HashSet<FileApi> = condensed.iter().cloned().flatten().collect();
+    let all_files: HashSet<FileApi> = condensed.iter().flatten().cloned().collect();
     let mut final_set: HashSet<FileApi> = HashSet::new();
     for file in all_files {
         let mut all_match = true;
         for file_set in condensed.iter() {
-            if !file_set.iter().find(|f| f.id == file.id).is_some() {
+            if !file_set.iter().any(|f| f.id == file.id) {
                 all_match = false;
                 break;
             }
@@ -111,7 +111,7 @@ fn search_files_by_title(
     con: &Connection,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
     // search text isn't empty
-    file_repository::search_files(search_title, &con)
+    file_repository::search_files(search_title, con)
         .map(|it| it.into_iter().map(FileApi::from).collect())
         .map_err(|e| {
             log::error!(
@@ -352,7 +352,7 @@ fn is_ancestor_of(
     file: &FileApi,
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
-    return if let Some(direct_parent_id) = file.folder_id {
+    if let Some(direct_parent_id) = file.folder_id {
         // avoid having to make a db call if the potential ancestor is a direct parent
         if direct_parent_id == potential_ancestor_id {
             Ok(true)
@@ -370,8 +370,8 @@ fn is_ancestor_of(
         }
     } else {
         // file is at root, so no folder will ever be its parent unless the ancestor id is also root
-        return Ok(potential_ancestor_id == 0);
-    };
+        Ok(potential_ancestor_id == 0)
+    }
 }
 
 #[cfg(test)]
@@ -585,7 +585,7 @@ mod search_files_tests {
             vec![].try_into().unwrap(),
         )
         .unwrap();
-        let expected = HashSet::from_iter(vec![good_file].into_iter());
+        let expected = HashSet::from_iter(vec![good_file]);
         assert_eq!(expected, res);
         cleanup();
     }

@@ -9,7 +9,7 @@ use lapin::{Channel, Connection};
 
 struct RabbitProvider {
     /// the connection to the rabbit mq
-    connection: Connection,
+    _connection: Connection,
     /// the channel that we will be consuming messages from / publishing messages to
     channel: Channel,
 }
@@ -168,7 +168,7 @@ impl RabbitProvider {
             (rabbit_connection, channel)
         });
         RabbitProvider {
-            connection,
+            _connection: connection,
             channel,
         }
     }

@@ -605,8 +605,8 @@ fn does_file_exist(
     let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
     let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
         .iter()
-        .cloned()
-        .find(|file| file.name == name.to_lowercase());
+        .find(|file| file.name == name.to_lowercase())
+        .cloned();
     Ok(matching_file.is_some())
 }
 

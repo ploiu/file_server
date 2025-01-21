@@ -191,7 +191,7 @@ mod create_tag_tests {
     fn create_tag() {
         refresh_db();
         let con = open_connection();
-        let tag = tag_repository::create_tag(&"test".to_string(), &con).unwrap();
+        let tag = tag_repository::create_tag("test", &con).unwrap();
         con.close().unwrap();
         assert_eq!(
             Tag {
@@ -215,8 +215,8 @@ mod get_tag_by_title_tests {
     fn get_tag_by_title_found() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        let found = get_tag_by_title(&"TeSt".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        let found = get_tag_by_title("TeSt", &con).unwrap();
         con.close().unwrap();
         assert_eq!(
             Some(Tag {
@@ -231,7 +231,7 @@ mod get_tag_by_title_tests {
     fn get_tag_by_title_not_found() {
         refresh_db();
         let con = open_connection();
-        let not_found = get_tag_by_title(&"test".to_string(), &con).unwrap();
+        let not_found = get_tag_by_title("test", &con).unwrap();
         con.close().unwrap();
         assert_eq!(None, not_found);
         cleanup();
@@ -249,7 +249,7 @@ mod get_tag_by_id_tests {
     fn get_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         let tag = get_tag(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(
@@ -274,7 +274,7 @@ mod update_tag_tests {
     fn update_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         update_tag(
             Tag {
                 id: 1,
@@ -306,7 +306,7 @@ mod delete_tag_tests {
     fn delete_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         delete_tag(1, &con).unwrap();
         let not_found = get_tag(1, &con);
         con.close().unwrap();
@@ -328,8 +328,8 @@ mod get_tag_on_file_tests {
     fn get_tags_on_file_returns_tags() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        create_tag(&"test2".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        create_tag("test2", &con).unwrap();
         create_file(
             &FileRecord {
                 id: None,
@@ -397,7 +397,7 @@ mod remove_tag_from_file_tests {
     fn remove_tag_from_file_works() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         create_file(
             &FileRecord {
                 id: None,
@@ -430,8 +430,8 @@ mod get_tag_on_folder_tests {
     fn get_tags_on_folder_returns_tags() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        create_tag(&"test2".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        create_tag("test2", &con).unwrap();
         create_folder(
             &Folder {
                 parent_id: None,
@@ -494,7 +494,7 @@ mod remove_tag_from_folder_tests {
     fn remove_tag_from_folder_works() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         create_folder(
             &Folder {
                 parent_id: None,

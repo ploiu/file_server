@@ -1,3 +1,5 @@
+use std::fmt::Display;
+
 use rusqlite::ToSql;
 use serde::{Deserialize, Serialize};
 
@@ -85,29 +87,29 @@ impl ToSql for FileTypes {
     }
 }
 
-impl ToString for FileTypes {
-    fn to_string(&self) -> String {
+impl Display for FileTypes {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Application => "application".to_string(),
-            Self::Archive => "archive".to_string(),
-            Self::Audio => "audio".to_string(),
-            Self::Cad => "cad".to_string(),
-            Self::Code => "code".to_string(),
-            Self::Configuration => "configuration".to_string(),
-            Self::Diagram => "diagram".to_string(),
-            Self::Document => "document".to_string(),
-            Self::Font => "font".to_string(),
-            Self::GameRom => "game_rom".to_string(),
-            Self::Image => "image".to_string(),
-            Self::Material => "material".to_string(),
-            Self::Model => "model".to_string(),
-            Self::Object => "object".to_string(),
-            Self::Presentation => "presentation".to_string(),
-            Self::SaveFile => "save_file".to_string(),
-            Self::Spreadsheet => "spreadsheet".to_string(),
-            Self::Text => "text".to_string(),
-            Self::Video => "video".to_string(),
-            Self::Unknown => "unknown".to_string(),
+            Self::Application => write!(f, "application"),
+            Self::Archive => write!(f, "archive"),
+            Self::Audio => write!(f, "audio"),
+            Self::Cad => write!(f, "cad"),
+            Self::Code => write!(f, "code"),
+            Self::Configuration => write!(f, "configuration"),
+            Self::Diagram => write!(f, "diagram"),
+            Self::Document => write!(f, "document"),
+            Self::Font => write!(f, "font"),
+            Self::GameRom => write!(f, "game_rom"),
+            Self::Image => write!(f, "image"),
+            Self::Material => write!(f, "material"),
+            Self::Model => write!(f, "model"),
+            Self::Object => write!(f, "object"),
+            Self::Presentation => write!(f, "presentation"),
+            Self::SaveFile => write!(f, "save_file"),
+            Self::Spreadsheet => write!(f, "spreadsheet"),
+            Self::Text => write!(f, "text"),
+            Self::Video => write!(f, "video"),
+            Self::Unknown => write!(f, "unknown"),
         }
     }
 }

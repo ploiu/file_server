@@ -226,8 +226,7 @@ from
 where ";
     let mut where_clause = base_sql.to_string();
     let mut params: Vec<(String, String)> = Vec::with_capacity(attributes.len());
-    let mut arg_count: usize = 0;
-    for attr in attributes.clone() {
+    for (arg_count, attr) in attributes.clone().into_iter().enumerate() {
         let (sql, param_data) = convert_attribute_to_where_clause(attr, arg_count);
         if let Some(p_data) = param_data {
             params.push(p_data);
@@ -236,7 +235,6 @@ where ";
         if arg_count < attributes.len() - 1 {
             where_clause += " AND ";
         }
-        arg_count += 1;
     }
     (where_clause, params)
 }
@@ -354,8 +352,8 @@ fn determine_file_size_range(size: FileSizes) -> (u64, u64) {
         FileSizes::Tiny => (0, 500 * KIB),
         FileSizes::Small => (500 * KIB, 10 * MIB),
         FileSizes::Medium => (10 * MIB, 100 * MIB),
-        FileSizes::Large => (100 * MIB, 1 * GIB),
-        FileSizes::ExtraLarge => (1 * GIB, u64::MAX),
+        FileSizes::Large => (100 * MIB, GIB),
+        FileSizes::ExtraLarge => (GIB, u64::MAX),
     }
 }
 
@@ -732,7 +730,7 @@ mod search_files_by_attributes {
                 parent_id: None,
                 create_date: date_time,
                 // `ExtraLarge` size
-                size: 1 * 1024 * 1024 * 1024,
+                size: 1024 * 1024 * 1024,
                 file_type: FileTypes::Text,
             }
             .save_to_db(),
