@@ -1,4 +1,4 @@
-use std::backtrace::{self, Backtrace};
+use std::backtrace::Backtrace;
 use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::fs::File;
@@ -12,7 +12,6 @@ use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
-use crate::config::FILE_SERVER_CONFIG;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
@@ -22,7 +21,7 @@ use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::{file_repository, folder_repository, metadata_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
 
@@ -336,11 +335,9 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     } else {
         file.folder_id
     };
-    // on migration from v3 to v4, if the file being updated hasn't had its type determined yet (or if rabbit is disabled), we need to ensure the type gets set still
-    if file.file_type.is_none() {
-        file.file_type = Some(determine_file_type(&file.name));
-    }
-    let converted_record: FileRecord = (&file).into();
+    // ensure file type gets updated if the name is changed
+    file.file_type = Some(determine_file_type(&file.name));
+    let converted_record = FileRecord::from(&file);
     if let Err(e) = file_repository::update_file(&converted_record, &con) {
         con.close().unwrap();
         log::error!(
@@ -617,6 +614,7 @@ mod update_file_tests {
     use crate::model::api::FileApi;
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
+    
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
@@ -936,6 +934,26 @@ mod update_file_tests {
             .collect();
         file_names.sort();
         assert_eq!(vec!["inner", "test_thing.txt", "thing.txt"], file_names);
+        cleanup();
+    }
+
+    #[test]
+    fn updates_file_type() {
+        refresh_db();
+        create_file_db_entry("test", None);
+        create_file_disk("test", "");
+        let file = FileApi {
+            id: 1,
+            folder_id: None,
+            name: "test.txt".to_string(),
+            tags: vec![],
+            size: None,
+            create_date: None,
+            file_type: Some(FileTypes::Text),
+        };
+        update_file(file).unwrap();
+        let retrieved = get_file_metadata(1);
+        assert_eq!(Some(FileTypes::Text), retrieved.unwrap().file_type);
         cleanup();
     }
 }

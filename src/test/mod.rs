@@ -43,12 +43,12 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
     let connection = open_connection();
     let file_id = file_repository::create_file(
         &FileRecord {
-            id: folder_id,
+            id: None,
             name: String::from(name),
-            parent_id: None,
+            parent_id: folder_id,
             size: 0,
             create_date: now(),
-            file_type: FileTypes::Unknown,
+            file_type: FileTypes::default(),
         },
         &connection,
     )

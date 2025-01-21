@@ -2,7 +2,6 @@ use std::backtrace::Backtrace;
 
 use crate::{
     config::FILE_SERVER_CONFIG,
-    model::repository::FileRecord,
     queue,
     repository::{file_repository, metadata_repository, open_connection},
     service::file_service,
