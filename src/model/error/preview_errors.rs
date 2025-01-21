@@ -1,10 +1,10 @@
 pub enum PreviewError {
     /// The image failed to be opened
-    FailedOpen,
+    Open,
     /// The image could not be decoded properly
-    FailedDecode,
+    Decode,
     /// The image could not be encoded properly
-    FailedEncode,
+    Encode,
     /// The image format could not be guessed
-    FailedGuessFormat,
+    GuessFormat,
 }

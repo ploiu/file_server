@@ -5,6 +5,7 @@ use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
 use rocket::serde::json::serde_json as serde;
 
+use crate::model::file_types::FileTypes;
 use crate::model::repository::{FileRecord, Folder};
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::folder_responses::FolderResponse;
@@ -688,7 +689,10 @@ fn update_folder_to_file_with_same_name_root() {
         FileRecord {
             id: Some(1),
             name: String::from("file"),
-            parent_id: None
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown
         }
     );
     let root_folders = folder_repository::get_child_folders(None, &con).unwrap();

@@ -71,7 +71,7 @@ pub enum UpdateFileResponse {
     GenericError(Json<BasicMessage>),
 }
 
-#[derive(Responder)]
+#[derive(Responder, Debug)]
 pub enum SearchFileResponse {
     #[response(status = 200)]
     Success(Json<Vec<FileApi>>),

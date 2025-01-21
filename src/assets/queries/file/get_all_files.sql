@@ -7,11 +7,10 @@ select
     ff.folderId
 from
     FileRecords f
-    left join folder_files ff on ff.fileId = f.id
-where
-    ff.folderId in (?1)
+    left join folder_files ff on f.id = ff.fileId
 group by
     f.id,
     f.name,
     f.fileSize,
-    f.dateCreated
+    f.dateCreated,
+    ff.folderId

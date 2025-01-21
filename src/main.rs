@@ -7,8 +7,8 @@ use std::{fs, time::Instant};
 
 use rocket::{Build, Rocket};
 
+use db_migrations::{generate_all_file_types_and_sizes, generate_all_previews};
 use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
-use service::file_service::generate_all_previews;
 use service::preview_service::generate_preview;
 
 use crate::handler::api_handler::update_password;
@@ -16,6 +16,7 @@ use crate::queue::file_preview_consumer;
 use crate::repository::initialize_db;
 
 mod config;
+mod db_migrations;
 mod guard;
 mod handler;
 mod model;
@@ -35,7 +36,7 @@ fn temp_dir() -> String {
     format!("./.{}_temp", thread_name)
 }
 
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 fn init_log() -> Result<(), fern::InitError> {
     // cargo fix keeps removing this if it's outside the function
     use std::time::SystemTime;
@@ -65,6 +66,7 @@ pub fn rocket() -> Rocket<Build> {
     init_log().unwrap();
     initialize_db().unwrap();
     generate_all_previews();
+    generate_all_file_types_and_sizes();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     // keep track of when the last request was made. This will let us wait for the server to be free before processing file previews

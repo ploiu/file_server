@@ -1,10 +1,21 @@
+use chrono::NaiveDateTime;
 use regex::Regex;
 use rocket::serde::{Deserialize, Serialize};
 
+use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::response::TagApi;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct FileMetadata {
+    pub size: u32,
+    pub date_created: u64,
+    pub file_type: FileTypes,
+}
+
+#[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
+#[cfg_attr(not(test), derive(PartialEq))]
 #[serde(crate = "rocket::serde")]
 pub struct FileApi {
     pub id: u32,
@@ -14,6 +25,12 @@ pub struct FileApi {
     /// this value may be unsafe, see [`FileApi::name`]
     pub name: String,
     pub tags: Vec<TagApi>,
+    // wrapped in option so api consumers don't have to send this field (these fields can't be written to after a file is uploaded)
+    pub size: Option<u64>,
+    #[serde(rename = "dateCreated", skip_serializing_if = "Option::is_none")]
+    pub date_created: Option<NaiveDateTime>,
+    #[serde(rename = "fileType", skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<FileTypes>,
 }
 
 impl FileApi {
@@ -40,13 +57,10 @@ impl FileApi {
         Some(replaced)
     }
 
-    pub fn from(file: FileRecord, tags: Vec<TagApi>) -> FileApi {
-        FileApi {
-            tags,
-            id: file.id.unwrap(),
-            folder_id: file.parent_id,
-            name: file.name,
-        }
+    pub fn from_with_tags(file: FileRecord, tags: Vec<TagApi>) -> Self {
+        let mut api: Self = file.into();
+        api.tags = tags;
+        api
     }
 
     #[cfg(test)]
@@ -56,6 +70,25 @@ impl FileApi {
             folder_id,
             name,
             tags: Vec::new(),
+            size: None,
+            date_created: None,
+            // TODO file_types
+            file_type: None,
+        }
+    }
+}
+
+impl From<FileRecord> for FileApi {
+    /// This does not handle adding in tags, that will need to be done separately
+    fn from(value: FileRecord) -> Self {
+        Self {
+            id: value.id.unwrap(),
+            folder_id: value.parent_id,
+            name: value.name,
+            tags: Vec::new(),
+            size: Some(value.size),
+            date_created: Some(value.create_date),
+            file_type: Some(value.file_type),
         }
     }
 }
@@ -74,7 +107,6 @@ mod update_file_request_tests {
         ];
         for name in invalid_names.iter() {
             let req = FileApi::new(1, None, name.to_string());
-            println!("Testing {}", name);
             assert_eq!(None, req.name());
         }
     }

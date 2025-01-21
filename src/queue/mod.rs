@@ -9,7 +9,7 @@ use lapin::{Channel, Connection};
 
 struct RabbitProvider {
     /// the connection to the rabbit mq
-    connection: Connection,
+    _connection: Connection,
     /// the channel that we will be consuming messages from / publishing messages to
     channel: Channel,
 }
@@ -20,7 +20,7 @@ struct RabbitProvider {
 /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
 ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
 ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 pub fn file_preview_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
@@ -108,8 +108,10 @@ where
 /// failing to publish a message will not return an error, but will log the
 /// reason for failure. This is because rabbit is used to offload smaller tasks
 /// that aren't strictly necessary for the operation of the file server.
-#[cfg(any(not(test), rust_analyzer))]
-pub fn publish_message(queue_name: &str, message: &String) {
+#[cfg(not(test))]
+pub fn publish_message(queue_name: &str, message: &str) {
+    use std::backtrace::Backtrace;
+
     use lapin::{options::BasicPublishOptions, BasicProperties};
 
     if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
@@ -128,14 +130,14 @@ pub fn publish_message(queue_name: &str, message: &String) {
     ));
     if let Err(e) = res {
         log::error!(
-            "Failed to publish message {message} to queue {queue_name}. Exception is {:?}",
-            e
+            "Failed to publish message {message} to queue {queue_name}. Exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
     }
 }
 
 /// should only be called if RabbitConfig.enabled = true
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 impl RabbitProvider {
     fn init() -> Self {
         use lapin::options::QueueDeclareOptions;
@@ -166,26 +168,26 @@ impl RabbitProvider {
             (rabbit_connection, channel)
         });
         RabbitProvider {
-            connection,
+            _connection: connection,
             channel,
         }
     }
 }
 
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
     once_cell::sync::Lazy::new(|| {
         let config = FILE_SERVER_CONFIG.clone();
-        return if config.rabbit_mq.enabled {
+        if config.rabbit_mq.enabled {
             Some(RabbitProvider::init())
         } else {
             None
-        };
+        }
     });
 
 // ---------------------------- test implementations that don't start up rabbit
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
 where
     F: Fn(String) -> Fut + Send + 'static,
@@ -193,5 +195,5 @@ where
 {
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
-pub fn publish_message(_: &str, _: &String) {}
+#[cfg(test)]
+pub fn publish_message(_: &str, _: &str) {}

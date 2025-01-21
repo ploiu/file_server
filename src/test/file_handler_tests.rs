@@ -1,10 +1,11 @@
-use std::fs;
+use std::{fs, vec};
 
 use rocket::http::{Header, Status};
 use rocket::local::blocking::Client;
 use rocket::serde::json::serde_json as serde;
 
 use crate::model::api::FileApi;
+use crate::model::file_types::FileTypes;
 use crate::model::response::BasicMessage;
 use crate::repository::initialize_db;
 use crate::rocket;
@@ -231,15 +232,12 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         .dispatch();
     assert_eq!(res.status(), Status::Created);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test.txt"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test.txt".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.file_type, Some(FileTypes::Text));
+    assert_eq!(res_body.size, Some(6));
     cleanup();
 }
 
@@ -305,15 +303,13 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
     let status = res.status();
     assert_eq!(status, Status::Created);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.file_type, Some(FileTypes::Unknown));
+    assert_eq!(res_body.size, Some(6));
+
     // make sure that the file comes back with the right name
     let res: FileApi = client
         .get(uri!("/files/metadata/1"))
@@ -321,15 +317,12 @@ Content-Disposition: form-data; name=\"folderId\"\r\n\
         .dispatch()
         .into_json()
         .unwrap();
-    assert_eq!(
-        res,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res.id, 1);
+    assert_eq!(res.name, "test".to_string());
+    assert_eq!(res.folder_id, None);
+    assert_eq!(res.tags, vec![]);
+    assert_eq!(res.file_type, Some(FileTypes::Unknown));
+    assert_eq!(res.size, Some(6));
     cleanup();
 }
 
@@ -407,7 +400,7 @@ fn search_files_bad_search_query() {
     let body: BasicMessage = res.into_json().unwrap();
     assert_eq!(
         body.message,
-        String::from("Search string or tags are required.")
+        String::from("Search string, attributes, or tags are required.")
     );
     cleanup();
 }
@@ -531,7 +524,7 @@ fn delete_file() {
     assert_eq!(res.status(), Status::NoContent);
     // make sure the file was removed from the disk and db
     if fs::read(format!("{}/{}", file_dir(), "test.txt")).is_ok() {
-        fail()
+        crate::fail!("file still exists even though it should have been removed!");
     };
     let get_res = client
         .get(uri!("/files/1"))
@@ -623,7 +616,7 @@ fn update_file_file_already_exists() {
 }
 
 #[test]
-fn update_file_no_extension() {
+fn update_file_no_extension_removes_extension_and_file_type() {
     set_password();
     remove_files();
     create_file_db_entry("test.txt", None);
@@ -639,15 +632,12 @@ fn update_file_no_extension() {
     let status = res.status();
     assert_eq!(status, Status::Ok);
     let res_body: FileApi = res.into_json().unwrap();
-    assert_eq!(
-        res_body,
-        FileApi {
-            id: 1,
-            name: String::from("test"),
-            folder_id: None,
-            tags: Vec::new(),
-        }
-    );
+    assert_eq!(res_body.id, 1);
+    assert_eq!(res_body.name, "test".to_string());
+    assert_eq!(res_body.folder_id, None);
+    assert_eq!(res_body.tags, vec![]);
+    assert_eq!(res_body.size, Some(0));
+    assert_eq!(res_body.file_type, Some(FileTypes::Unknown));
     cleanup();
 }
 

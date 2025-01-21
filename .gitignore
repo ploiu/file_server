@@ -2,12 +2,13 @@
 /.idea
 /files
 *.iml
-*.sqlite
+*.sqlite*
 *.pem
 *.key
 cert_options.conf
 .file_server_temp/**
 !.file_server_temp/.gitkeep
 FileServer.toml
-output.log
-output_test.log
+*.log
+# failed test folders and files stick around for debugging, and have `::` in them because of how threads are named in rust
+*::*

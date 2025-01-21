@@ -42,8 +42,6 @@ pub enum UpdateFolderError {
 pub enum GetChildFilesError {
     /// database could not execute the query
     DbFailure,
-    /// the folder id could not be found
-    FolderNotFound,
     /// could not retrieve tags from the database
     TagError,
 }

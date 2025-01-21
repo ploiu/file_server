@@ -1,32 +1,139 @@
-use std::fs;
+use std::backtrace::Backtrace;
+use std::collections::HashMap;
+use std::ffi::OsStr;
 use std::fs::File;
+use std::fs::{self};
+use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 use std::string::ToString;
 
+use once_cell::sync::Lazy;
 use regex::Regex;
 use rocket::tokio::fs::create_dir;
 use rusqlite::Connection;
 
-use crate::config::FILE_SERVER_CONFIG;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
     CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
+use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::{file_repository, folder_repository, metadata_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
 
+/// mapping of file lowercase file extension => file type
+static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
+    use FileTypes::*;
+    HashMap::from([
+        ("msi", Application),
+        ("exe", Application),
+        ("sh", Application),
+        ("ps1", Application),
+        ("bin", Application),
+        ("jar", Application),
+        ("bz2", Archive),
+        ("gz", Archive),
+        ("tar", Archive),
+        ("bz", Archive),
+        ("rar", Archive),
+        ("zip", Archive),
+        ("7z", Archive),
+        ("midi", Audio),
+        ("mp3", Audio),
+        ("oga", Audio),
+        ("ogg", Audio),
+        ("opus", Audio),
+        ("3g2", Audio),
+        ("mid", Audio),
+        ("3gp", Audio),
+        ("wav", Audio),
+        ("weba", Audio),
+        ("ogx", Audio),
+        ("aac", Audio),
+        ("cda", Audio),
+        ("f3d", Cad),
+        ("php", Code),
+        ("csh", Code),
+        ("xml", Code),
+        ("htm", Code),
+        ("xhtml", Code),
+        ("mjs", Code),
+        ("jsonc", Code),
+        ("jsonld", Code),
+        ("json", Code),
+        ("js", Code),
+        ("html", Code),
+        ("ts", Code),
+        ("css", Code),
+        ("ini", Configuration),
+        ("toml", Configuration),
+        ("yml", Configuration),
+        ("properties", Configuration),
+        ("vsd", Diagram),
+        ("rtf", Document),
+        ("arc", Document),
+        ("pdf", Document),
+        ("doc", Document),
+        ("odt", Document),
+        ("epub", Document),
+        ("abw", Document),
+        ("md", Document),
+        ("odp", Document),
+        ("azw", Document),
+        ("docx", Document),
+        ("eot", Font),
+        ("otf", Font),
+        ("woff2", Font),
+        ("ttf", Font),
+        ("woff", Font),
+        ("nds", GameRom),
+        ("wux", GameRom),
+        ("xci", GameRom),
+        ("avif", Image),
+        ("apng", Image),
+        ("odg", Image),
+        ("pdn", Image),
+        ("bmp", Image),
+        ("ico", Image),
+        ("jpeg", Image),
+        ("webp", Image),
+        ("png", Image),
+        ("svg", Image),
+        ("jpg", Image),
+        ("tif", Image),
+        ("tiff", Image),
+        ("gif", Image),
+        ("mtl", Material),
+        ("stl", Model),
+        ("obj", Object),
+        ("pptx", Presentation),
+        ("ppt", Presentation),
+        ("odp", Presentation),
+        ("mcworld", SaveFile),
+        ("xls", Spreadsheet),
+        ("csv", Spreadsheet),
+        ("ods", Spreadsheet),
+        ("xlsx", Spreadsheet),
+        ("txt", Text),
+        ("mpeg", Video),
+        ("avi", Video),
+        ("ogv", Video),
+        ("mp4", Video),
+        ("webm", Video),
+    ])
+});
+
 #[inline]
-#[cfg(any(not(test), rust_analyzer))]
+#[cfg(not(test))]
 pub fn file_dir() -> String {
     "./files".to_string()
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 pub fn file_dir() -> String {
     let thread_name = crate::test::current_thread_name();
     let dir_name = format!("./{}", thread_name);
@@ -58,13 +165,12 @@ pub async fn save_file(
     let root_regex = Regex::new(format!("^{}/", file_dir()).as_str()).unwrap();
     let parent_id = file_input.folder_id();
     let file_id: u32;
-    let resulting_file: FileApi;
-    if parent_id != 0 {
+    let resulting_file = if parent_id != 0 {
         // we requested a folder to put the file in, so make sure it exists
         let folder = folder_service::get_folder(Some(parent_id)).map_err(|e| {
             log::error!(
-                "Save file - failed to retrieve parent folder. Nested exception is {:?}",
-                e
+                "Save file - failed to retrieve parent folder. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             if e == GetFolderError::NotFound {
                 CreateFileError::ParentFolderNotFound
@@ -73,14 +179,11 @@ pub async fn save_file(
             }
         })?;
         // folder exists, now try to create the file
-        file_id =
-            persist_save_file_to_folder(file_input, &folder, String::from(&file_name)).await?;
-        resulting_file = FileApi {
-            id: file_id,
-            folder_id: None,
-            name: String::from(root_regex.replace(&file_name, "")),
-            tags: Vec::new(),
-        }
+        let mut created =
+            persist_save_file_to_folder(file_input, &folder, file_name.to_string()).await?;
+        created.name = String::from(root_regex.replace(&file_name, ""));
+        file_id = created.id.unwrap();
+        created.into()
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
             format!(".{}", ext)
@@ -88,14 +191,11 @@ pub async fn save_file(
             String::from("")
         };
         let file_name = format!("{}/{}{}", &file_dir(), file_name, file_extension);
-        file_id = persist_save_file(file_input).await?;
-        resulting_file = FileApi {
-            id: file_id,
-            folder_id: None,
-            name: String::from(root_regex.replace(&file_name, "")),
-            tags: Vec::new(),
-        }
-    }
+        let mut created = persist_save_file(file_input).await?;
+        created.name = String::from(root_regex.replace(&file_name, ""));
+        file_id = created.id.unwrap();
+        created.into()
+    };
     // now publish the file to the rabbit queue so a preview can be generated for it later
     queue::publish_message("icon_gen", &file_id.to_string());
     Ok(resulting_file)
@@ -109,8 +209,8 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
         Err(e) => {
             con.close().unwrap();
             log::error!(
-                "Failed to pull file info from database. Nested exception is {:?}",
-                e
+                "Failed to pull file info from database. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             return if e == rusqlite::Error::QueryReturnedNoRows {
                 Err(GetFileError::NotFound)
@@ -127,7 +227,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
         }
     };
     con.close().unwrap();
-    Ok(FileApi::from(file, tags))
+    Ok(FileApi::from_with_tags(file, tags))
 }
 
 pub fn check_file_exists(id: u32) -> bool {
@@ -165,9 +265,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
     delete_result?;
     fs::remove_file(&file_path).map_err(|e| {
         log::error!(
-            "Failed to delete file from disk at location {:?}!\n Nested exception is {:?}",
-            file_path,
-            e
+            "Failed to delete file from disk at location {file_path:?}!\n Nested exception is {e:?}\n{}", Backtrace::force_capture()
         );
         DeleteFileError::FileSystemError
     })
@@ -186,25 +284,29 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
     }
     let delete_result = file_repository::delete_file(id, con);
     if delete_result.is_ok() {
-        return Ok(());
+        Ok(())
     } else if Err(rusqlite::Error::QueryReturnedNoRows) == delete_result {
         return Err(DeleteFileError::NotFound);
     } else {
         log::error!(
-            "Failed to delete file record from database! Nested exception is: \n {:?}",
-            delete_result.unwrap_err()
+            "Failed to delete file record from database! Nested exception is {:?}\n{}",
+            delete_result.unwrap_err(),
+            Backtrace::force_capture()
         );
         return Err(DeleteFileError::DbError);
     }
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
+    let mut file = file;
     // first check if the file exists
     let con: Connection = repository::open_connection();
-    if file_repository::get_file(file.id, &con).is_err() {
+    let repo_file = file_repository::get_file(file.id, &con);
+    if repo_file.is_err() {
         con.close().unwrap();
         return Err(UpdateFileError::NotFound);
     }
+    let repo_file = repo_file.unwrap();
     // now check if the folder exists
     let parent_folder =
         folder_service::get_folder(file.folder_id).map_err(|_| UpdateFileError::FolderNotFound)?;
@@ -233,13 +335,14 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     } else {
         file.folder_id
     };
-    if let Err(e) =
-        file_repository::update_file(&file.id, &new_parent_id, &file.name().unwrap(), &con)
-    {
+    // ensure file type gets updated if the name is changed
+    file.file_type = Some(determine_file_type(&file.name));
+    let converted_record = FileRecord::from(&file);
+    if let Err(e) = file_repository::update_file(&converted_record, &con) {
         con.close().unwrap();
         log::error!(
-            "Failed to update file record in database. Nested exception is {:?}",
-            e
+            "Failed to update file record in database. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(UpdateFileError::DbError);
     }
@@ -267,8 +370,8 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     let new_path = Regex::new("/root").unwrap().replace(new_path.as_str(), "");
     if let Err(e) = fs::rename(old_path, new_path.to_string()) {
         log::error!(
-            "Failed to move file in the file system. Nested exception is {:?}",
-            e
+            "Failed to move file in the file system. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(UpdateFileError::FileSystemError);
     }
@@ -277,6 +380,9 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         folder_id: new_parent_id,
         name: file.name().unwrap(),
         tags,
+        size: Some(repo_file.size),
+        date_created: Some(repo_file.create_date),
+        file_type: file.file_type,
     })
 }
 
@@ -284,7 +390,10 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
 pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
     let con = repository::open_connection();
     let result = file_repository::get_file_path(id, &con).map_err(|e| {
-        log::error!("Failed to get file path! Nested exception is {:?}", e);
+        log::error!(
+            "Failed to get file path for file id {id}! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         if e == rusqlite::Error::QueryReturnedNoRows {
             GetFileError::NotFound
         } else {
@@ -305,7 +414,10 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let con: Connection = repository::open_connection();
     let result = file_repository::get_file_preview(id, &con).map_err(|e| {
-        log::error!("Failed to get file preview! Nested exception is {:?}", e);
+        log::error!(
+            "Failed to get file preview! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         if e == rusqlite::Error::QueryReturnedNoRows {
             GetPreviewError::NotFound
         } else {
@@ -316,39 +428,20 @@ pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     result
 }
 
-/// checks the database and generates previews for all files if the database doesn't have the flag `generated_previews` in the metadata table
-pub fn generate_all_previews() {
-    if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
-        return;
-    }
-    log::info!("Starting to generate previews for existing files...");
-    let con: Connection = open_connection();
-    let flag_res = metadata_repository::get_generated_previews_flag(&con);
-    if Ok(false) == flag_res {
-        let file_ids = match file_repository::get_all_file_ids(&con) {
-            Ok(ids) => ids,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!("Failed to retrieve all file IDs in the database. Error is {e:?}");
-                return;
-            }
-        };
-        for id in file_ids {
-            queue::publish_message("icon_gen", &id.to_string());
-        }
-        let flag_set_result = metadata_repository::set_generated_previews_flag(&con);
-        con.close().unwrap();
-        if let Err(e) = flag_set_result {
-            log::error!("Failed to set preview flag in database. Exception is {e:?}");
-        } else {
-            log::info!("Successfully pushed file IDs to queue")
-        }
-    } else if let Err(e) = flag_res {
-        log::error!("Failed to get preview flag from database. Error is {e:?}");
-        con.close().unwrap();
-        return;
+/// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
+pub fn determine_file_type(file_name: &str) -> FileTypes {
+    let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
+    if let Some(ext) = extension {
+        FILE_TYPE_MAPPING
+            .get(ext)
+            .copied()
+            .unwrap_or(FileTypes::Unknown)
     } else {
-        log::info!("Not generating file previews because the db flag is already set.")
+        // no extension means it's either a binary file or a text file. We _could_ read the file to determine,
+        // but it looks like that can be tricky as we'd have to scan the entire file no matter how big and even then it might
+        // not be guaranteed. I believe most of the time this would be text file...
+        // but since there's no guarantee I'll leave it as unknown
+        FileTypes::Unknown
     }
 }
 
@@ -359,51 +452,82 @@ async fn persist_save_file_to_folder(
     file_input: &mut CreateFileRequest<'_>,
     folder: &FolderResponse,
     file_name: String,
-) -> Result<u32, CreateFileError> {
+) -> Result<FileRecord, CreateFileError> {
     let file_name = determine_file_name(&file_name, &file_input.extension);
     let formatted_name = format!("{}/{}/{}", file_dir(), folder.path, file_name);
     match file_input.file.persist_to(&formatted_name).await {
         Ok(_) => {
-            let id = save_file_record(&formatted_name)?;
+            // path function here is guaranteed to return some at this point, according to docs
+            let file_path = file_input.file.path().unwrap();
+            let file_size = if let Ok(metadata) = fs::metadata(file_path) {
+                metadata.size()
+            } else {
+                0
+            };
+            let res = save_file_record(&formatted_name, file_size)?;
             // file and folder are both in repository, now link them
-            if link_folder_to_file(id, folder.id).is_err() {
+            if link_folder_to_file(res.id.unwrap(), folder.id).is_err() {
                 return Err(CreateFileError::FailWriteDb);
             }
-            Ok(id)
+            Ok(res)
         }
         Err(e) => {
-            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to save file to disk. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(CreateFileError::FailWriteDisk)
         }
     }
 }
 
 /// persists the passed file to the disk and the database
-async fn persist_save_file(file_input: &mut CreateFileRequest<'_>) -> Result<u32, CreateFileError> {
-    let file_name = determine_file_name(
-        &String::from(file_input.file.name().unwrap()),
-        &file_input.extension,
-    );
+async fn persist_save_file(
+    file_input: &mut CreateFileRequest<'_>,
+) -> Result<FileRecord, CreateFileError> {
+    let file_name = determine_file_name(file_input.file.name().unwrap(), &file_input.extension);
     let file_name = format!("{}/{}", &file_dir(), file_name);
     match file_input.file.persist_to(&file_name).await {
-        Ok(_) => Ok(save_file_record(&file_name)?),
+        Ok(()) => {
+            // path function here is guaranteed to return some at this point, according to docs
+            let file_path = file_input.file.path().unwrap();
+            let file_size = if let Ok(metadata) = fs::metadata(file_path) {
+                metadata.size()
+            } else {
+                0
+            };
+            save_file_record(&file_name, file_size)
+        }
         Err(e) => {
-            log::error!("Failed to save file to disk. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to save file to disk. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(CreateFileError::FailWriteDisk)
         }
     }
 }
 
-fn save_file_record(name: &str) -> Result<u32, CreateFileError> {
+fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError> {
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
-    let file_record = FileRecord::from(formatted_name.to_string());
+    let now = chrono::offset::Local::now();
+    let file_type = determine_file_type(name);
+    let mut file_record = FileRecord {
+        id: None,
+        name: formatted_name.to_string(),
+        parent_id: None,
+        create_date: now.naive_local(),
+        size,
+        file_type,
+    };
     let con = repository::open_connection();
     let res =
         file_repository::create_file(&file_record, &con).map_err(|_| CreateFileError::FailWriteDb);
     con.close().unwrap();
-    res
+    file_record.id = Some(res.unwrap());
+    Ok(file_record)
 }
 
 /// adds a link to the folder for the passed file in the database
@@ -420,7 +544,7 @@ fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderErr
 /// checks the db to see if we have a record of the passed file
 fn check_file_in_dir(
     file_input: &mut CreateFileRequest,
-    file_name: &String,
+    file_name: &str,
 ) -> Result<(), CreateFileError> {
     log::warn!("{file_name}{:?}", &file_input.extension);
     let full_file_name = determine_file_name(file_name, &file_input.extension);
@@ -454,7 +578,7 @@ fn check_file_in_dir(
 /// let file_name = determine_file_name(&root_name, &extension);
 /// assert_eq!(file_name, String::from("test.txt"));
 /// ```
-fn determine_file_name(root_name: &String, extension: &Option<String>) -> String {
+fn determine_file_name(root_name: &str, extension: &Option<String>) -> String {
     if let Some(ext) = extension {
         format!("{}.{}", root_name, ext)
     } else {
@@ -462,7 +586,7 @@ fn determine_file_name(root_name: &String, extension: &Option<String>) -> String
     }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod deterine_file_name_tests {
     use super::determine_file_name;
 
@@ -483,19 +607,21 @@ mod deterine_file_name_tests {
     }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod update_file_tests {
     use std::fs;
 
     use crate::model::api::FileApi;
     use crate::model::error::file_errors::UpdateFileError;
+    use crate::model::file_types::FileTypes;
+
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, refresh_db,
+        create_folder_disk, create_tag_file, now, refresh_db,
     };
 
     #[test]
@@ -511,21 +637,24 @@ mod update_file_tests {
                 id: None,
                 title: "tag1".to_string(),
             }],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
+        assert_eq!(res.id, 1);
+        assert_eq!(res.name, "test.txt".to_string());
+        assert_eq!(res.folder_id, None);
         assert_eq!(
-            FileApi {
-                id: 1,
-                folder_id: None,
-                name: "test.txt".to_string(),
-                tags: vec![TagApi {
-                    id: Some(1),
-                    title: "tag1".to_string(),
-                }],
-            },
-            res
+            res.tags,
+            vec![TagApi {
+                id: Some(1),
+                title: "tag1".to_string(),
+            }]
         );
+        assert_eq!(res.file_type, Some(FileTypes::Text));
+        assert_eq!(res.size, Some(0));
         cleanup();
     }
 
@@ -540,18 +669,18 @@ mod update_file_tests {
             folder_id: Some(0),
             name: "test.txt".to_string(),
             tags: vec![],
+            size: None,
+            date_created: None,
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
-        assert_eq!(
-            FileApi {
-                id: 1,
-                folder_id: None,
-                name: "test.txt".to_string(),
-                tags: vec![],
-            },
-            res
-        );
+        assert_eq!(res.id, 1);
+        assert_eq!(res.name, "test.txt".to_string());
+        assert_eq!(res.folder_id, None);
+        assert_eq!(res.tags, vec![]);
+        assert_eq!(res.file_type, Some(FileTypes::Text));
+        assert_eq!(res.size, Some(0));
         cleanup();
     }
 
@@ -563,6 +692,9 @@ mod update_file_tests {
             folder_id: None,
             name: "test".to_string(),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::NotFound, res);
@@ -578,6 +710,9 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             folder_id: Some(1),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderNotFound, res);
@@ -596,6 +731,9 @@ mod update_file_tests {
             name: "test2.txt".to_string(),
             folder_id: None,
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
@@ -620,6 +758,9 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             folder_id: Some(2),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FileAlreadyExists, res);
@@ -641,6 +782,9 @@ mod update_file_tests {
             name: "test".to_string(),
             folder_id: None,
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap();
         let res = get_file_metadata(1).unwrap();
@@ -665,6 +809,9 @@ mod update_file_tests {
             name: "new_name.txt".to_string(),
             folder_id: Some(1),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap();
         assert_eq!(1, res.id);
@@ -684,20 +831,22 @@ mod update_file_tests {
             folder_id: Some(0),
             name: "test".to_string(),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
         // verify the database hasn't changed (file id 1 should be named file in root folder)
         let root_files = folder_service::get_folder(None).unwrap().files;
-        assert_eq!(
-            root_files[0],
-            FileApi {
-                id: 1,
-                name: String::from("file"),
-                folder_id: None,
-                tags: vec![],
-            }
-        );
+        assert_eq!(1, root_files.len());
+        let file = &root_files[0];
+        assert_eq!(file.id, 1);
+        assert_eq!(file.name, "file".to_string());
+        assert_eq!(file.folder_id, None);
+        assert_eq!(file.tags, vec![]);
+        assert_eq!(file.file_type, Some(FileTypes::Unknown));
+        assert_eq!(file.size, Some(0));
         cleanup();
     }
 
@@ -712,6 +861,9 @@ mod update_file_tests {
             name: "a".to_string(),
             folder_id: Some(1),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
@@ -732,6 +884,9 @@ mod update_file_tests {
             name: "a".to_string(),
             folder_id: Some(1),
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap_err();
         assert_eq!(UpdateFileError::FolderAlreadyExistsWithSameName, res);
@@ -766,6 +921,9 @@ mod update_file_tests {
             name: "thing.txt".to_string(),
             folder_id: None,
             tags: vec![],
+            size: Some(0),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
+            file_type: None,
         })
         .unwrap();
         let folder_files = folder_service::get_folder(Some(0)).unwrap().files;
@@ -778,9 +936,29 @@ mod update_file_tests {
         assert_eq!(vec!["inner", "test_thing.txt", "thing.txt"], file_names);
         cleanup();
     }
+
+    #[test]
+    fn updates_file_type() {
+        refresh_db();
+        create_file_db_entry("test", None);
+        create_file_disk("test", "");
+        let file = FileApi {
+            id: 1,
+            folder_id: None,
+            name: "test.txt".to_string(),
+            tags: vec![],
+            size: None,
+            date_created: None,
+            file_type: Some(FileTypes::Text),
+        };
+        update_file(file).unwrap();
+        let retrieved = get_file_metadata(1);
+        assert_eq!(Some(FileTypes::Text), retrieved.unwrap().file_type);
+        cleanup();
+    }
 }
 
-#[cfg(all(test, not(rust_analyzer)))]
+#[cfg(test)]
 mod delete_file_with_id_tests {
     use crate::{
         service::file_service::*,
@@ -792,9 +970,8 @@ mod delete_file_with_id_tests {
         refresh_db();
         create_file_db_entry("test.txt", None);
         let con = open_connection();
-        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        assert_eq!((), res);
         let file = get_file_metadata(1).unwrap_err();
         assert_eq!(GetFileError::NotFound, file);
         cleanup();
@@ -806,9 +983,8 @@ mod delete_file_with_id_tests {
         create_file_db_entry("test.txt", None);
         create_file_preview(1);
         let con = open_connection();
-        let res = delete_file_by_id_with_connection(1, &con).unwrap();
+        delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        assert_eq!((), res);
         let preview = get_file_preview(1).unwrap_err();
         assert_eq!(GetPreviewError::NotFound, preview);
         cleanup();

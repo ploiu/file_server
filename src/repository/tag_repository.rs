@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{backtrace::Backtrace, collections::HashMap};
 
 use rusqlite::Connection;
 
@@ -6,12 +6,12 @@ use crate::model::repository;
 
 /// creates a new tag in the database. This does not check if the tag already exists,
 /// so the caller must check that themselves
-pub fn create_tag(title: &String, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
+pub fn create_tag(title: &str, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/create_tag.sql"))?;
     let id = pst.insert(rusqlite::params![title])? as u32;
     Ok(repository::Tag {
         id,
-        title: title.clone(),
+        title: title.to_string(),
     })
 }
 
@@ -19,7 +19,7 @@ pub fn create_tag(title: &String, con: &Connection) -> Result<repository::Tag, r
 ///
 /// if `None` is returned, that means there was no match
 pub fn get_tag_by_title(
-    title: &String,
+    title: &str,
     con: &Connection,
 ) -> Result<Option<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_title.sql"))?;
@@ -30,7 +30,10 @@ pub fn get_tag_by_title(
             if e == rusqlite::Error::QueryReturnedNoRows {
                 Ok(None)
             } else {
-                eprintln!("Failed to get tag by name, error is {:?}", e);
+                log::error!(
+                    "Failed to get tag by name, error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 Err(e)
             }
         }
@@ -67,7 +70,7 @@ pub fn get_tags_on_file(
     con: &Connection,
 ) -> Result<Vec<repository::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
-    let rows = pst.query_map(rusqlite::params![file_id], |row| tag_mapper(row))?;
+    let rows = pst.query_map(rusqlite::params![file_id], tag_mapper)?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
         // I know it's probably bad style, but I'm laughing too hard at the double question mark.
@@ -92,7 +95,7 @@ pub fn get_tags_on_files(
         include_str!("../assets/queries/tags/get_tags_for_files.sql"),
         in_clause
     );
-    let mut pst = con.prepare(&formatted_query.as_str())?;
+    let mut pst = con.prepare(formatted_query.as_str())?;
     let rows = pst.query_map([], |row| {
         let file_id: u32 = row.get(0)?;
         let tag_id: u32 = row.get(1)?;
@@ -106,14 +109,11 @@ pub fn get_tags_on_files(
     let mut mapped: HashMap<u32, Vec<repository::Tag>> = HashMap::new();
     for res in rows {
         let res = res?;
-        if !mapped.contains_key(&res.file_id) {
-            mapped.insert(
-                res.file_id,
-                vec![repository::Tag {
-                    id: res.tag_id,
-                    title: res.tag_title,
-                }],
-            );
+        if let std::collections::hash_map::Entry::Vacant(e) = mapped.entry(res.file_id) {
+            e.insert(vec![repository::Tag {
+                id: res.tag_id,
+                title: res.tag_title,
+            }]);
         } else {
             mapped.get_mut(&res.file_id).unwrap().push(repository::Tag {
                 id: res.tag_id,
@@ -191,7 +191,7 @@ mod create_tag_tests {
     fn create_tag() {
         refresh_db();
         let con = open_connection();
-        let tag = tag_repository::create_tag(&"test".to_string(), &con).unwrap();
+        let tag = tag_repository::create_tag("test", &con).unwrap();
         con.close().unwrap();
         assert_eq!(
             Tag {
@@ -215,8 +215,8 @@ mod get_tag_by_title_tests {
     fn get_tag_by_title_found() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        let found = get_tag_by_title(&"TeSt".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        let found = get_tag_by_title("TeSt", &con).unwrap();
         con.close().unwrap();
         assert_eq!(
             Some(Tag {
@@ -231,7 +231,7 @@ mod get_tag_by_title_tests {
     fn get_tag_by_title_not_found() {
         refresh_db();
         let con = open_connection();
-        let not_found = get_tag_by_title(&"test".to_string(), &con).unwrap();
+        let not_found = get_tag_by_title("test", &con).unwrap();
         con.close().unwrap();
         assert_eq!(None, not_found);
         cleanup();
@@ -249,7 +249,7 @@ mod get_tag_by_id_tests {
     fn get_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         let tag = get_tag(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(
@@ -274,7 +274,7 @@ mod update_tag_tests {
     fn update_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         update_tag(
             Tag {
                 id: 1,
@@ -306,7 +306,7 @@ mod delete_tag_tests {
     fn delete_tag_success() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         delete_tag(1, &con).unwrap();
         let not_found = get_tag(1, &con);
         con.close().unwrap();
@@ -317,23 +317,27 @@ mod delete_tag_tests {
 
 #[cfg(test)]
 mod get_tag_on_file_tests {
+    use super::*;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::repository::tag_repository::{add_tag_to_file, create_tag, get_tags_on_file};
     use crate::test::*;
 
     #[test]
     fn get_tags_on_file_returns_tags() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        create_tag(&"test2".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        create_tag("test2", &con).unwrap();
         create_file(
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
+                file_type: FileTypes::Unknown,
             },
             &con,
         )
@@ -366,6 +370,9 @@ mod get_tag_on_file_tests {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
+                file_type: FileTypes::Application,
             },
             &con,
         )
@@ -379,22 +386,26 @@ mod get_tag_on_file_tests {
 
 #[cfg(test)]
 mod remove_tag_from_file_tests {
+    use super::*;
+    use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::repository::tag_repository::{create_tag, get_tags_on_file, remove_tag_from_file};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, now, refresh_db};
 
     #[test]
     fn remove_tag_from_file_works() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         create_file(
             &FileRecord {
                 id: None,
                 name: "test_file".to_string(),
                 parent_id: None,
+                create_date: now(),
+                size: 0,
+                file_type: FileTypes::Unknown,
             },
             &con,
         )
@@ -419,8 +430,8 @@ mod get_tag_on_folder_tests {
     fn get_tags_on_folder_returns_tags() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
-        create_tag(&"test2".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
+        create_tag("test2", &con).unwrap();
         create_folder(
             &Folder {
                 parent_id: None,
@@ -483,7 +494,7 @@ mod remove_tag_from_folder_tests {
     fn remove_tag_from_folder_works() {
         refresh_db();
         let con = open_connection();
-        create_tag(&"test".to_string(), &con).unwrap();
+        create_tag("test", &con).unwrap();
         create_folder(
             &Folder {
                 parent_id: None,

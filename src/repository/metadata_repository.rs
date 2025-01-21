@@ -1,3 +1,5 @@
+use std::backtrace::Backtrace;
+
 use rusqlite::Connection;
 
 use crate::guard::HeaderAuth;
@@ -35,7 +37,10 @@ pub fn check_auth(auth: HeaderAuth, con: &Connection) -> Result<CheckAuthResult,
         }
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(CheckAuthResult::Missing),
         Err(e) => {
-            eprintln!("Failed to check auth in database: {:?}", e);
+            log::error!(
+                "Failed to check auth in database: {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }
@@ -48,7 +53,10 @@ pub fn set_auth(auth: HeaderAuth, con: &Connection) -> Result<(), rusqlite::Erro
     match statement.execute([auth.to_string()]) {
         Ok(_) => Ok(()),
         Err(e) => {
-            eprintln!("Failed to set password. Nested exception is {:?}", e);
+            log::error!(
+                "Failed to set password. Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             Err(e)
         }
     }
@@ -69,10 +77,10 @@ pub fn get_generated_previews_flag(con: &Connection) -> Result<bool, rusqlite::E
     let query_res: Result<String, rusqlite::Error> = statement.query_row([], |it| it.get(0));
     if let Err(rusqlite::Error::QueryReturnedNoRows) = query_res {
         Ok(false)
-    } else if query_res.is_ok() {
-        Ok(true)
+    } else if let Err(e) = query_res {
+        Err(e)
     } else {
-        Err(query_res.unwrap_err())
+        Ok(true)
     }
 }
 
@@ -84,14 +92,34 @@ pub fn set_generated_previews_flag(con: &Connection) -> Result<(), rusqlite::Err
     Ok(())
 }
 
+pub fn get_generated_file_types_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
+    let mut check_flag_statement = con.prepare(include_str!(
+        "../assets/queries/metadata/get_file_types_generated_flag.sql"
+    ))?;
+    let query_res: Result<(), rusqlite::Error> = check_flag_statement.query_row([], |_| Ok(()));
+    match query_res {
+        Ok(()) => Ok(true),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn set_generated_file_types_flag(con: &Connection) -> Result<(), rusqlite::Error> {
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/set_file_types_generated_flag.sql"
+    ))?;
+    statement.execute([])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
 
+    use super::{check_auth, set_auth, update_auth};
     use crate::guard::HeaderAuth;
     use crate::model::request::BodyAuth;
     use crate::model::service::metadata::CheckAuthResult;
-    use crate::repository::metadata_repository::{check_auth, set_auth, update_auth};
     use crate::repository::open_connection;
     use crate::test::{cleanup, refresh_db};
 

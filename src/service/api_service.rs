@@ -1,3 +1,5 @@
+use std::backtrace::Backtrace;
+
 use rusqlite::Connection;
 
 use crate::guard::HeaderAuth;
@@ -38,13 +40,19 @@ pub fn update_auth(auth: UpdateAuth) -> Result<(), UpdatePasswordError> {
     log::info!("Attempting to update password...");
     let check_res = check_auth(auth.old_auth.into_auth());
     if check_res != CheckAuthResult::Valid {
-        log::error!("Failed to update authentication. Error is {:?}", check_res);
+        log::error!(
+            "Failed to update authentication. Error is {check_res:?}\n{}",
+            Backtrace::force_capture()
+        );
         return Err(UpdatePasswordError::Unauthorized);
     }
     // authorization matches, we can update
     let con: Connection = open_connection();
     if let Err(e) = metadata_repository::update_auth(auth.new_auth, &con) {
-        log::error!("Failed to update password! Error is {e}");
+        log::error!(
+            "Failed to update password! Error is {e}\n{}",
+            Backtrace::force_capture()
+        );
         con.close().unwrap();
         return Err(UpdatePasswordError::Unauthorized);
     }
