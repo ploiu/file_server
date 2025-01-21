@@ -21,5 +21,3 @@ image = "0.25.5"
 humantime = "2.1.0"
 chrono = { version = "0.4.39", features = ["serde"] }
 itertools = "0.13.0"
-# this is here because some deps use a vulnerable version
-idna = "1.0.3"
