@@ -43,7 +43,7 @@ pub struct Tag {
 impl From<&FileApi> for FileRecord {
     fn from(value: &FileApi) -> Self {
         let create_date = value
-            .create_date
+            .date_created
             .unwrap_or(chrono::offset::Local::now().naive_local());
         Self {
             id: if value.id == 0 { None } else { Some(value.id) },

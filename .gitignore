@@ -2,7 +2,7 @@
 /.idea
 /files
 *.iml
-*.sqlite
+*.sqlite*
 *.pem
 *.key
 cert_options.conf
@@ -10,7 +10,5 @@ cert_options.conf
 !.file_server_temp/.gitkeep
 FileServer.toml
 *.log
-dumped.sql
 # failed test folders and files stick around for debugging, and have `::` in them because of how threads are named in rust
 *::*
-*.bak

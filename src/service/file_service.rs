@@ -381,7 +381,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         name: file.name().unwrap(),
         tags,
         size: Some(repo_file.size),
-        create_date: Some(repo_file.create_date),
+        date_created: Some(repo_file.create_date),
         file_type: file.file_type,
     })
 }
@@ -614,7 +614,7 @@ mod update_file_tests {
     use crate::model::api::FileApi;
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
-    
+
     use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
@@ -638,7 +638,7 @@ mod update_file_tests {
                 title: "tag1".to_string(),
             }],
             size: Some(0),
-            create_date: Some(now()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap();
@@ -670,7 +670,7 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             tags: vec![],
             size: None,
-            create_date: None,
+            date_created: None,
             file_type: None,
         })
         .unwrap();
@@ -693,7 +693,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -711,7 +711,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -732,7 +732,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -759,7 +759,7 @@ mod update_file_tests {
             folder_id: Some(2),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -783,7 +783,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap();
@@ -810,7 +810,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap();
@@ -832,7 +832,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -862,7 +862,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -885,7 +885,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap_err();
@@ -922,7 +922,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            create_date: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(chrono::offset::Local::now().naive_local()),
             file_type: None,
         })
         .unwrap();
@@ -948,7 +948,7 @@ mod update_file_tests {
             name: "test.txt".to_string(),
             tags: vec![],
             size: None,
-            create_date: None,
+            date_created: None,
             file_type: Some(FileTypes::Text),
         };
         update_file(file).unwrap();

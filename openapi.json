@@ -207,6 +207,25 @@
                 "type": "string"
               }
             }
+          },
+          {
+            "in": "query",
+            "name": "attributes",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "description": "searches on specific file attributes: dateCreated, fileSize, and fileType. Multiple attribute queries are ANDed together. Available operators and values depend on which attribute is being searched on. Syntax is <code>&lt;field&gt;.&lt;op&gt;;&lt;value&gt;</code> <br> <strong>dateCreated</strong><br> Available operators: <ul> <li>lt</li> <li>gt</li> </ul> Value Type: ISO date (e.g. 2024-12-30) To find a file for a specific date, use <code>createDate.gt;&lt;today&gt;</code> along with <code>createDate.lt;&lt;tomorrow&gt;</code> <br> <strong>fileSize</strong><br> 2 different value types: raw bytes and aliased size. Available operators: <ul> <li>lt</li> <li>eq</li> <li>gt</li> <li>neq</li> </ul> Size aliases: <dl> <dt>Tiny</dt> <dd>[0, 500KiB)</dd> <dt>Small</dt> <dd>[500KiB, 10MiB)</dd> <dt>Medium</dt> <dd>[10MiB, 100MiB)</dd> <dt>Large</dt> <dd>[100MiB, 1GiB)</dd> <dt>ExtraLarge</dt> <dd>[1GiB, (2-64)-1 Bytes)</dd> </dl> bytes cannot be aliased and must be passed as a full number. You can let the user shorten them in your client side application, though. <br><strong>fileType</strong><br> Available Operators: <ul> <li>eq</li> <li>neq</li> </ul> Available Values: <ul> <li>Application</li> <li>Archive</li> <li>Audio</li> <li>Cad</li> <li>Code</li> <li>Configuration</li> <li>Diagram</li> <li>Document</li> <li>Font</li> <li>GameRom</li> <li>Image</li> <li>Material</li> <li>Model</li> <li>Object</li> <li>Presentation</li> <li>SaveFile</li> <li>Spreadsheet</li> <li>Text</li> <li>Video</li> <li>Unknown</li> </ul>",
+            "examples": {
+              "dateCreated specific date": {
+                "value": ["dateCreated.gt;2025-01-20", "dateCreated.lt;2025-01-21"]
+              },
+              "get all non images that qualify as \"large\" and above": {
+                "value": ["fileType.neq;image", "fileSize.gt;medium"]
+              }
+            }
           }
         ],
         "description": "searches for and retrieves all files whose metadata match the passed search string",
@@ -844,6 +863,22 @@
             "items": {
               "$ref": "#/components/schemas/tagApi"
             }
+          },
+          "size": {
+            "type": "number",
+            "nullable": true,
+            "description": "never null in responses, can be null in requests (not modifiable)"
+          },
+          "dateCreated": {
+            "type": "string",
+            "nullable": true,
+            "description": "never null in responses, can be null in requests (not modifiable)",
+            "format": "yyyy-MM-dd'T'HH:mm:ss"
+          },
+          "fileType": {
+            "type": "string",
+            "nullable": true,
+            "description": "never null in responses, can be null in requests (not modifiable)"
           }
         }
       },

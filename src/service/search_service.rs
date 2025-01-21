@@ -500,7 +500,7 @@ mod search_files_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            create_date: None,
+            date_created: None,
             file_type: Some(FileTypes::Unknown)
         }));
         assert!(res.contains(&FileApi {
@@ -509,7 +509,7 @@ mod search_files_tests {
             folder_id: Some(3),
             tags: vec![],
             size: Some(0),
-            create_date: None,
+            date_created: None,
             file_type: Some(FileTypes::Unknown)
         }));
         let res = search_files("", vec!["tag2".to_string()], vec![].try_into().unwrap()).unwrap();
@@ -520,7 +520,7 @@ mod search_files_tests {
             folder_id: Some(3),
             tags: vec![],
             size: Some(0),
-            create_date: None,
+            date_created: None,
             file_type: Some(FileTypes::Unknown)
         }));
         cleanup();
@@ -562,7 +562,7 @@ mod search_files_tests {
                 title: "file".to_string(),
             }],
             size: Some(0),
-            create_date: Some(NaiveDateTime::default()),
+            date_created: Some(NaiveDateTime::default()),
             file_type: Some(FileTypes::Unknown),
         }
         .save_to_db();
@@ -575,7 +575,7 @@ mod search_files_tests {
                 title: "something_else".to_string(),
             }],
             size: None,
-            create_date: None,
+            date_created: None,
             file_type: None,
         }
         .save_to_db();

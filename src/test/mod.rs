@@ -214,7 +214,7 @@ impl FileApi {
             id: None,
             name: self.name.clone(),
             parent_id: self.folder_id,
-            create_date: self.create_date.unwrap_or_default(),
+            create_date: self.date_created.unwrap_or_default(),
             size: self.size.unwrap_or_default(),
             file_type: self.file_type.unwrap_or_default(),
         };
@@ -234,7 +234,7 @@ impl FileApi {
             name: self.name.clone(),
             tags: self.tags.clone(),
             size: self.size,
-            create_date: self.create_date,
+            date_created: self.date_created,
             file_type: self.file_type,
         }
     }

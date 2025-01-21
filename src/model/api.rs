@@ -27,7 +27,9 @@ pub struct FileApi {
     pub tags: Vec<TagApi>,
     // wrapped in option so api consumers don't have to send this field (these fields can't be written to after a file is uploaded)
     pub size: Option<u64>,
-    pub create_date: Option<NaiveDateTime>,
+    #[serde(rename = "dateCreated", skip_serializing_if = "Option::is_none")]
+    pub date_created: Option<NaiveDateTime>,
+    #[serde(rename = "fileType", skip_serializing_if = "Option::is_none")]
     pub file_type: Option<FileTypes>,
 }
 
@@ -69,7 +71,7 @@ impl FileApi {
             name,
             tags: Vec::new(),
             size: None,
-            create_date: None,
+            date_created: None,
             // TODO file_types
             file_type: None,
         }
@@ -85,7 +87,7 @@ impl From<FileRecord> for FileApi {
             name: value.name,
             tags: Vec::new(),
             size: Some(value.size),
-            create_date: Some(value.create_date),
+            date_created: Some(value.create_date),
             file_type: Some(value.file_type),
         }
     }
