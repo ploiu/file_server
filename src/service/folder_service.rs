@@ -1,6 +1,6 @@
 use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
-use std::fs;
+use std::fs::{self, File};
 use std::hash::Hash;
 use std::path::Path;
 
@@ -12,7 +12,8 @@ use model::repository::Folder;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
 use crate::model::error::folder_errors::{
-    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, UpdateFolderError,
+    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, SaveFolderError,
+    UpdateFolderError,
 };
 
 use crate::model::repository::Tag;
@@ -334,6 +335,38 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     }
     con.close().unwrap();
     Ok(map)
+}
+
+/// compresses the folder with the passed id in tar format, stores it in the system temp directory, and returns the resulting file.
+/// If the id is 0, this function fails if the folder isn't found or if the folder is root. While technically possible, the root folder shouldn't
+/// be downloaded in its entirety - that just seems suspicious. Regular backups should be made outside of the api, and I don't want this endpoint to be
+/// used in place of properly backup up your stuff
+fn download_folder(id: u32) -> Result<File, SaveFolderError> {
+    if id == 0 {
+        return Err(SaveFolderError::RootFolder);
+    }
+    let folder = get_folder(Some(id)).map_err(|e| {
+        log::error!(
+            "Failed to retrieve folder {id} from the database; {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        SaveFolderError::NotFound
+    })?;
+    let temp_dir = std::env::temp_dir();
+    let tarchive_dir = format!("{}/{}.tar", temp_dir.display(), folder.name);
+    let tarchive = File::create(tarchive_dir.clone()).map_err(|e| {
+        log::error!(
+            "Failed to create tar archive for {tarchive_dir}; {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        SaveFolderError::Tar
+    })?;
+    let mut tarchive_builder = tar::Builder::new(tarchive);
+    tarchive_builder
+        .append_dir_all("", format!("{}/{}", file_dir(), folder.path))
+        .unwrap();
+    tarchive_builder.finish().unwrap();
+    File::open(tarchive_dir.clone()).map_err(|_| SaveFolderError::NotFound)
 }
 
 // private functions
@@ -1198,6 +1231,25 @@ mod reduce_folders_by_tag_tests {
                 .map(|it| it.id)
                 .collect();
         assert_eq!(expected, actual);
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod download_folder_tests {
+    use crate::{service::folder_service::download_folder, test::{cleanup, create_folder_db_entry, create_folder_disk, refresh_db}};
+
+    #[test]
+    fn test() {
+        refresh_db();
+        create_folder_disk("test/top/middle/bottom");
+        create_folder_db_entry("test", None);
+        create_folder_db_entry("top", Some(1));
+        create_folder_db_entry("middle", Some(2));
+        create_folder_db_entry("bottom", Some(3));
+        let f = download_folder(2).unwrap();
+        println!("{f:?}");
+        crate::fail!();
         cleanup();
     }
 }
