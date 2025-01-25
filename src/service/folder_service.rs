@@ -347,13 +347,20 @@ fn download_folder(id: u32) -> Result<File, SaveFolderError> {
     }
     let folder = get_folder(Some(id)).map_err(|e| {
         log::error!(
-            "Failed to retrieve folder {id} from the database; {e:?}\n{}",
+            "Failed to retrieve folder with id {id} from the database; {e:?}\n{}",
             Backtrace::force_capture()
         );
         SaveFolderError::NotFound
     })?;
     let temp_dir = std::env::temp_dir();
-    let tarchive_dir = format!("{}/{}.tar", temp_dir.display(), folder.name);
+    // nano id used here to ensure file names are unique if the same file is downloaded multiple times
+    let tarchive_dir = format!(
+        "{}/{}-{}.tar",
+        temp_dir.display(),
+        folder.name,
+        nanoid::nanoid!()
+    );
+    // so we have to actually create the tar archive file first before passing it to the builder
     let tarchive = File::create(tarchive_dir.clone()).map_err(|e| {
         log::error!(
             "Failed to create tar archive for {tarchive_dir}; {e:?}\n{}",
@@ -362,10 +369,27 @@ fn download_folder(id: u32) -> Result<File, SaveFolderError> {
         SaveFolderError::Tar
     })?;
     let mut tarchive_builder = tar::Builder::new(tarchive);
-    tarchive_builder
-        .append_dir_all("", format!("{}/{}", file_dir(), folder.path))
-        .unwrap();
-    tarchive_builder.finish().unwrap();
+    match tarchive_builder.append_dir_all("", format!("{}/{}", file_dir(), folder.path)) {
+        Err(e) => {
+            log::error!(
+                "Failed to tarchive {}/{}; {e:?}\n{}",
+                file_dir(),
+                folder.path,
+                Backtrace::force_capture()
+            );
+            return Err(SaveFolderError::Tar);
+        }
+        _ => {}
+    };
+    match tarchive_builder.finish() {
+        Err(e) => {
+            log::error!(
+                "Failed to close tarchive {tarchive_dir}; {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+        }
+        _ => {}
+    }
     File::open(tarchive_dir.clone()).map_err(|_| SaveFolderError::NotFound)
 }
 
@@ -1237,7 +1261,10 @@ mod reduce_folders_by_tag_tests {
 
 #[cfg(test)]
 mod download_folder_tests {
-    use crate::{service::folder_service::download_folder, test::{cleanup, create_folder_db_entry, create_folder_disk, refresh_db}};
+    use crate::{
+        service::folder_service::download_folder,
+        test::{cleanup, create_folder_db_entry, create_folder_disk, refresh_db},
+    };
 
     #[test]
     fn test() {

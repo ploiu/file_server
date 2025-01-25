@@ -22,3 +22,4 @@ humantime = "2.1"
 chrono = { version = "0.4", features = ["serde"] }
 itertools = "0.14"
 tar = "0.4"
+nanoid = "0.4.0"
