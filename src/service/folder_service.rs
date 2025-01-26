@@ -12,7 +12,7 @@ use model::repository::Folder;
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
 use crate::model::error::folder_errors::{
-    CreateFolderError, DeleteFolderError, GetChildFilesError, GetFolderError, SaveFolderError,
+    CreateFolderError, DeleteFolderError, DownloadFolderError, GetChildFilesError, GetFolderError,
     UpdateFolderError,
 };
 
@@ -341,16 +341,16 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
 /// If the id is 0, this function fails if the folder isn't found or if the folder is root. While technically possible, the root folder shouldn't
 /// be downloaded in its entirety - that just seems suspicious. Regular backups should be made outside of the api, and I don't want this endpoint to be
 /// used in place of properly backup up your stuff
-fn download_folder(id: u32) -> Result<File, SaveFolderError> {
+pub fn download_folder(id: u32) -> Result<File, DownloadFolderError> {
     if id == 0 {
-        return Err(SaveFolderError::RootFolder);
+        return Err(DownloadFolderError::RootFolder);
     }
     let folder = get_folder(Some(id)).map_err(|e| {
         log::error!(
             "Failed to retrieve folder with id {id} from the database; {e:?}\n{}",
             Backtrace::force_capture()
         );
-        SaveFolderError::NotFound
+        DownloadFolderError::NotFound
     })?;
     let temp_dir = std::env::temp_dir();
     // nano id used here to ensure file names are unique if the same file is downloaded multiple times
@@ -366,7 +366,7 @@ fn download_folder(id: u32) -> Result<File, SaveFolderError> {
             "Failed to create tar archive for {tarchive_dir}; {e:?}\n{}",
             Backtrace::force_capture()
         );
-        SaveFolderError::Tar
+        DownloadFolderError::Tar
     })?;
     let mut tarchive_builder = tar::Builder::new(tarchive);
     match tarchive_builder.append_dir_all("", format!("{}/{}", file_dir(), folder.path)) {
@@ -377,7 +377,7 @@ fn download_folder(id: u32) -> Result<File, SaveFolderError> {
                 folder.path,
                 Backtrace::force_capture()
             );
-            return Err(SaveFolderError::Tar);
+            return Err(DownloadFolderError::Tar);
         }
         _ => {}
     };
@@ -390,7 +390,7 @@ fn download_folder(id: u32) -> Result<File, SaveFolderError> {
         }
         _ => {}
     }
-    File::open(tarchive_dir.clone()).map_err(|_| SaveFolderError::NotFound)
+    File::open(tarchive_dir.clone()).map_err(|_| DownloadFolderError::NotFound)
 }
 
 // private functions

@@ -93,6 +93,7 @@ pub fn rocket() -> Rocket<Build> {
             "/folders",
             routes![
                 get_folder,
+                download_folder,
                 create_folder,
                 update_folder,
                 delete_folder,

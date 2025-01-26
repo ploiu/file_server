@@ -7,7 +7,7 @@ pub enum GetFolderError {
 }
 
 #[derive(PartialEq, Debug)]
-pub enum SaveFolderError {
+pub enum DownloadFolderError {
     /// folder doesn't exist in the database
     NotFound,
     /// folder is root - can't compress (use manual backups instead)

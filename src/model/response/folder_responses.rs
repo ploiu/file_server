@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::fs::File;
 use std::ops::AddAssign;
 
 use rocket::serde::{json::Json, Deserialize, Serialize};
@@ -68,6 +69,20 @@ pub enum GetFolderResponse {
     Success(Json<FolderResponse>),
     #[response(status = 401)]
     Unauthorized(String),
+}
+
+#[derive(Responder)]
+pub enum DownloadFolderResponse {
+    #[response(status = 200, content_type = "application/x-tar")]
+    Success(File),
+    #[response(status = 400, content_type = "json")]
+    BadRequest(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 404, content_type = "json")]
+    FolderNotFound(Json<BasicMessage>),
+    #[response(status = 500, content_type = "json")]
+    FileSystemError(Json<BasicMessage>),
 }
 
 #[derive(Responder)]
