@@ -20,7 +20,7 @@ use crate::model::response::BasicMessage;
 use crate::service::folder_service;
 use crate::util::update_last_request_time;
 
-#[get("/<id>")]
+#[get("/metadata/<id>")]
 pub fn get_folder(
     id: Option<u32>,
     auth: HeaderAuth,

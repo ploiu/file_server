@@ -34,7 +34,7 @@ fn get_root_folder() {
     set_password();
     remove_files();
     let client = client();
-    let uri = uri!("/folders/null");
+    let uri = uri!("/folders/metadata/null");
     let res = client
         .get(uri)
         .header(Header::new("Authorization", AUTH))
@@ -60,7 +60,7 @@ fn get_root_folder_with_0_id() {
     set_password();
     remove_files();
     let client = client();
-    let uri = uri!("/folders/0");
+    let uri = uri!("/folders/metadata/0");
     let res = client
         .get(uri)
         .header(Header::new("Authorization", AUTH))
@@ -86,7 +86,7 @@ fn get_non_existent_folder() {
     set_password();
     remove_files();
     let client = client();
-    let uri = uri!("/folders/1234");
+    let uri = uri!("/folders/metadata/1234");
     let res = client
         .get(uri)
         .header(Header::new("Authorization", AUTH))
@@ -105,12 +105,12 @@ fn get_folder_without_creds() {
     initialize_db().unwrap();
     remove_files();
     let client = client();
-    let res = client.get(uri!("/folders/1234")).dispatch();
+    let res = client.get(uri!("/folders/metadata/1234")).dispatch();
     // without a password set
     assert_eq!(res.status(), Status::Unauthorized);
     // now with a password set
     set_password();
-    let res = client.get(uri!("/folders/1234")).dispatch();
+    let res = client.get(uri!("/folders/metadata/1234")).dispatch();
     assert_eq!(res.status(), Status::Unauthorized);
     cleanup();
 }
