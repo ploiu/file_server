@@ -1267,16 +1267,14 @@ mod download_folder_tests {
     };
 
     #[test]
-    fn test() {
+    fn works() {
         refresh_db();
         create_folder_disk("test/top/middle/bottom");
         create_folder_db_entry("test", None);
         create_folder_db_entry("top", Some(1));
         create_folder_db_entry("middle", Some(2));
         create_folder_db_entry("bottom", Some(3));
-        let f = download_folder(2).unwrap();
-        println!("{f:?}");
-        crate::fail!();
+        assert!(download_folder(2).is_ok());
         cleanup();
     }
 }
