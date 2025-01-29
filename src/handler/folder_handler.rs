@@ -7,14 +7,14 @@ use rocket::State;
 
 use crate::guard::HeaderAuth;
 use crate::model::error::folder_errors::{
-    CreateFolderError, DeleteFolderError, GetFolderError, UpdateFolderError,
+    CreateFolderError, DeleteFolderError, DownloadFolderError, GetFolderError, UpdateFolderError,
 };
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 
 use crate::model::response::folder_responses::{
-    CreateFolderResponse, DeleteFolderResponse, GetFolderResponse, GetMultiPreviewResponse,
-    UpdateFolderResponse,
+    CreateFolderResponse, DeleteFolderResponse, DownloadFolderResponse, GetFolderResponse,
+    GetMultiPreviewResponse, UpdateFolderResponse,
 };
 use crate::model::response::BasicMessage;
 use crate::service::folder_service;
@@ -41,6 +41,32 @@ pub fn get_folder(
         Err(_) => GetFolderResponse::FolderDbError(BasicMessage::new(
             "Failed to pull folder info from database. Check server logs for details",
         )),
+    }
+}
+
+#[get("/<id>")]
+pub fn download_folder(
+    id: u32,
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> DownloadFolderResponse {
+    match auth.validate() {
+        ValidateResult::Ok => { /*no op*/ }
+        ValidateResult::NoPasswordSet => return DownloadFolderResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return DownloadFolderResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    update_last_request_time(last_request_time);
+    match folder_service::download_folder(id) {
+        Ok(f) => DownloadFolderResponse::Success(f),
+        Err(DownloadFolderError::NotFound) => DownloadFolderResponse::FolderNotFound(
+            BasicMessage::new("No folder with that id found"),
+        ),
+        Err(DownloadFolderError::RootFolder) => DownloadFolderResponse::BadRequest(
+            BasicMessage::new("Cannot download root folder, make backups yourself!"),
+        ),
+        Err(DownloadFolderError::Tar) => {
+            DownloadFolderResponse::FileSystemError(BasicMessage::new("Failed to compress folder"))
+        }
     }
 }
 

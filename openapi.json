@@ -244,7 +244,10 @@
                 ]
               },
               "get all non images that qualify as \"large\" and above": {
-                "value": ["fileType.neq;image", "fileSize.gt;medium"]
+                "value": [
+                  "fileType.neq;image",
+                  "fileSize.gt;medium"
+                ]
               }
             }
           }
@@ -425,7 +428,9 @@
         }
       ],
       "get": {
-        "tags": ["files"],
+        "tags": [
+          "files"
+        ],
         "description": "downloads a small png of the file with the passed id",
         "responses": {
           "200": {
@@ -641,6 +646,57 @@
         }
       }
     },
+    "/folders/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number",
+            "minimum": 0
+          },
+          "in": "path"
+        }
+      ],
+      "get": {
+        "tags": [
+          "folders"
+        ],
+        "description": "downloads the folder with the passed id as a tar file. Downloading the root folder will reject the request with a 400. The file server should not be used to back up its own data. Perform backups yourself external to this api",
+        "responses": {
+          "200": {
+            "description": "folder successfully compressed and downloaded",
+            "content": {
+              "application/x-tar": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "404": {
+            "description": "No folder with the passed id was found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          },
+          "500": {
+            "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
     "/folders/preview/{id}": {
       "parameters": [
         {
@@ -653,7 +709,9 @@
         }
       ],
       "get": {
-        "tags": ["folders"],
+        "tags": [
+          "folders"
+        ],
         "description": "downloads all file previews under the folder with the passed id",
         "responses": {
           "200": {

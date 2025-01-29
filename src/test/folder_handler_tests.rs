@@ -862,3 +862,49 @@ fn update_folder_to_file_with_same_name_different_folder() {
     assert!(root_files.contains(&PathBuf::from(format!("{}/test", file_dir()))));
     cleanup();
 }
+
+#[test]
+fn download_folder_returns_200_for_valid_folder() {
+    set_password();
+    remove_files();
+    create_folder_disk("test/top/middle/bottom");
+    create_folder_db_entry("test", None);
+    create_folder_db_entry("top", Some(1));
+    create_folder_db_entry("middle", Some(2));
+    create_folder_db_entry("bottom", Some(3));
+    create_file_db_entry("test", Some(4));
+    create_file_disk("test/top/middle/bottom/test", "test");
+    let client = client();
+    let res = client
+        .get(uri!("/folders/1"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(Status::Ok, res.status());
+    cleanup();
+}
+
+#[test]
+fn download_folder_returns_400_for_root() {
+    set_password();
+    remove_files();
+    let client = client();
+    let res = client
+        .get(uri!("/folders/0"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(Status::BadRequest, res.status());
+    cleanup();
+}
+
+#[test]
+fn download_folder_returns_404_for_missing_id() {
+    set_password();
+    remove_files();
+    let client = client();
+    let res = client
+        .get(uri!("/folders/12345"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(Status::NotFound, res.status());
+    cleanup();
+}

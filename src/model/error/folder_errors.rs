@@ -7,6 +7,16 @@ pub enum GetFolderError {
 }
 
 #[derive(PartialEq, Debug)]
+pub enum DownloadFolderError {
+    /// folder doesn't exist in the database
+    NotFound,
+    /// folder is root - can't compress (use manual backups instead)
+    RootFolder,
+    /// Tar failed to archive
+    Tar,
+}
+
+#[derive(PartialEq, Debug)]
 pub enum CreateFolderError {
     /// a folder with the name in the selected path already exists
     AlreadyExists,

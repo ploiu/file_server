@@ -32,7 +32,7 @@ values
     ('diagram'),
     ('document'),
     ('font'),
-    ('game_rom'),
+    ('rom'),
     ('image'),
     ('material'),
     ('model'),
