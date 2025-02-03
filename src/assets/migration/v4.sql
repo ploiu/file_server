@@ -38,7 +38,7 @@ values
     ('model'),
     ('object'),
     ('presentation'),
-    ('save_file'),
+    ('savefile'),
     ('spreadsheet'),
     ('text'),
     ('video'),
