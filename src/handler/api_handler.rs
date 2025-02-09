@@ -1,10 +1,19 @@
-use rocket::serde::{json::Json, Serialize};
+use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
+use rocket::serde::{json::Json, Serialize};
+use rocket::State;
+
+use crate::guard::HeaderAuth;
 use crate::model::error::metadata_errors::CreatePasswordError;
+use crate::model::guard::auth::ValidateResult;
 use crate::model::request::{BodyAuth, UpdateAuth};
-use crate::model::response::api_responses::{SetPassWordResponse, UpdatePasswordResponse};
+use crate::model::response::api_responses::{
+    GetDiskInfoResponse, SetPassWordResponse, UpdatePasswordResponse,
+};
 use crate::model::response::BasicMessage;
-use crate::service::api_service;
+use crate::service::api_service::{self, DiskInfoError};
+use crate::util::update_last_request_time;
 
 static API_VERSION_NUMBER: &str = "3.0.0";
 
@@ -46,5 +55,27 @@ pub fn update_password(auth: Json<UpdateAuth>) -> UpdatePasswordResponse {
     match api_service::update_auth(auth.into_inner()) {
         Ok(_) => UpdatePasswordResponse::Success(()),
         Err(_) => UpdatePasswordResponse::Unauthorized(()),
+    }
+}
+
+#[get("/disk")]
+pub fn get_disk_info(
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> GetDiskInfoResponse {
+    match auth.validate() {
+        ValidateResult::Ok => { /*no op*/ }
+        ValidateResult::NoPasswordSet => return GetDiskInfoResponse::Unauthorized("No password has been set. You can set a username and password by making a POST to `/api/password`".to_string()),
+        ValidateResult::Invalid => return GetDiskInfoResponse::Unauthorized("Bad Credentials".to_string())
+    };
+    update_last_request_time(last_request_time);
+    match api_service::get_disk_info() {
+        Ok(info) => GetDiskInfoResponse::Success(Json::from(info)),
+        Err(DiskInfoError::Generic) => {
+            GetDiskInfoResponse::GenericError(BasicMessage::new("Failed to retrieve disk info"))
+        }
+        Err(DiskInfoError::Windows) => GetDiskInfoResponse::Windows(BasicMessage::new(
+            "Disk info support isn't available for server running on windows",
+        )),
     }
 }

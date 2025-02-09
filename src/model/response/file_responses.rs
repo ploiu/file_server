@@ -75,10 +75,10 @@ pub enum UpdateFileResponse {
 pub enum SearchFileResponse {
     #[response(status = 200)]
     Success(Json<Vec<FileApi>>),
-    #[response(status = 401)]
-    Unauthorized(String),
     #[response(status = 400, content_type = "json")]
     BadRequest(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
     #[response(status = 500, content_type = "json")]
     GenericError(Json<BasicMessage>),
 }
@@ -87,10 +87,10 @@ pub enum SearchFileResponse {
 pub enum GetPreviewResponse {
     #[response(status = 200, content_type = "image/png")]
     Success(Vec<u8>),
-    #[response(status = 404, content_type = "json")]
-    NotFound(Json<BasicMessage>),
     #[response(status = 401)]
     Unauthorized(String),
+    #[response(status = 404, content_type = "json")]
+    NotFound(Json<BasicMessage>),
     #[response(status = 500, content_type = "json")]
     GenericError(Json<BasicMessage>),
 }
