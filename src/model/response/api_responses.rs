@@ -1,6 +1,6 @@
 use rocket::serde::json::Json;
 
-use crate::model::response::BasicMessage;
+use crate::{model::response::BasicMessage, service::api_service::DiskInfo};
 
 type NoContent = ();
 
@@ -20,4 +20,17 @@ pub enum UpdatePasswordResponse {
     Success(NoContent),
     #[response(status = 401, content_type = "json")]
     Unauthorized(NoContent),
+}
+
+#[derive(Responder)]
+pub enum GetDiskInfoResponse {
+    #[response(status = 200, content_type = "json")]
+    Success(Json<DiskInfo>),
+    /// windows isn't supported for this endpoint
+    #[response(status = 400, content_type = "json")]
+    Windows(Json<BasicMessage>),
+    #[response(status = 401)]
+    Unauthorized(String),
+    #[response(status = 500, content_type = "json")]
+    GenericError(Json<BasicMessage>),
 }

@@ -30,6 +30,47 @@
         }
       }
     },
+    "/api/disk": {
+      "get": {
+        "tags": ["api"],
+        "description": "Returns current disk usage information",
+        "responses": {
+          "200": {
+            "description": "info retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/diskInfo"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "file server is hosted on windows. Accurately determining the disk requires looking at the device id, which is complicated on windows and uses unsafe code. This endpoint will always return a 400 (if auth check passes) and the server is running on windows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          },
+          "500": {
+            "description": "failed to retrieve disk info due to an unknown error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/basicMessage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/password": {
       "post": {
         "requestBody": {
@@ -904,6 +945,25 @@
           }
         }
       },
+      "diskInfo": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "the mounted folder name"
+          },
+          "totalSpace": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the total size in bytes the disk can hold"
+          },
+          "freeSpace": {
+            "type": "integer",
+            "format": "int64",
+            "description": "the written bytes to the disk"
+          }
+        }
+      },
       "createFileRequest": {
         "properties": {
           "file": {
@@ -1160,7 +1220,7 @@
   },
   "security": [
     {
-      "BasicAuth": []
+      "basicAuth": []
     }
   ]
 }

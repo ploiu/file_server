@@ -76,7 +76,10 @@ pub fn rocket() -> Rocket<Build> {
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
     rocket::build()
-        .mount("/api", routes![api_version, set_password, update_password])
+        .mount(
+            "/api",
+            routes![api_version, set_password, update_password, get_disk_info],
+        )
         .mount(
             "/files",
             routes![
