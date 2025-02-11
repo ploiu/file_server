@@ -23,8 +23,8 @@ This project is still in development, but here is what I want from something lik
 - supports flexible and powerful search based on file attributes:
     - [x] name
     - [x] user-defined tags (see [#30](https://github.com/ploiu/file_server/issues/30))
-    - [ ] file type
-    - [ ] date
+    - [x] file type
+    - [x] date
 - allows for organizing files into folders
 - has a well-documented rest api
 
