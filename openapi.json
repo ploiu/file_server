@@ -761,10 +761,6 @@
               "application/json": {
                 "schema": {
                   "type": "object",
-                  "additionalProperties": {
-                    "type": "string",
-                    "format": "binary"
-                  },
                   "description": "map of key => file id : byte[]"
                 }
               }
@@ -1221,5 +1217,10 @@
         "scheme": "basic"
       }
     }
-  }
+  },
+  "security": [
+    {
+      "basicAuth": []
+    }
+  ]
 }
