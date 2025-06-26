@@ -15,7 +15,7 @@ use crate::model::response::api_responses::{
 use crate::service::api_service::{self, DiskInfoError};
 use crate::util::update_last_request_time;
 
-static API_VERSION_NUMBER: &str = "3.0.0";
+static API_VERSION_NUMBER: &str = "3.0.1";
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde")]
