@@ -14,25 +14,22 @@ pub mod tag_repository;
 pub fn open_connection() -> Connection {
     use crate::config::FILE_SERVER_CONFIG;
 
-    return match Connection::open_with_flags(
+    match Connection::open_with_flags(
         Path::new(FILE_SERVER_CONFIG.clone().database.location.as_str()),
         OpenFlags::default(),
     ) {
         Ok(con) => con,
         Err(error) => panic!("Failed to get a connection to the database!: {}", error),
-    };
+    }
 }
 
 #[cfg(test)]
 pub fn open_connection() -> Connection {
     let db_name = format!("{}.sqlite", crate::test::current_thread_name());
-    return match Connection::open_with_flags(
-        Path::new(db_name.as_str()),
-        rusqlite::OpenFlags::default(),
-    ) {
+    match Connection::open_with_flags(Path::new(db_name.as_str()), rusqlite::OpenFlags::default()) {
         Ok(con) => con,
         Err(error) => panic!("Failed to get a connection to the database!: {}", error),
-    };
+    }
 }
 
 /// runs init.sql on the database

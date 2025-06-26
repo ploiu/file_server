@@ -18,7 +18,8 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
-                "Failed to check if any tags with the name {name} already exist! Error is {e:?}\n{}", Backtrace::force_capture()
+                "Failed to check if any tags with the name {name} already exist! Error is {e:?}\n{}",
+                Backtrace::force_capture()
             );
             con.close().unwrap();
             return Err(CreateTagError::DbError);
@@ -100,7 +101,11 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
     // now make sure the database doesn't already have a tag with the new name TODO maybe see if can clean up, 2 empty branches is a smell
     match tag_repository::get_tag_by_title(&new_title, &con) {
         Ok(Some(_)) => {
-            log::error!("Could not update tag with id {:?} to name {new_title}, because a tag with that name already exists!\n{}", request.id, Backtrace::force_capture());
+            log::error!(
+                "Could not update tag with id {:?} to name {new_title}, because a tag with that name already exists!\n{}",
+                request.id,
+                Backtrace::force_capture()
+            );
             con.close().unwrap();
             return Err(UpdateTagError::NewNameAlreadyExists);
         }
@@ -307,7 +312,8 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationErro
     // make sure the folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
         log::error!(
-            "Cannot get tags on folder with id {folder_id}, because that folder does not exist!\n{}", Backtrace::force_capture()
+            "Cannot get tags on folder with id {folder_id}, because that folder does not exist!\n{}",
+            Backtrace::force_capture()
         );
         return Err(TagRelationError::FileNotFound);
     }

@@ -1,11 +1,11 @@
 use std::fmt;
 use std::io::Write;
 
-use base64::{engine::general_purpose, Engine as _};
+use base64::{Engine as _, engine::general_purpose};
+use rocket::Request;
 use rocket::async_trait;
 use rocket::http::Status;
 use rocket::request::{FromRequest, Outcome};
-use rocket::Request;
 use sha2::{Digest, Sha256};
 
 use crate::model::error::guard_errors::AuthError;

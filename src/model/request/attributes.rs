@@ -313,7 +313,7 @@ fn parse_file_size(operator: EqualityOperator, value: &str) -> Result<AttributeT
 /// parses an attribute search for a [NamedComparisonAttribute]
 fn parse_file_type(operator: EqualityOperator, value: &str) -> Result<AttributeTypes, ParseError> {
     // reason "unknown" is checked here is because I don't want both a `try_from` and a `from` for FileTypes
-    if FileTypes::from(value) != FileTypes::Unknown || value.to_ascii_lowercase() == "unknown" {
+    if FileTypes::from(value) != FileTypes::Unknown || value.eq_ignore_ascii_case("unknown") {
         if operator != EqualityOperator::Eq && operator != EqualityOperator::Neq {
             Err(ParseError::BadEqualityOperator(format!(
                 "{operator} is not a valid equality operator for fileType"
@@ -349,7 +349,7 @@ fn parse_value(attr_string: &str) -> &str {
 #[cfg(test)]
 mod validate_format_tests {
 
-    use super::{parse_operator, ParseError};
+    use super::{ParseError, parse_operator};
 
     #[test]
     fn returns_error_if_no_period() {

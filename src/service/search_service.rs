@@ -8,8 +8,8 @@ use crate::model::api::FileApi;
 use crate::model::error::file_errors::SearchFileError;
 use crate::model::repository::FileRecord;
 use crate::model::request::attributes::AttributeSearch;
-use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
+use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::folder_service;
 
@@ -72,18 +72,20 @@ pub fn search_files(
     }
     final_set = final_set.into_iter().unique_by(|f| f.id).collect();
     // now make sure all files have their tags or else we'll get inconsistent response bodies
-    let tag_mapping =
-        match tag_repository::get_tags_on_files(final_set.iter().map(|f| f.id).collect(), &con) {
-            Ok(tags) => tags,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
+    let tag_mapping = match tag_repository::get_tags_on_files(
+        final_set.iter().map(|f| f.id).collect(),
+        &con,
+    ) {
+        Ok(tags) => tags,
+        Err(e) => {
+            con.close().unwrap();
+            log::error!(
                 "Failed to search files - failed to retrieve tags on all files. Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
-                return Err(SearchFileError::DbError);
-            }
-        };
+            return Err(SearchFileError::DbError);
+        }
+    };
     // using a normal for loop here confuses the rust compiler, and it offers suggestions that just further breaks things.
     // am I doing this wrong? probably...but it works
     let final_set: HashSet<FileApi> = final_set
@@ -489,7 +491,7 @@ mod search_files_tests {
         create_file_db_entry("bottom file", Some(3));
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
-                                      // tag1 should retrieve all files
+        // tag1 should retrieve all files
         let res = search_files("", vec!["tag1".to_string()], vec![].try_into().unwrap()).unwrap();
         // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
         let res: Vec<FileApi> = res.iter().cloned().collect();

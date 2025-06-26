@@ -623,8 +623,8 @@ mod update_file_tests {
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
 
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
     use crate::test::{
@@ -758,7 +758,7 @@ mod update_file_tests {
         refresh_db();
         create_folder_db_entry("test", None); // id 1
         create_folder_db_entry("target", None); // id 2
-                                                // put the files in the folders
+        // put the files in the folders
         create_file_db_entry("test.txt", Some(1)); // id 1
         create_file_db_entry("test.txt", Some(2)); // id 2
         let res = update_file(FileApi {

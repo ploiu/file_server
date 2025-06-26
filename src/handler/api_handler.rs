@@ -1,17 +1,17 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use rocket::serde::{json::Json, Serialize};
 use rocket::State;
+use rocket::serde::{Serialize, json::Json};
 
 use crate::guard::HeaderAuth;
 use crate::model::error::metadata_errors::CreatePasswordError;
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::{BodyAuth, UpdateAuth};
+use crate::model::response::BasicMessage;
 use crate::model::response::api_responses::{
     GetDiskInfoResponse, SetPassWordResponse, UpdatePasswordResponse,
 };
-use crate::model::response::BasicMessage;
 use crate::service::api_service::{self, DiskInfoError};
 use crate::util::update_last_request_time;
 

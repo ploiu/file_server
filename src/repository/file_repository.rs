@@ -1,7 +1,7 @@
 use std::{backtrace::Backtrace, collections::HashSet};
 
 use chrono::NaiveDateTime;
-use rusqlite::{params, Connection, ToSql};
+use rusqlite::{Connection, ToSql, params};
 
 /// a sql where clause part with named parameter tuple
 type WhereClause = (String, Option<(String, String)>);
@@ -377,7 +377,7 @@ mod get_files_by_all_tags_tests {
         create_file_db_entry("has some", None); // 2
         create_file_db_entry("has all", None); // 3
         create_file_db_entry("also has all", None); // 4
-                                                    // add tags
+        // add tags
         create_tag_files("tag1", vec![2, 3, 4]);
         create_tag_files("asdf", vec![3, 4]);
         create_tag_files("fda", vec![2, 3, 4]);

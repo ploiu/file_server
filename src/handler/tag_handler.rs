@@ -1,8 +1,8 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use rocket::serde::json::Json;
 use rocket::State;
+use rocket::serde::json::Json;
 
 use crate::guard::HeaderAuth;
 use crate::model::error::tag_errors::{GetTagError, UpdateTagError};

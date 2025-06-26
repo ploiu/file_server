@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::ops::AddAssign;
 
-use rocket::serde::{json::Json, Deserialize, Serialize};
+use rocket::serde::{Deserialize, Serialize, json::Json};
 
 use crate::model::api::FileApi;
 use crate::model::repository::Folder;

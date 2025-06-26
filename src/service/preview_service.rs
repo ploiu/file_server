@@ -80,10 +80,7 @@ fn resize_image(image_path: &str) -> Result<Vec<u8>, PreviewError> {
     let img = match ImageReader::open(image_path) {
         Ok(i) => i,
         Err(e) => {
-            log::error!(
-                "Failed to open image at path {image_path}. Exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
+            log::warn!("Failed to open image at path {image_path}. Exception is {e:?}");
             return Err(PreviewError::Open);
         }
     };
@@ -91,24 +88,24 @@ fn resize_image(image_path: &str) -> Result<Vec<u8>, PreviewError> {
     let img = match img.with_guessed_format() {
         Ok(i) => i,
         Err(e) => {
-            log::error!(
-                "Failed to guess the format of path {image_path}. Exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
+            log::warn!("Failed to guess the format of path {image_path}. Exception is {e:?}");
             return Err(PreviewError::GuessFormat);
         }
     };
     let img: DynamicImage = match img.decode() {
         Ok(i) => i,
         Err(e) => {
-            log::error!("Failed to decode the image at path {image_path}. Exception is {e:?}");
+            log::warn!("Failed to decode the image at path {image_path}. Exception is {e:?}");
             return Err(PreviewError::Decode);
         }
     };
     let resized = img.resize(150, 150, image::imageops::FilterType::Gaussian);
     let mut blob = Vec::<u8>::new();
     if let Err(e) = resized.write_to(&mut Cursor::new(&mut blob), image::ImageFormat::Png) {
-        log::error!("Failed to write resized image with path [{image_path}] to blob array. Exception is {e:?}\n{}", Backtrace::force_capture());
+        log::error!(
+            "Failed to write resized image with path [{image_path}] to blob array. Exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
         return Err(PreviewError::Encode);
     }
     Ok(blob)

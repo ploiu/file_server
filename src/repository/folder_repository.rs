@@ -1,7 +1,7 @@
 use std::backtrace::Backtrace;
 use std::collections::{HashMap, HashSet};
 
-use rusqlite::{params, Connection, Rows};
+use rusqlite::{Connection, Rows, params};
 
 use crate::model::repository;
 use crate::repository::file_repository;
@@ -311,7 +311,7 @@ mod get_folders_by_any_tag_tests {
         create_folder_db_entry("some tags", Some(1)); // 2
         create_folder_db_entry("no tags", None); // 3
         create_folder_db_entry("no relevant tags", None); // 4
-                                                          // tags on them folders
+        // tags on them folders
         create_tag_folders("irrelevant", vec![2, 4]);
         create_tag_folders("relevant 1", vec![1, 2]);
         create_tag_folders("relevant 2", vec![1]);

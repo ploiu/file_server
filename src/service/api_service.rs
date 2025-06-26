@@ -99,13 +99,12 @@ pub fn get_disk_info() -> Result<DiskInfo, DiskInfoError> {
     let device_id = get_device_id(&files_dir)?;
     let disks = Disks::new_with_refreshed_list();
     for disk in &disks {
-        if device_id == get_device_id(&disk.mount_point())? {
+        if device_id == get_device_id(disk.mount_point())? {
             return Ok(DiskInfo {
                 name: String::from(
                     disk.mount_point()
                         .to_str()
-                        .or(Some("non-utf8 mount point path!"))
-                        .unwrap(),
+                        .unwrap_or("non-utf8 mount point path!"),
                 ),
                 total_space: disk.total_space(),
                 free_space: disk.available_space(),
@@ -130,7 +129,7 @@ fn get_device_id(path: &std::path::Path) -> Result<u64, DiskInfoError> {
                 "Failed to get device id for {path:?}; {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            return Err(DiskInfoError::Generic);
+            Err(DiskInfoError::Generic)
         }
     }
 }

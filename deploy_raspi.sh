@@ -24,4 +24,4 @@ readonly SOURCE_PATH=./target/${TARGET_ARCH}/release/file_server
 [[ "${TARGET_PATH}" = "" ]] && echo "missing TARGET_PATH" && exit
 cargo build --release --target=${TARGET_ARCH}
 
-rsync ${SOURCE_PATH} ${TARGET_HOST}:${TARGET_PATH}_exec
+rsync ${SOURCE_PATH} ${TARGET_HOST}:${TARGET_PATH}

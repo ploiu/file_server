@@ -18,8 +18,8 @@ use crate::model::error::folder_errors::{
 
 use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
+use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
@@ -369,26 +369,20 @@ pub fn download_folder(id: u32) -> Result<File, DownloadFolderError> {
         DownloadFolderError::Tar
     })?;
     let mut tarchive_builder = tar::Builder::new(tarchive);
-    match tarchive_builder.append_dir_all("", format!("{}/{}", file_dir(), folder.path)) {
-        Err(e) => {
-            log::error!(
-                "Failed to tarchive {}/{}; {e:?}\n{}",
-                file_dir(),
-                folder.path,
-                Backtrace::force_capture()
-            );
-            return Err(DownloadFolderError::Tar);
-        }
-        _ => {}
+    if let Err(e) = tarchive_builder.append_dir_all("", format!("{}/{}", file_dir(), folder.path)) {
+        log::error!(
+            "Failed to tarchive {}/{}; {e:?}\n{}",
+            file_dir(),
+            folder.path,
+            Backtrace::force_capture()
+        );
+        return Err(DownloadFolderError::Tar);
     };
-    match tarchive_builder.finish() {
-        Err(e) => {
-            log::error!(
-                "Failed to close tarchive {tarchive_dir}; {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-        }
-        _ => {}
+    if let Err(e) = tarchive_builder.finish() {
+        log::error!(
+            "Failed to close tarchive {tarchive_dir}; {e:?}\n{}",
+            Backtrace::force_capture()
+        );
     }
     File::open(tarchive_dir.clone()).map_err(|_| DownloadFolderError::NotFound)
 }
@@ -761,7 +755,8 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     // now that we've deleted everything beneath it, delete the requested folder from the repository
     if let Err(e) = folder_repository::delete_folder(id, con) {
         log::error!(
-            "Failed to delete root folder in recursive folder delete. Nested exception is {e:?}\n{}", Backtrace::force_capture()
+            "Failed to delete root folder in recursive folder delete. Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
         );
         return Err(DeleteFolderError::DbFailure);
     };
@@ -777,8 +772,8 @@ fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -
 #[cfg(test)]
 mod get_folder_tests {
     use crate::model::error::folder_errors::GetFolderError;
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
 
@@ -836,8 +831,8 @@ mod get_folder_tests {
 mod update_folder_tests {
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::{get_folder, update_folder};
     use crate::test::{
         cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
@@ -923,8 +918,8 @@ mod update_folder_tests {
 mod reduce_folders_by_tag_tests {
     use std::collections::HashSet;
 
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::reduce_folders_by_tag;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,

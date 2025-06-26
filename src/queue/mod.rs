@@ -112,7 +112,7 @@ where
 pub fn publish_message(queue_name: &str, message: &str) {
     use std::backtrace::Backtrace;
 
-    use lapin::{options::BasicPublishOptions, BasicProperties};
+    use lapin::{BasicProperties, options::BasicPublishOptions};
 
     if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
         return;
@@ -140,9 +140,9 @@ pub fn publish_message(queue_name: &str, message: &str) {
 #[cfg(not(test))]
 impl RabbitProvider {
     fn init() -> Self {
+        use lapin::ConnectionProperties;
         use lapin::options::QueueDeclareOptions;
         use lapin::types::FieldTable;
-        use lapin::ConnectionProperties;
 
         let config = FILE_SERVER_CONFIG.clone();
         let (connection, channel) = async_global_executor::block_on(async {
