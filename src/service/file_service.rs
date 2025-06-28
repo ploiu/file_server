@@ -422,13 +422,14 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let con: Connection = repository::open_connection();
     let result = file_repository::get_file_preview(id, &con).map_err(|e| {
-        log::error!(
-            "Failed to get file preview! Nested exception is {e:?}\n{}",
-            Backtrace::force_capture()
-        );
         if e == rusqlite::Error::QueryReturnedNoRows {
+            log::warn!("Failed to get file preview because no preview exists in the db!");
             GetPreviewError::NotFound
         } else {
+            log::error!(
+                "Failed to get file preview! Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             GetPreviewError::DbFailure
         }
     });
