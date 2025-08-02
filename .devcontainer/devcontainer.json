@@ -1,0 +1,32 @@
+{
+    "name": "file_server_dev",
+    "build": {
+        "dockerfile": "Dockerfile"
+    },
+    "forwardPorts": [8000],
+    "customizations": {
+        "vscode": {
+            "settings": {
+                "files.autoSave": "afterDelay",
+                "editor.fontSize": 14,
+                "editor.fontFamily": "'Fira Code'"
+            },
+            "extensions": [
+                "fill-labs.dependi",
+                "tamasfe.even-better-toml",
+                "file-icons.file-icons",
+                "k--kato.intellij-idea-keybindings",
+                "emilast.LogFileHighlighter",
+                "webfreak.debug",
+                "christian-kohler.path-intellisense",
+                "1YiB.rust-bundle",
+                "adpyke.vscode-sql-formatter",
+                "qwtel.sqlite-viewer",
+                "wayou.vscode-todo-highlight",
+                "akamud.vscode-theme-onedark"
+            ]
+        }
+    },
+    "remoteUser": "dev",
+    "postCreateCommand": "cargo test"
+}
