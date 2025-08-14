@@ -1,4 +1,4 @@
-rm output.log
+rm -f output.log
 touch output.log
 cargo run &
 tail -f output.log &

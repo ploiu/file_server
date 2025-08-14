@@ -1,10 +1,11 @@
-FROM rust:1.88.0
+FROM docker.io/library/rust:1.88.0
 
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
     curl \
     git \
+    gcc-aarch64-linux-gnu \
     && rm -rf /var/lib/apt/lists/* \
     # for cross compilation with raspberry pi 
     && rustup target add aarch64-unknown-linux-gnu \
