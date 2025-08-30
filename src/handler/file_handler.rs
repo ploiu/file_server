@@ -233,7 +233,7 @@ pub fn get_file_preview(
             "No preview for a file with that id could be found",
         )),
         Err(e) => GetPreviewResponse::GenericError(BasicMessage::new(
-            format!("Failed to get file preview. Exception is {:?}", e).as_str(),
+            format!("Failed to get file preview. Exception is {e:?}").as_str(),
         )),
     }
 }

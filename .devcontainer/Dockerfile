@@ -12,8 +12,9 @@ RUN apt-get update && apt-get install -y \
     # create a non-root user to run everything in
     && useradd -m dev \
     # set default shell to bash for the new user
-    && chsh -s /bin/bash dev
-
+    && chsh -s /bin/bash dev \
+    && rustup component add clippy rustfmt \
+    
 USER dev
 
 # better prompt and git status viewer

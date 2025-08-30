@@ -44,8 +44,8 @@ impl AddAssign<Vec<FolderResponse>> for FolderResponse {
 impl From<Folder> for FolderResponse {
     fn from(base: Folder) -> Self {
         let split_name = String::from(&base.name);
-        let split_name = split_name.split('/');
-        let name = String::from(split_name.last().unwrap_or(base.name.as_str()));
+        let mut split_name = split_name.split('/');
+        let name = String::from(split_name.next_back().unwrap_or(base.name.as_str()));
         FolderResponse {
             // should always have an id when coming from the database
             id: base.id.unwrap(),

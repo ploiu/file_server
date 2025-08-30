@@ -144,7 +144,7 @@ pub fn file_dir() -> String {
 #[cfg(test)]
 pub fn file_dir() -> String {
     let thread_name = crate::test::current_thread_name();
-    let dir_name = format!("./{}", thread_name);
+    let dir_name = format!("./{thread_name}");
     dir_name
 }
 
@@ -153,7 +153,7 @@ pub async fn check_root_dir(dir: String) {
     let path = Path::new(dir.as_str());
     if !path.exists() {
         if let Err(e) = create_dir(path).await {
-            panic!("Failed to create file directory: \n {:?}", e)
+            panic!("Failed to create file directory: \n {e:?}")
         }
     }
 }
@@ -194,7 +194,7 @@ pub async fn save_file(
         created.into()
     } else {
         let file_extension = if let Some(ext) = &file_input.extension {
-            format!(".{}", ext)
+            format!(".{ext}")
         } else {
             String::from("")
         };
@@ -589,7 +589,7 @@ fn check_file_in_dir(
 /// ```
 fn determine_file_name(root_name: &str, extension: &Option<String>) -> String {
     if let Some(ext) = extension {
-        format!("{}.{}", root_name, ext)
+        format!("{root_name}.{ext}")
     } else {
         root_name.to_string()
     }

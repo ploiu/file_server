@@ -137,8 +137,12 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     }
     // updated folder name will be a path, so we need to get just the folder name
     let split_name = String::from(&updated_folder.name);
-    let split_name = split_name.split('/');
-    let name = String::from(split_name.last().unwrap_or(updated_folder.name.as_str()));
+    let mut split_name = split_name.split('/');
+    let name = String::from(
+        split_name
+            .next_back()
+            .unwrap_or(updated_folder.name.as_str()),
+    );
     match tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone()) {
         Ok(()) => { /*no op*/ }
         Err(_) => {
@@ -642,9 +646,9 @@ fn search_folder_within(
         .map(|folder| Folder {
             id: folder.id,
             parent_id: folder.parent_id,
-            name: String::from(folder.name.to_lowercase().split('/').last().unwrap()),
+            name: String::from(folder.name.to_lowercase().split('/').next_back().unwrap()),
         })
-        .find(|folder| folder.name == name.to_lowercase().split('/').last().unwrap());
+        .find(|folder| folder.name == name.to_lowercase().split('/').next_back().unwrap());
     Ok(matching_folder)
 }
 

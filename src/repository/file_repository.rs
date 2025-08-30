@@ -107,7 +107,7 @@ pub fn update_file(record: &FileRecord, con: &Connection) -> Result<(), rusqlite
 /// performs a fuzzy search using the passed criteria.
 /// The fuzzy search mashes all the fields together and performs a sql `LIKE` clause on the input
 pub fn search_files(criteria: &str, con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
-    let criteria = format!("%{}%", criteria);
+    let criteria = format!("%{criteria}%");
     let mut pst = con.prepare(include_str!("../assets/queries/file/search_files.sql"))?;
     let rows = pst.query_map([&criteria], map_file_all_fields)?;
     rows.into_iter().collect()

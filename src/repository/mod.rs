@@ -19,7 +19,7 @@ pub fn open_connection() -> Connection {
         OpenFlags::default(),
     ) {
         Ok(con) => con,
-        Err(error) => panic!("Failed to get a connection to the database!: {}", error),
+        Err(error) => panic!("Failed to get a connection to the database!: {error}"),
     }
 }
 
@@ -28,7 +28,7 @@ pub fn open_connection() -> Connection {
     let db_name = format!("{}.sqlite", crate::test::current_thread_name());
     match Connection::open_with_flags(Path::new(db_name.as_str()), rusqlite::OpenFlags::default()) {
         Ok(con) => con,
-        Err(error) => panic!("Failed to get a connection to the database!: {}", error),
+        Err(error) => panic!("Failed to get a connection to the database!: {error}"),
     }
 }
 

@@ -66,8 +66,7 @@ where
                 } as u32;
                 if time_since_last_request <= config.file_preview.sleep_time_millis {
                     log::info!(
-                        "Not generating previews since the time since last request is only {:?}",
-                        time_since_last_request
+                        "Not generating previews since the time since last request is only {time_since_last_request:?}"
                     );
                     // we haven't waited enough time since the last request, so unack the message, sleep, and then skip this item
                     delivery

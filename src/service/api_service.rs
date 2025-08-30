@@ -153,7 +153,7 @@ fn is_password_set() -> bool {
         Ok(_) => true,
         Err(rusqlite::Error::QueryReturnedNoRows) => false,
         Err(e) => {
-            panic!("Failed to check auth in database: {:?}", e);
+            panic!("Failed to check auth in database: {e:?}");
         }
     }
 }

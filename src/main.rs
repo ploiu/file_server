@@ -33,7 +33,7 @@ fn temp_dir() -> String {
 #[cfg(test)]
 fn temp_dir() -> String {
     let thread_name = test::current_thread_name();
-    format!("./.{}_temp", thread_name)
+    format!("./.{thread_name}_temp")
 }
 
 #[cfg(not(test))]
