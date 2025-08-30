@@ -6,7 +6,7 @@ authors = ["Ploiu"]
 
 [dependencies]
 rocket = { version = "0.5", features = ["json", "tls"] }
-rusqlite = { version = "0.36", features = ["bundled", "array", "chrono"] }
+rusqlite = { version = "0.37", features = ["bundled", "array", "chrono"] }
 base64 = "0.22"
 sha2 = "0.10"
 log = "0.4"
@@ -23,4 +23,4 @@ chrono = { version = "0.4", features = ["serde"] }
 itertools = "0.14"
 tar = "0.4"
 nanoid = "0.4.0"
-sysinfo = { version = "0.35", features = ["disk"] }
+sysinfo = { version = "0.37", features = ["disk"] }
