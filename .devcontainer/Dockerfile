@@ -6,6 +6,8 @@ RUN apt-get update && apt-get install -y \
     curl \
     git \
     gcc-aarch64-linux-gnu \
+    ffmpeg \
+    sqlite3 \
     && rm -rf /var/lib/apt/lists/* \
     # for cross compilation with raspberry pi 
     && rustup target add aarch64-unknown-linux-gnu \
