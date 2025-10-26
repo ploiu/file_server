@@ -17,7 +17,9 @@ RUN apt-get update && apt-get install -y \
     && chsh -s /bin/bash dev \
     && rustup component add clippy rustfmt
 
+RUN git clone https://github.com/ploiu/bashScripts /home/dev/bashScripts
 USER dev
 
 # better prompt and git status viewer
 RUN bash -c "$(curl -fsSL https://raw.githubusercontent.com/ohmybash/oh-my-bash/master/tools/install.sh)"
+RUN echo "for script in \$(find ~/bashScripts -name '*.sh'); do source \$script; done" >> /home/dev/.bashrc

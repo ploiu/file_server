@@ -1,3 +1,8 @@
+use std::path::Path;
+
+#[cfg(not(test))]
+use rusqlite::OpenFlags;
+use rusqlite::{Connection, Result};
 use std::backtrace::Backtrace;
 
 use crate::{
@@ -8,6 +13,7 @@ use crate::{
 };
 
 /// checks the database and generates previews for all files if the database doesn't have the flag `generated_previews` in the metadata table
+#[deprecated]
 pub fn generate_all_previews() {
     if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
         return;
@@ -138,4 +144,44 @@ pub fn generate_all_file_types_and_sizes() {
     } else {
         log::info!("Not generating file types and sizes because flag is already set...");
     }
+}
+
+/// incrementally upgrades the database for each version the database is behind
+pub fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
+    if table_version < 2 {
+        log::info!("Migrating database to v2...");
+        migrate_v2(con)?;
+    }
+    if table_version < 3 {
+        log::info!("Migrating database to v3...");
+        migrate_v3(con)?;
+    }
+    if table_version < 4 {
+        log::info!("Migrating database to v4...");
+        migrate_v4(con)?;
+    }
+    if table_version < 5 {
+        log::info!("Migrating database to v5...");
+        migrate_v5(con)?;
+    }
+    Ok(())
+}
+
+fn migrate_v2(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("./assets/migration/v2.sql");
+    con.execute_batch(migration_script)
+}
+
+fn migrate_v3(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("./assets/migration/v3.sql");
+    con.execute_batch(migration_script)
+}
+
+fn migrate_v4(con: &Connection) -> Result<()> {
+    let migration_script = include_str!("./assets/migration/v4.sql");
+    con.execute_batch(migration_script)
+}
+
+fn migrate_v5(con: &Connection) -> Result<()> {
+    con.execute_batch(include_str!("./assets/migration/v5.sql"))
 }

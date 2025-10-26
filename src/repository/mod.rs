@@ -4,6 +4,8 @@ use std::path::Path;
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Result};
 
+use crate::db_migrations::migrate_db;
+
 pub mod file_repository;
 pub mod folder_repository;
 pub mod metadata_repository;
@@ -54,36 +56,4 @@ pub fn initialize_db() -> Result<()> {
     migrate_db(&con, table_version)?;
     con.close().unwrap();
     Ok(())
-}
-
-/// incrementally upgrades the database for each version the database is behind
-fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
-    if table_version < 2 {
-        log::info!("Migrating database to v2...");
-        migrate_v2(con)?;
-    }
-    if table_version < 3 {
-        log::info!("Migrating database to v3...");
-        migrate_v3(con)?;
-    }
-    if table_version < 4 {
-        log::info!("Migrating database to v4...");
-        migrate_v4(con)?;
-    }
-    Ok(())
-}
-
-fn migrate_v2(con: &Connection) -> Result<()> {
-    let migration_script = include_str!("../assets/migration/v2.sql");
-    con.execute_batch(migration_script)
-}
-
-fn migrate_v3(con: &Connection) -> Result<()> {
-    let migration_script = include_str!("../assets/migration/v3.sql");
-    con.execute_batch(migration_script)
-}
-
-fn migrate_v4(con: &Connection) -> Result<()> {
-    let migration_script = include_str!("../assets/migration/v4.sql");
-    con.execute_batch(migration_script)
 }
