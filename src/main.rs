@@ -9,7 +9,7 @@ use rocket::{Build, Rocket};
 
 use db_migrations::{generate_all_file_types_and_sizes, generate_all_previews};
 use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
-use service::preview_service::generate_preview;
+use previews::preview_service::generate_preview;
 
 use crate::handler::api_handler::update_password;
 use crate::queue::file_preview_consumer;
@@ -20,6 +20,7 @@ mod db_migrations;
 mod guard;
 mod handler;
 mod model;
+mod previews;
 mod queue;
 mod repository;
 mod service;

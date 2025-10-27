@@ -24,6 +24,7 @@ use crate::repository::{file_repository, folder_repository, open_connection, tag
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
+use crate::previews::preview_repository;
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
@@ -318,7 +319,7 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     .collect();
     let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
     for id in file_ids {
-        let preview = match file_repository::get_file_preview(id, &con) {
+        let preview = match preview_repository::get_file_preview(id, &con) {
             Ok(p) => p,
             // no preview for 1 specific file is common and fine
             Err(rusqlite::Error::QueryReturnedNoRows) => continue,

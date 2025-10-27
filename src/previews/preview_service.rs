@@ -8,6 +8,7 @@ use rusqlite::Connection;
 use crate::model::error::preview_errors::PreviewError;
 use crate::repository::{file_repository, open_connection};
 use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
+use crate::previews::preview_repository;
 
 /// generates a preview of a file based on the passed `message_data` parameter.
 /// Not all files will have previews generated (mainly images, videos, and gifs)
@@ -52,7 +53,7 @@ pub async fn generate_preview(message_data: String) -> bool {
     }
     // now time to store our blob in the database
     let con: Connection = open_connection();
-    let create_result = file_repository::create_file_preview(id, preview_blob, &con);
+    let create_result = preview_repository::create_file_preview(id, preview_blob, &con);
     con.close().unwrap();
     if let Err(e) = create_result {
         log::error!(

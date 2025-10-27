@@ -24,6 +24,7 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
+use crate::previews::preview_repository;
 
 /// mapping of file lowercase file extension => file type
 static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
@@ -282,7 +283,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     // we first need to delete the file preview
-    let preview_delete_result = file_repository::delete_file_preview(id, con);
+    let preview_delete_result = preview_repository::delete_file_preview(id, con);
     // we don't necessarily care if the preview wasn't deleted or not for this return value, but it's best to log it if error
     if preview_delete_result.is_err() {
         log::warn!(
@@ -421,7 +422,7 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 /// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
 pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let con: Connection = repository::open_connection();
-    let result = file_repository::get_file_preview(id, &con).map_err(|e| {
+    let result = preview_repository::get_file_preview(id, &con).map_err(|e| {
         if e == rusqlite::Error::QueryReturnedNoRows {
             log::warn!("Failed to get file preview because no preview exists in the db!");
             GetPreviewError::NotFound
