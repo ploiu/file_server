@@ -111,7 +111,7 @@ where
 pub fn publish_message(queue_name: &str, message: &str) {
     use std::backtrace::Backtrace;
 
-    use lapin::{BasicProperties, options::BasicPublishOptions};
+    use lapin::{options::BasicPublishOptions, BasicProperties};
 
     if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
         return;

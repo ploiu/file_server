@@ -18,13 +18,13 @@ use crate::model::error::folder_errors::{
 
 use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::TagApi;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
+use crate::model::response::TagApi;
+use crate::previews::preview_repository;
+use crate::repository::{folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
-use crate::previews::preview_repository;
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let db_id = if Some(0) == id || id.is_none() {
@@ -777,8 +777,8 @@ fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -
 #[cfg(test)]
 mod get_folder_tests {
     use crate::model::error::folder_errors::GetFolderError;
-    use crate::model::response::TagApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
 
@@ -836,8 +836,8 @@ mod get_folder_tests {
 mod update_folder_tests {
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
-    use crate::model::response::TagApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
     use crate::service::folder_service::{get_folder, update_folder};
     use crate::test::{
         cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
@@ -923,8 +923,8 @@ mod update_folder_tests {
 mod reduce_folders_by_tag_tests {
     use std::collections::HashSet;
 
-    use crate::model::response::TagApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
     use crate::service::folder_service::reduce_folders_by_tag;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,

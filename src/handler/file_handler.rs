@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use rocket::State;
 use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
+use rocket::State;
 
 use crate::guard::HeaderAuth;
 use crate::model::api::FileApi;
@@ -14,11 +14,12 @@ use crate::model::error::file_errors::{
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::attributes::{self, AttributeSearch};
 use crate::model::request::file_requests::CreateFileRequest;
-use crate::model::response::BasicMessage;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
     GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
 };
+use crate::model::response::BasicMessage;
+use crate::previews::preview_service;
 use crate::service::file_service::save_file;
 use crate::service::{file_service, search_service};
 use crate::util::update_last_request_time;
@@ -227,7 +228,7 @@ pub fn get_file_preview(
         ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match file_service::get_file_preview(id) {
+    match preview_service::get_file_preview(id) {
         Ok(preview) => GetPreviewResponse::Success(preview),
         Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
             "No preview for a file with that id could be found",

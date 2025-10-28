@@ -1,7 +1,4 @@
-use std::path::Path;
 
-#[cfg(not(test))]
-use rusqlite::OpenFlags;
 use rusqlite::{Connection, Result};
 use std::backtrace::Backtrace;
 

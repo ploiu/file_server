@@ -24,7 +24,6 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
-use crate::previews::preview_repository;
 
 /// mapping of file lowercase file extension => file type
 static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| {
@@ -83,7 +82,6 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("epub", Document),
         ("abw", Document),
         ("md", Document),
-        ("odp", Document),
         ("azw", Document),
         ("docx", Document),
         ("eot", Font),
@@ -413,31 +411,6 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
     result
 }
 
-/// Retrieves the preview contents of the file with the passed id in png format.
-/// The preview might not immediately exist in the database at the time this function is called,
-/// so extra care needs to be taken to not blow up if (when) that happens.
-///
-/// # Errors
-///
-/// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
-pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
-    let con: Connection = repository::open_connection();
-    let result = preview_repository::get_file_preview(id, &con).map_err(|e| {
-        if e == rusqlite::Error::QueryReturnedNoRows {
-            log::warn!("Failed to get file preview because no preview exists in the db!");
-            GetPreviewError::NotFound
-        } else {
-            log::error!(
-                "Failed to get file preview! Nested exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            GetPreviewError::DbFailure
-        }
-    });
-    con.close().unwrap();
-    result
-}
-
 /// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
 pub fn determine_file_type(file_name: &str) -> FileTypes {
     let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
@@ -597,7 +570,7 @@ fn determine_file_name(root_name: &str, extension: &Option<String>) -> String {
 }
 
 #[cfg(test)]
-mod deterine_file_name_tests {
+mod determine_file_name_tests {
     use super::determine_file_name;
 
     #[test]
@@ -625,8 +598,8 @@ mod update_file_tests {
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
 
-    use crate::model::response::TagApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::model::response::TagApi;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
     use crate::test::{
@@ -971,6 +944,7 @@ mod update_file_tests {
 #[cfg(test)]
 mod delete_file_with_id_tests {
     use crate::{
+        previews::preview_service::get_file_preview,
         service::file_service::*,
         test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
     };
