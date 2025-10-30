@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use model::repository::Folder;
 
 use crate::model::api::FileApi;
-use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
+use crate::model::error::file_errors::{DeleteFileError, GetBulkPreviewError, GetPreviewError};
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, DownloadFolderError, GetChildFilesError, GetFolderError,
     UpdateFolderError,
@@ -18,9 +18,9 @@ use crate::model::error::folder_errors::{
 
 use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::folder_responses::FolderResponse;
 use crate::model::response::TagApi;
-use crate::previews::preview_repository;
+use crate::model::response::folder_responses::FolderResponse;
+use crate::previews::preview_service;
 use crate::repository::{folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
@@ -299,7 +299,7 @@ pub fn reduce_folders_by_tag(
     Ok(copied)
 }
 
-pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
+pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
     let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
@@ -310,7 +310,7 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
                 "Failed to query files for folder {id}. Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            return Err(GetPreviewError::DbFailure);
+            return Err(GetBulkPreviewError::DbFailure);
         }
         Err(_e) => vec![],
     }
@@ -319,22 +319,9 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     .collect();
     let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
     for id in file_ids {
-        let preview = match preview_repository::get_file_preview(id, &con) {
+        let preview = match preview_service::get_file_preview(id) {
             Ok(p) => p,
-            // no preview for 1 specific file is common and fine
-            Err(rusqlite::Error::QueryReturnedNoRows) => continue,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to get preview for file {id}. Error is {e:?}\n{}",
-                    Backtrace::force_capture()
-                );
-                if rusqlite::Error::QueryReturnedNoRows == e {
-                    return Err(GetPreviewError::NotFound);
-                } else {
-                    return Err(GetPreviewError::DbFailure);
-                }
-            }
+            Err(_) => continue,
         };
         map.insert(id, preview);
     }
@@ -777,8 +764,8 @@ fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -
 #[cfg(test)]
 mod get_folder_tests {
     use crate::model::error::folder_errors::GetFolderError;
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
 
@@ -836,8 +823,8 @@ mod get_folder_tests {
 mod update_folder_tests {
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::{get_folder, update_folder};
     use crate::test::{
         cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
@@ -923,8 +910,8 @@ mod update_folder_tests {
 mod reduce_folders_by_tag_tests {
     use std::collections::HashSet;
 
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::reduce_folders_by_tag;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,

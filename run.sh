@@ -1,3 +1,5 @@
+pkill file_server
+pkill tail
 rm -f output.log
 touch output.log
 cargo run &

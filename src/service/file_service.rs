@@ -21,6 +21,7 @@ use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
+use crate::previews::preview_service;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
@@ -281,27 +282,24 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     // we first need to delete the file preview
-    let preview_delete_result = preview_repository::delete_file_preview(id, con);
-    // we don't necessarily care if the preview wasn't deleted or not for this return value, but it's best to log it if error
-    if preview_delete_result.is_err() {
-        log::warn!(
-            "Failed to delete file preview for file {id}. Exception is {:?}",
-            preview_delete_result.unwrap_err()
-        );
-    }
+    preview_service::delete_file_preview(id);
     let delete_result = file_repository::delete_file(id, con);
-    if delete_result.is_ok() {
-        Ok(())
-    } else if Err(rusqlite::Error::QueryReturnedNoRows) == delete_result {
-        return Err(DeleteFileError::NotFound);
-    } else {
-        log::error!(
-            "Failed to delete file record from database! Nested exception is {:?}\n{}",
-            delete_result.unwrap_err(),
-            Backtrace::force_capture()
-        );
-        return Err(DeleteFileError::DbError);
+    match delete_result {
+        Ok(_) => {}
+        Err(e) => {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                log::warn!("attempted to delete a file with id {id} that does not exist in the database");
+            } else {
+                log::error!(
+                    "Failed to delete file record from database! Nested exception is {:?}\n{}",
+                    e,
+                    Backtrace::force_capture()
+                );
+                return Err(DeleteFileError::DbError);
+            }
+        }
     }
+    Ok(())
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
@@ -598,8 +596,8 @@ mod update_file_tests {
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
 
-    use crate::model::response::folder_responses::FolderResponse;
     use crate::model::response::TagApi;
+    use crate::model::response::folder_responses::FolderResponse;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
     use crate::test::{

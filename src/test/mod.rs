@@ -13,7 +13,7 @@ use crate::temp_dir;
 pub mod api_handler_tests;
 pub mod file_handler_tests;
 pub mod folder_handler_tests;
-use crate::previews::preview_repository;
+use crate::previews::preview_service;
 
 /// username:password
 #[cfg(test)]
@@ -32,6 +32,15 @@ pub fn remove_files() {
     let file_path = Path::new(thread_name.as_str());
     if file_path.exists() {
         remove_dir_all(file_path).unwrap_or(());
+    }
+}
+
+#[cfg(test)]
+pub fn remove_previews() {
+    let preview_dir = preview_service::preview_dir();
+    let preview_path = Path::new(preview_dir.as_str());
+    if preview_path.exists() {
+        remove_dir_all(preview_path).unwrap_or(());
     }
 }
 
@@ -62,8 +71,9 @@ pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
 
 #[cfg(test)]
 pub fn create_file_preview(file_id: u32) {
-    let connection = open_connection();
-    preview_repository::create_file_preview(file_id, vec![0x00], &connection).unwrap();
+    preview_service::ensure_preview_dir();
+    let full_path = format!("{}/{}.png", preview_service::preview_dir(), file_id);
+    fs::File::create(full_path).unwrap();
 }
 
 #[cfg(test)]
@@ -172,6 +182,7 @@ pub fn cleanup() {
     let thread_name = current_thread_name();
     let temp_dir_name = temp_dir();
     remove_files();
+    remove_previews();
     remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
     remove_dir_all(Path::new(temp_dir_name.as_str())).unwrap_or(());
 }

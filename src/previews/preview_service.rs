@@ -126,9 +126,50 @@ pub async fn generate_preview(message_data: String) -> bool {
 ///
 /// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
 pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
-    todo!("read the file from the disk and return its contents")
+    let preview_path = format!("{}/{id}.png", preview_dir());
+    let path = Path::new(&preview_path);
+    if !path.exists() {
+        return Err(GetPreviewError::NotFound);
+    }
+    // we know the file exists, so now we can return the contents
+    match std::fs::read(&preview_path) {
+        Ok(contents) => Ok(contents),
+        Err(e) => {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                Err(GetPreviewError::NotFound)
+            } else {
+                log::error!(
+                    "Failed to read preview file at path {preview_path}! Exception is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                Err(GetPreviewError::FileSystemError)
+            }
+        }
+    }
 }
 
+/// deletes the preview file for the file with the passed id
+///
+/// # Parameters
+/// * `id` - the id of the file whose preview should be deleted
+///
+/// If the file doesn't exist, a warning will be logged but no error will be thrown
+pub fn delete_file_preview(id: u32) {
+    let preview_path = preview_dir();
+    let file_path = format!("{preview_path}/{id}.png");
+    let path = Path::new(&file_path);
+    match std::fs::remove_file(path) {
+        Ok(_) => {}
+        Err(e) => {
+            log::warn!(
+                "Failed to delete preview file at path {file_path}! Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+        }
+    }
+}
+
+/// checks if ffmpeg is installed on the system
 fn check_ffmpeg() -> bool {
     let output = Command::new("sh")
         .arg("-c")
@@ -141,5 +182,38 @@ fn check_ffmpeg() -> bool {
     } else {
         log::error!("ffmpeg is not installed. Check returned with code {code:?}");
         false
+    }
+}
+
+#[cfg(test)]
+mod generate_preview_tests {}
+
+#[cfg(test)]
+mod get_file_preview_tests {}
+
+#[cfg(test)]
+mod delete_file_preview_tests {
+    use super::{delete_file_preview, preview_dir};
+    use crate::test::{cleanup, create_file_preview};
+    use std::path::Path;
+
+    #[test]
+    fn should_remove_the_preview_from_the_disk() {
+        create_file_preview(1);
+        let preview_path = format!("{}/1.png", preview_dir());
+        let preview_path = Path::new(&preview_path);
+        assert!(preview_path.exists());
+        delete_file_preview(1);
+        assert!(!preview_path.exists());
+        cleanup();
+    }
+
+    #[test]
+    fn should_not_panic_if_no_preview() {
+        let nonexistent_path = format!("{}/9999.png", preview_dir());
+        let nonexistent_path = Path::new(&nonexistent_path);
+        assert!(!nonexistent_path.exists());
+        delete_file_preview(9999); // should not exist
+        cleanup();
     }
 }
