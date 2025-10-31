@@ -176,7 +176,7 @@ fn check_ffmpeg() -> bool {
     }
 }
 
-#[cfg(all(test, not(feature = "ci")))]
+#[cfg(all(test, not(ci)))]
 mod generate_preview_tests {
     use crate::test::{cleanup, refresh_db};
 

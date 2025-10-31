@@ -24,7 +24,3 @@ itertools = "0.14"
 tar = "0.4"
 nanoid = "0.4.0"
 sysinfo = { version = "0.37", features = ["disk"] }
-
-[features]
-# used to prevent running external tools (like ffmpeg) during tests in ci test runners that might not have them, like github actions
-ci = []

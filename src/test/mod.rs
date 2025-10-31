@@ -174,10 +174,6 @@ pub mod tests {
         chrono::offset::Local::now().naive_local()
     }
 
-    pub fn is_ci() -> bool {
-        std::env::var("CI").is_ok()
-    }
-
     // these partialEq implementations are because NaiveDate generation is too inconsistent to test around, so these test implementations do not test the date
     #[allow(clippy::derived_hash_with_manual_eq)]
     impl PartialEq for FileRecord {
