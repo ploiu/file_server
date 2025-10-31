@@ -24,3 +24,6 @@ itertools = "0.14"
 tar = "0.4"
 nanoid = "0.4.0"
 sysinfo = { version = "0.37", features = ["disk"] }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(ci)'] }
