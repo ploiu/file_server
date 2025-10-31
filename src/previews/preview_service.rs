@@ -40,6 +40,7 @@ pub fn ensure_preview_dir() {
 pub async fn generate_preview(message_data: String) -> bool {
     ensure_preview_dir();
     if !check_ffmpeg() {
+        // keep it in rabbit so that it can be retried later when ffmpeg is installed
         return false;
     }
     let id: u32 = match message_data.parse() {
@@ -181,6 +182,13 @@ mod generate_preview_tests {
 
     #[test]
     fn generate_preview_successfully_creates_preview_for_file() {
+        refresh_db();
+        crate::fail!();
+        cleanup();
+    }
+
+    #[test]
+    fn generate_preview_ignores_missing_file_from_db() {
         refresh_db();
         crate::fail!();
         cleanup();
