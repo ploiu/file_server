@@ -1,59 +1,10 @@
-
 use rusqlite::{Connection, Result};
 use std::backtrace::Backtrace;
 
 use crate::{
-    config::FILE_SERVER_CONFIG,
-    queue,
     repository::{file_repository, metadata_repository, open_connection},
     service::file_service,
 };
-
-/// checks the database and generates previews for all files if the database doesn't have the flag `generated_previews` in the metadata table
-#[deprecated]
-pub fn generate_all_previews() {
-    if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
-        return;
-    }
-    log::info!("Starting to generate previews for existing files...");
-    let con = open_connection();
-    let flag_res = metadata_repository::get_generated_previews_flag(&con);
-    if Ok(false) == flag_res {
-        let file_ids = match file_repository::get_all_file_ids(&con) {
-            Ok(ids) => ids,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to retrieve all file IDs in the database. Error is {e:?}\n{}",
-                    Backtrace::force_capture()
-                );
-                return;
-            }
-        };
-        for id in file_ids {
-            queue::publish_message("icon_gen", &id.to_string());
-        }
-        let flag_set_result = metadata_repository::set_generated_previews_flag(&con);
-        con.close().unwrap();
-        if let Err(e) = flag_set_result {
-            log::error!(
-                "Failed to set preview flag in database. Exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-        } else {
-            log::info!("Successfully pushed file IDs to queue")
-        }
-    } else if let Err(e) = flag_res {
-        log::error!(
-            "Failed to get preview flag from database. Error is {e:?}\n{}",
-            Backtrace::force_capture()
-        );
-        con.close().unwrap();
-        return;
-    } else {
-        log::info!("Not generating file previews because the db flag is already set.")
-    }
-}
 
 /// pulls all pre-existing files in the database and updates the `type` column to be the correct [crate::model::file_types::FileTypes]
 /// This function only performs the update if the flag controlling this has not been set in the metadata table

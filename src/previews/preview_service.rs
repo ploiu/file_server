@@ -1,18 +1,8 @@
-use crate::model::api::FileApi;
 use crate::model::error::file_errors::GetPreviewError;
-use crate::model::error::preview_errors::PreviewError;
 use crate::model::file_types::FileTypes;
-use crate::repository::open_connection;
 use crate::service::file_service;
-use crate::{
-    model::error::file_errors::GetFileError, repository, service::file_service::get_file_path,
-};
-use image::DynamicImage;
-use image::ImageReader;
-use rocket::tokio::fs::create_dir;
-use rusqlite::Connection;
+use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
 use std::backtrace::Backtrace;
-use std::io::Cursor;
 use std::path::Path;
 use std::process::Command;
 
@@ -68,7 +58,7 @@ pub async fn generate_preview(message_data: String) -> bool {
         Ok(f) => f,
         Err(e) => {
             log::warn!(
-                "Failed to get file from database when generating preview! Was the file deleted? File id [{id}]"
+                "Failed to get file from database when generating preview! Was the file deleted? File id [{id}]; error is {e:?}",
             );
             // file doesn't exist, don't requeue it
             return true;

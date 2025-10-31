@@ -160,7 +160,7 @@ pub struct AliasedAttribute {
 ///
 /// There are multiple attribute search types.
 /// - size and date are `full comparison attributes`, where we can use every
-///     instance of the [EqualityOperator] to search on them
+///   instance of the [EqualityOperator] to search on them
 /// - file type is a `named attributed`, where the list of allowed search values are determined by a specific list.
 /// - size can also be an `aliased attribute`, where specific values have titles (see [FileSizes])
 #[derive(Debug)]

@@ -70,28 +70,6 @@ pub fn update_auth(auth: BodyAuth, con: &Connection) -> Result<(), rusqlite::Err
     Ok(())
 }
 
-pub fn get_generated_previews_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
-    let mut statement = con.prepare(include_str!(
-        "../assets/queries/metadata/get_preview_generated_flag.sql"
-    ))?;
-    let query_res: Result<String, rusqlite::Error> = statement.query_row([], |it| it.get(0));
-    if let Err(rusqlite::Error::QueryReturnedNoRows) = query_res {
-        Ok(false)
-    } else if let Err(e) = query_res {
-        Err(e)
-    } else {
-        Ok(true)
-    }
-}
-
-pub fn set_generated_previews_flag(con: &Connection) -> Result<(), rusqlite::Error> {
-    let mut statement = con.prepare(include_str!(
-        "../assets/queries/metadata/set_preview_generated_flag.sql"
-    ))?;
-    statement.execute([])?;
-    Ok(())
-}
-
 pub fn get_generated_file_types_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
     let mut check_flag_statement = con.prepare(include_str!(
         "../assets/queries/metadata/get_file_types_generated_flag.sql"

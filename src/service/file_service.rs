@@ -14,7 +14,7 @@ use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::file_types::FileTypes;
@@ -288,7 +288,9 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
         Ok(_) => {}
         Err(e) => {
             if e == rusqlite::Error::QueryReturnedNoRows {
-                log::warn!("attempted to delete a file with id {id} that does not exist in the database");
+                log::warn!(
+                    "attempted to delete a file with id {id} that does not exist in the database"
+                );
             } else {
                 log::error!(
                     "Failed to delete file record from database! Nested exception is {:?}\n{}",
@@ -942,6 +944,7 @@ mod update_file_tests {
 #[cfg(test)]
 mod delete_file_with_id_tests {
     use crate::{
+        model::error::file_errors,
         previews::preview_service::get_file_preview,
         service::file_service::*,
         test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
@@ -968,7 +971,7 @@ mod delete_file_with_id_tests {
         delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
         let preview = get_file_preview(1).unwrap_err();
-        assert_eq!(GetPreviewError::NotFound, preview);
+        assert_eq!(file_errors::GetPreviewError::NotFound, preview);
         cleanup();
     }
 }

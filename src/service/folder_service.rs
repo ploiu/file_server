@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use model::repository::Folder;
 
 use crate::model::api::FileApi;
-use crate::model::error::file_errors::{DeleteFileError, GetBulkPreviewError, GetPreviewError};
+use crate::model::error::file_errors::{DeleteFileError, GetBulkPreviewError};
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, DownloadFolderError, GetChildFilesError, GetFolderError,
     UpdateFolderError,
@@ -310,7 +310,7 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
                 "Failed to query files for folder {id}. Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            return Err(GetBulkPreviewError::DbFailure);
+            return Err(GetBulkPreviewError::Db);
         }
         Err(_e) => vec![],
     }

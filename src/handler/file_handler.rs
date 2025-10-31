@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
+use rocket::State;
 use rocket::form::{Form, Strict};
 use rocket::serde::json::Json;
-use rocket::State;
 
 use crate::guard::HeaderAuth;
 use crate::model::api::FileApi;
@@ -14,11 +14,11 @@ use crate::model::error::file_errors::{
 use crate::model::guard::auth::ValidateResult;
 use crate::model::request::attributes::{self, AttributeSearch};
 use crate::model::request::file_requests::CreateFileRequest;
+use crate::model::response::BasicMessage;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
     GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
 };
-use crate::model::response::BasicMessage;
 use crate::previews::preview_service;
 use crate::service::file_service::save_file;
 use crate::service::{file_service, search_service};
