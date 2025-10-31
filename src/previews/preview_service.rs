@@ -175,8 +175,17 @@ fn check_ffmpeg() -> bool {
     }
 }
 
-#[cfg(test)]
-mod generate_preview_tests {}
+#[cfg(all(test, not(feature = "ci")))]
+mod generate_preview_tests {
+    use crate::test::{cleanup, refresh_db};
+
+    #[test]
+    fn generate_preview_successfully_creates_preview_for_file() {
+        refresh_db();
+        crate::fail!();
+        cleanup();
+    }
+}
 
 #[cfg(test)]
 mod get_file_preview_tests {}
