@@ -9,7 +9,7 @@ fn client() -> Client {
 }
 
 fn set_password() {
-    refresh_db();
+    init_db_folder();
     let client = client();
     let uri = uri!("/api/password");
     client
@@ -20,7 +20,7 @@ fn set_password() {
 
 #[test]
 fn version() {
-    refresh_db();
+    init_db_folder();
     let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
     let res = client.get(uri!("/api/version")).dispatch();
     assert_eq!(res.status(), Status::Ok);
@@ -30,7 +30,7 @@ fn version() {
 
 #[test]
 fn set_password_missing_fields() {
-    refresh_db();
+    init_db_folder();
     let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
     let uri = uri!("/api/password");
     let res = client.post(uri).dispatch();
@@ -40,7 +40,7 @@ fn set_password_missing_fields() {
 
 #[test]
 fn set_password_works() {
-    refresh_db();
+    init_db_folder();
     let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
     let uri = uri!("/api/password");
     let res = client

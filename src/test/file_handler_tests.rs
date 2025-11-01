@@ -18,7 +18,7 @@ fn client() -> Client {
 }
 
 fn set_password() {
-    refresh_db();
+    init_db_folder();
     let client = client();
     let uri = uri!("/api/password");
     client
@@ -374,7 +374,7 @@ fn get_file() {
 
 #[test]
 fn search_files_without_creds() {
-    refresh_db();
+    init_db_folder();
     remove_files();
     let client = client();
     let res = client.get(uri!("/files/metadata?search=test")).dispatch();
@@ -428,7 +428,7 @@ fn search_files() {
 
 #[test]
 fn download_file_without_creds() {
-    refresh_db();
+    init_db_folder();
     remove_files();
     let client = client();
     let res = client.get(uri!("/files/1")).dispatch();
@@ -479,7 +479,7 @@ fn download_file() {
 
 #[test]
 fn delete_file_without_creds() {
-    refresh_db();
+    init_db_folder();
     remove_files();
     let client = client();
     let res = client.delete(uri!("/files/1")).dispatch();
@@ -512,7 +512,7 @@ fn delete_file_not_found() {
 
 #[test]
 fn delete_file() {
-    refresh_db();
+    init_db_folder();
     set_password();
     test::create_file_db_entry("test.txt", None);
     create_file_disk("test.txt", "hi");
@@ -536,7 +536,7 @@ fn delete_file() {
 
 #[test]
 fn update_file_without_creds() {
-    refresh_db();
+    init_db_folder();
     remove_files();
     let client = client();
     let res = client.put(uri!("/files")).dispatch();

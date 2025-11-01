@@ -302,11 +302,11 @@ mod get_folders_by_any_tag_tests {
     use crate::model::repository::Folder;
     use crate::repository::folder_repository::get_folders_by_any_tag;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, refresh_db};
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, init_db_folder};
 
     #[test]
     fn returns_folders_with_any_tag() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("all tags", None); // 1
         create_folder_db_entry("some tags", Some(1)); // 2
         create_folder_db_entry("no tags", None); // 3
@@ -346,11 +346,11 @@ mod get_parent_folders_by_tag_tests {
 
     use crate::repository::folder_repository::get_parent_folders_by_tag;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, init_db_folder};
 
     #[test]
     fn retrieves_parent_folders() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("top", None);
         create_folder_db_entry("middle", Some(1));
         create_folder_db_entry("bottom", Some(2));
@@ -369,11 +369,11 @@ mod get_child_files_tests {
 
     use crate::repository::folder_repository::get_child_files;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, refresh_db};
+    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, init_db_folder};
 
     #[test]
     fn get_child_files_works_for_root() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test", None);
         create_file_db_entry("test2", None);
         create_folder_db_entry("top", None);
@@ -394,7 +394,7 @@ mod get_child_files_tests {
 
     #[test]
     fn get_child_files_works_for_non_root() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("bad", None);
         create_folder_db_entry("top", None);
         create_folder_db_entry("middle", Some(1));
@@ -420,12 +420,12 @@ mod get_ancestor_folder_ids_tests {
     use super::get_ancestor_folder_ids;
     use crate::{
         repository::open_connection,
-        test::{cleanup, create_folder_db_entry, refresh_db},
+        test::{cleanup, create_folder_db_entry, init_db_folder},
     };
 
     #[test]
     fn returns_all_parents() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("1", None);
         create_folder_db_entry("2", Some(1));
         create_folder_db_entry("3", Some(2));
@@ -441,7 +441,7 @@ mod get_ancestor_folder_ids_tests {
 
     #[test]
     fn does_not_return_non_parents() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("good", None); // 1
         create_folder_db_entry("good", Some(1)); // 2
         create_folder_db_entry("bad", Some(1)); // 3
@@ -456,7 +456,7 @@ mod get_ancestor_folder_ids_tests {
 
     #[test]
     fn does_not_panic_when_no_parents() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_folder_db_entry("test", None);
         let res = get_ancestor_folder_ids(1, &con);

@@ -19,8 +19,9 @@ mod tests {
     /// username:password
     pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 
-    pub fn refresh_db() {
+    pub fn init_db_folder() {
         let thread_name = current_thread_name();
+        fs::create_dir_all(file_dir()).expect("Failed to create base file dir");
         remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
         initialize_db().unwrap();
     }

@@ -185,11 +185,11 @@ fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
 mod create_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::{open_connection, tag_repository};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn create_tag() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         let tag = tag_repository::create_tag("test", &con).unwrap();
         con.close().unwrap();
@@ -213,7 +213,7 @@ mod get_tag_by_title_tests {
 
     #[test]
     fn get_tag_by_title_found() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         let found = get_tag_by_title("TeSt", &con).unwrap();
@@ -229,7 +229,7 @@ mod get_tag_by_title_tests {
     }
     #[test]
     fn get_tag_by_title_not_found() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         let not_found = get_tag_by_title("test", &con).unwrap();
         con.close().unwrap();
@@ -243,11 +243,11 @@ mod get_tag_by_id_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tag};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn get_tag_success() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         let tag = get_tag(1, &con).unwrap();
@@ -268,11 +268,11 @@ mod update_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, get_tag, update_tag};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn update_tag_success() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         update_tag(
@@ -300,11 +300,11 @@ mod update_tag_tests {
 mod delete_tag_tests {
     use crate::repository::open_connection;
     use crate::repository::tag_repository::{create_tag, delete_tag, get_tag};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn delete_tag_success() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         delete_tag(1, &con).unwrap();
@@ -326,7 +326,7 @@ mod get_tag_on_file_tests {
 
     #[test]
     fn get_tags_on_file_returns_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         create_tag("test2", &con).unwrap();
@@ -363,7 +363,7 @@ mod get_tag_on_file_tests {
     }
     #[test]
     fn get_tags_on_file_returns_nothing_if_no_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_file(
             &FileRecord {
@@ -391,11 +391,11 @@ mod remove_tag_from_file_tests {
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, now, refresh_db};
+    use crate::test::{cleanup, now, init_db_folder};
 
     #[test]
     fn remove_tag_from_file_works() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         create_file(
@@ -428,7 +428,7 @@ mod get_tag_on_folder_tests {
 
     #[test]
     fn get_tags_on_folder_returns_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         create_tag("test2", &con).unwrap();
@@ -462,7 +462,7 @@ mod get_tag_on_folder_tests {
     }
     #[test]
     fn get_tags_on_folder_returns_nothing_if_no_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_folder(
             &Folder {
@@ -488,11 +488,11 @@ mod remove_tag_from_folder_tests {
     use crate::repository::tag_repository::{
         create_tag, get_tags_on_folder, remove_tag_from_folder,
     };
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn remove_tag_from_folder_works() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test", &con).unwrap();
         create_folder(
@@ -520,7 +520,7 @@ mod get_tags_on_files_tests {
 
     #[test]
     fn returns_proper_mapping_for_file_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("file1", None);
         create_file_db_entry("file2", None);
         create_file_db_entry("control", None);

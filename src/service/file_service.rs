@@ -604,12 +604,12 @@ mod update_file_tests {
     use crate::service::folder_service;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, now, refresh_db,
+        create_folder_disk, create_tag_file, init_db_folder, now,
     };
 
     #[test]
     fn update_file_adds_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         update_file(FileApi {
@@ -643,7 +643,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_removes_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         create_tag_file("tag1", 1);
@@ -669,7 +669,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_not_found() {
-        refresh_db();
+        init_db_folder();
         let res = update_file(FileApi {
             id: 1,
             folder_id: None,
@@ -686,7 +686,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_target_folder_not_found() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         let res = update_file(FileApi {
             id: 1,
@@ -704,7 +704,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_file_already_exists_root() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_db_entry("test2.txt", None);
         create_file_disk("test.txt", "test");
@@ -730,7 +730,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_file_already_exists_target_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // id 1
         create_folder_db_entry("target", None); // id 2
         // put the files in the folders
@@ -757,7 +757,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_no_extension() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         update_file(FileApi {
@@ -780,7 +780,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_works() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("target_folder", None); // id 1
         create_file_db_entry("test.txt", None); // id 1
         create_file_db_entry("other.txt", Some(1)); // id 2
@@ -806,7 +806,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_root() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // id 1
         create_file_db_entry("file", None); // id 1
         let res = update_file(FileApi {
@@ -835,7 +835,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_same_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
         create_file_db_entry("file", None); // file id 1
@@ -858,7 +858,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_different_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
         create_file_db_entry("file", None); // file id 1; from root to folder id 1
@@ -892,7 +892,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_trailing_name_fix() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test_thing.txt", None);
         create_file_disk("test_thing.txt", "test_thing");
         create_folder_db_entry("inner", None);
@@ -922,7 +922,7 @@ mod update_file_tests {
 
     #[test]
     fn updates_file_type() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test", None);
         create_file_disk("test", "");
         let file = FileApi {
@@ -947,12 +947,12 @@ mod delete_file_with_id_tests {
         model::error::file_errors,
         previews::get_file_preview,
         service::file_service::*,
-        test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
+        test::{cleanup, create_file_db_entry, create_file_preview, init_db_folder},
     };
 
     #[test]
     fn test_deletes_file_properly() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         let con = open_connection();
         delete_file_by_id_with_connection(1, &con).unwrap();
@@ -964,7 +964,7 @@ mod delete_file_with_id_tests {
 
     #[test]
     fn test_deletes_file_preview() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_preview(1);
         let con = open_connection();

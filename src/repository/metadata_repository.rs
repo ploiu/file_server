@@ -99,11 +99,11 @@ mod tests {
     use crate::model::request::BodyAuth;
     use crate::model::service::metadata::CheckAuthResult;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn update_auth_works() {
-        refresh_db();
+        init_db_folder();
         let con: Connection = open_connection();
         set_auth(
             HeaderAuth {

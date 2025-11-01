@@ -89,7 +89,7 @@ its files go into. The general test structure for those tests should be
 ```rs
 #[test]
 fn test_name() {
-    refresh_db();
+    init_db_folder();
     // test contents
     cleanup();
 }

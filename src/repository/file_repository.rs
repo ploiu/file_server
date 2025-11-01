@@ -338,11 +338,11 @@ mod get_files_by_all_tags_tests {
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::search_files_by_tags;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, refresh_db};
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, init_db_folder};
 
     #[test]
     fn returns_files_with_all_tags() {
-        refresh_db();
+        init_db_folder();
         let con: Connection = open_connection();
         create_file_db_entry("bad", None);
         create_file_db_entry("has some", None); // 2
@@ -387,12 +387,12 @@ mod create_file_tests {
     use crate::{
         model::{file_types::FileTypes, repository::FileRecord},
         repository::open_connection,
-        test::{cleanup, create_folder_db_entry, now, refresh_db},
+        test::{cleanup, create_folder_db_entry, now, init_db_folder},
     };
 
     #[test]
     fn saves_all_fields_to_db() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("whatever", None);
         let create_date = now();
         let name = "bg3_bugbear.mp4".to_string();
@@ -600,12 +600,12 @@ mod search_files_by_attributes {
     use crate::{
         model::request::attributes::*,
         repository::open_connection,
-        test::{cleanup, now, refresh_db},
+        test::{cleanup, now, init_db_folder},
     };
 
     #[test]
     fn properly_retrieves_files_with_1_attr() {
-        refresh_db();
+        init_db_folder();
         let good = FileRecord {
             id: None,
             name: "good.txt".to_string(),
@@ -642,7 +642,7 @@ mod search_files_by_attributes {
         let date = chrono::NaiveDate::from_ymd_opt(2020, 01, 15).unwrap();
         let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
         let date_time = NaiveDateTime::new(date, time);
-        refresh_db();
+        init_db_folder();
         let expected: HashSet<FileRecord> = [
             FileRecord {
                 id: None,
