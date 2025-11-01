@@ -21,7 +21,7 @@ use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::previews::preview_service;
+use crate::previews;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
@@ -282,7 +282,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     // we first need to delete the file preview
-    preview_service::delete_file_preview(id);
+    previews::delete_file_preview(id);
     let delete_result = file_repository::delete_file(id, con);
     match delete_result {
         Ok(_) => {}
@@ -945,7 +945,7 @@ mod update_file_tests {
 mod delete_file_with_id_tests {
     use crate::{
         model::error::file_errors,
-        previews::preview_service::get_file_preview,
+        previews::get_file_preview,
         service::file_service::*,
         test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
     };

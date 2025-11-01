@@ -3,10 +3,10 @@ pub mod file_handler_tests;
 pub mod folder_handler_tests;
 
 #[cfg(test)]
-pub mod tests {
+mod tests {
     use crate::model::api::FileApi;
     use crate::model::repository::{FileRecord, Folder, Tag};
-    use crate::previews::preview_service;
+    use crate::previews;
     use crate::repository::{
         file_repository, folder_repository, initialize_db, open_connection, tag_repository,
     };
@@ -34,7 +34,7 @@ pub mod tests {
     }
 
     pub fn remove_previews() {
-        let preview_dir = preview_service::preview_dir();
+        let preview_dir = previews::preview_dir();
         let preview_path = Path::new(preview_dir.as_str());
         if preview_path.exists() {
             remove_dir_all(preview_path).unwrap_or(());
@@ -66,8 +66,8 @@ pub mod tests {
     }
 
     pub fn create_file_preview(file_id: u32) {
-        preview_service::ensure_preview_dir();
-        let full_path = format!("{}/{}.png", preview_service::preview_dir(), file_id);
+        previews::ensure_preview_dir();
+        let full_path = format!("{}/{}.png", previews::preview_dir(), file_id);
         fs::File::create(full_path).unwrap();
     }
 

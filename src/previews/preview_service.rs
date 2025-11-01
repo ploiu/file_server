@@ -1,3 +1,4 @@
+use super::preview_dir;
 use crate::model::error::file_errors::GetPreviewError;
 use crate::model::file_types::FileTypes;
 use crate::service::file_service;
@@ -5,18 +6,6 @@ use crate::{model::error::file_errors::GetFileError, service::file_service::get_
 use std::backtrace::Backtrace;
 use std::path::Path;
 use std::process::Command;
-
-#[cfg(not(test))]
-fn preview_dir() -> String {
-    "./file_previews".to_string()
-}
-
-#[cfg(test)]
-pub fn preview_dir() -> String {
-    let thread_name = crate::test::current_thread_name();
-    let dir_name = format!("./{thread_name}_previews");
-    dir_name
-}
 
 /// checks if the ./file_previews directory exists. If not, it creates it.
 ///
@@ -173,96 +162,5 @@ fn check_ffmpeg() -> bool {
     } else {
         log::error!("ffmpeg is not installed. Check returned with code {code:?}");
         false
-    }
-}
-
-#[cfg(all(test, not(ci)))]
-mod generate_preview_tests {
-    use crate::test::{cleanup, refresh_db};
-
-    #[test]
-    fn generate_preview_successfully_creates_preview_for_file() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_ignores_missing_file_from_db() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_no_ffmpeg() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_message_not_file_id() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_ignores_missing_file_from_disk() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_generates_for_image() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_generates_for_video() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-
-    #[test]
-    fn generate_preview_does_not_generate_for_other_file_types() {
-        refresh_db();
-        crate::fail!();
-        cleanup();
-    }
-}
-
-#[cfg(test)]
-mod get_file_preview_tests {}
-
-#[cfg(test)]
-mod delete_file_preview_tests {
-    use super::{delete_file_preview, preview_dir};
-    use crate::test::{cleanup, create_file_preview};
-    use std::path::Path;
-
-    #[test]
-    fn should_remove_the_preview_from_the_disk() {
-        create_file_preview(1);
-        let preview_path = format!("{}/1.png", preview_dir());
-        let preview_path = Path::new(&preview_path);
-        assert!(preview_path.exists());
-        delete_file_preview(1);
-        assert!(!preview_path.exists());
-        cleanup();
-    }
-
-    #[test]
-    fn should_not_panic_if_no_preview() {
-        let nonexistent_path = format!("{}/9999.png", preview_dir());
-        let nonexistent_path = Path::new(&nonexistent_path);
-        assert!(!nonexistent_path.exists());
-        delete_file_preview(9999); // should not exist
-        cleanup();
     }
 }

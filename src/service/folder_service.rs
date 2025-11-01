@@ -20,7 +20,7 @@ use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::TagApi;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::previews::preview_service;
+use crate::previews;
 use crate::repository::{folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
@@ -319,7 +319,7 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     .collect();
     let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
     for id in file_ids {
-        let preview = match preview_service::get_file_preview(id) {
+        let preview = match previews::get_file_preview(id) {
             Ok(p) => p,
             Err(_) => continue,
         };

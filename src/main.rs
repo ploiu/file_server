@@ -11,7 +11,7 @@ use db_migrations::generate_all_file_types_and_sizes;
 use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
 
 use crate::handler::api_handler::update_password;
-use crate::previews::preview_service::generate_preview;
+use crate::previews::generate_preview;
 use crate::queue::file_preview_consumer;
 use crate::repository::initialize_db;
 

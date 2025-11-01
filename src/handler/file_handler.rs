@@ -19,7 +19,7 @@ use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
     GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
 };
-use crate::previews::preview_service;
+use crate::previews;
 use crate::service::file_service::save_file;
 use crate::service::{file_service, search_service};
 use crate::util::update_last_request_time;
@@ -228,7 +228,7 @@ pub fn get_file_preview(
         ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match preview_service::get_file_preview(id) {
+    match previews::get_file_preview(id) {
         Ok(preview) => GetPreviewResponse::Success(preview),
         Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
             "No preview for a file with that id could be found",
