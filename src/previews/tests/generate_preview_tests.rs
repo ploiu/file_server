@@ -91,7 +91,48 @@ async fn generate_preview_ignores_missing_file_from_disk() {
 #[tokio::test]
 async fn generate_preview_generates_for_video() {
     init_db_folder();
-    crate::fail!();
+    std::fs::copy("test_assets/test.mp4", format!("{}/test.mp4", file_dir()))
+        .expect("Failed to copy test file to the file directory");
+    create_file_db_entry("test.mp4", None);
+
+    let preview_path = format!("{}/1.png", preview_dir());
+    let preview_path = Path::new(&preview_path);
+    assert!(
+        !preview_path.exists(),
+        "Preview should not exist before it's generated"
+    );
+
+    let res = previews::generate_preview("1".to_string()).await;
+    assert!(res);
+    assert!(
+        preview_path.exists(),
+        "Preview should exist after it's generated!"
+    );
+
+    cleanup();
+}
+
+#[tokio::test]
+async fn generate_preview_generates_gif_as_video() {
+    init_db_folder();
+    std::fs::copy("test_assets/test.gif", format!("{}/test.gif", file_dir()))
+        .expect("Failed to copy test file to the file directory");
+    create_file_db_entry("test.gif", None);
+
+    let preview_path = format!("{}/1.png", preview_dir());
+    let preview_path = Path::new(&preview_path);
+    assert!(
+        !preview_path.exists(),
+        "Preview should not exist before it's generated"
+    );
+
+    let res = previews::generate_preview("1".to_string()).await;
+    assert!(res);
+    assert!(
+        preview_path.exists(),
+        "Preview should exist after it's generated!"
+    );
+
     cleanup();
 }
 

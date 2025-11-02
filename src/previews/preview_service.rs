@@ -80,7 +80,7 @@ pub async fn generate_preview(message_data: String) -> bool {
         && !file_data.name.ends_with(".gif")
     {
         format!("ffmpeg -i {path} -vf scale=150:-1 {preview_path}/{output_file_name}")
-    } else if Some(FileTypes::Video) == file_data.file_type {
+    } else if Some(FileTypes::Video) == file_data.file_type || file_data.name.ends_with(".gif") {
         format!("ffmpeg -i {path} -vf scale=150:-1 -frames:v 1 {preview_path}/{output_file_name}")
     } else {
         // invalid file type
