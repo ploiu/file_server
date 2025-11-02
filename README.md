@@ -31,7 +31,7 @@ I never got to use but enjoyed the syntax of.
 
 ## building
 
-supported rustc version: 1.85.0
+supported rustc version: 1.88.0
 
 This project _might_ be able to run on windows, but it is primarily designed to
 run on a linux installation. No guarantees are made about windows.
@@ -57,20 +57,24 @@ sudo apt install gcc-aarch64-linux-gnu
 cargo run
 ```
 
-preview generation for file uploads requires
+preview generation for file uploads requires [ffmpeg](https://ffmpeg.org/) and
 [rabbitmq](https://www.rabbitmq.com/) to be running on your machine. Running
 `docker compose up` in the project root directory will start up a docker with
 rabbit, and create an admin user with username `admin` and password `admin`. To
 turn off this feature, set `RabbitMq.enabled` to `false` in `FileServer.toml`
 
 ## Testing
-- some tests require ffmpeg to run (specifically all tests for generating file previews)
-- the same tests require these files located in `./test_assets`: `test.png`, `test.gif`, `test.mp4` They are ignored from git to reduce repository size and because I don't want to be liable if it turns out test data I used is copyrighted
+
+- some tests require ffmpeg to run (specifically all tests for generating file
+  previews)
+- the same tests require these files located in `./test_assets`: `test.png`,
+  `test.gif`, `test.mp4` They are ignored from git to reduce repository size and
+  because I don't want to be liable if it turns out test data I used is
+  copyrighted
 
 ## notes
 
-generating file previews requires rabbitmq to be running _when this application
-starts_. Timing can vary depending on your device, but here's an example script
+generating file previews requires rabbitmq to be running _when this application starts_. Timing can vary depending on your device, but here's an example script
 that can guide you in booting up properly (works great in `/etc/rc.local`):
 
 ```shell
@@ -79,3 +83,4 @@ sudo rabbitmq-server &
 sleep 45
 sudo rabbitmqctl await_online_nodes 1 && $(./sudo file_server &) &
 ```
+you can also use `systemd` to ensure this launches after rabbit

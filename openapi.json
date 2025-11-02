@@ -7,7 +7,7 @@
     },
     "title": "Ploiu File Server",
     "description": "a self-hostable file server written in rust",
-    "version": "3.0.0"
+    "version": "3.0.3"
   },
   "paths": {
     "/api/version": {

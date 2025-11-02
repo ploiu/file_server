@@ -5,6 +5,7 @@ enabled = true
 # required if RabbitMq.enabled = true
 address = "amqp://127.0.0.1:5672"
 
+# File Previews REQUIRE ffmpeg to run
 [FilePreview]
 # the number of milliseconds to wait after a request before previews will be processed. This is on a per-item basis
 sleepTimeMillis = 30_000
