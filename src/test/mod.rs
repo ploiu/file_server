@@ -17,6 +17,7 @@ mod tests {
     use crate::temp_dir;
     use std::fs;
     use std::fs::{remove_dir_all, remove_file};
+    use std::io::Write;
     use std::path::Path;
 
     /// username:password
@@ -79,7 +80,9 @@ mod tests {
     pub fn create_file_preview(file_id: u32) {
         previews::ensure_preview_dir();
         let full_path = format!("{}/{}.png", previews::preview_dir(), file_id);
-        fs::File::create(full_path).unwrap();
+        let mut created = fs::File::create(full_path).unwrap();
+        // write some constant dummy contents that we can easily verify in tests
+        created.write_all(&[0x01, 0x02, 0x03]).unwrap();
     }
 
     pub fn create_folder_db_entry(name: &str, parent_id: Option<u32>) {

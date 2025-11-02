@@ -391,7 +391,7 @@ mod remove_tag_from_file_tests {
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, now, init_db_folder};
+    use crate::test::{cleanup, init_db_folder, now};
 
     #[test]
     fn remove_tag_from_file_works() {

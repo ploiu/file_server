@@ -616,7 +616,7 @@ mod search_files_by_attributes {
             file_type: FileTypes::Text,
         }
         .save_to_db();
-        let bad = FileRecord {
+        let _bad = FileRecord {
             id: None,
             name: "bad.gif".to_string(),
             parent_id: None,
@@ -640,7 +640,7 @@ mod search_files_by_attributes {
 
     #[test]
     fn properly_retrieves_files_with_multiple_attr() {
-        let date = chrono::NaiveDate::from_ymd_opt(2020, 01, 15).unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2020, 1, 15).unwrap();
         let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
         let date_time = NaiveDateTime::new(date, time);
         init_db_folder();

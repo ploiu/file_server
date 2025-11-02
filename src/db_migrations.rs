@@ -115,9 +115,9 @@ pub fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
     Ok(())
 }
 
-fn log_migration_version(version: u64) {
+fn log_migration_version(_version: u64) {
     #[cfg(not(test))]
-    log::info!("Migrating database to v{version}...");
+    log::info!("Migrating database to v{_version}...");
 }
 
 fn migrate_v2(con: &Connection) -> Result<()> {

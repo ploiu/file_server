@@ -1,3 +1,5 @@
+pub use queue::*;
+
 #[cfg(not(test))]
 #[allow(clippy::module_inception)]
 pub mod queue {
@@ -198,5 +200,3 @@ pub mod queue {
 
     pub fn publish_message(_: &str, _: &str) {}
 }
-
-pub use queue::*;
