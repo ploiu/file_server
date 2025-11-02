@@ -1,6 +1,6 @@
 mod preview_service;
 
-pub use preview_service::{delete_file_preview, generate_preview, get_file_preview};
+pub use preview_service::{delete_file_preview, generate_preview, get_file_preview, load_all_files_in_preview_queue};
 
 #[cfg(not(test))]
 fn preview_dir() -> String {

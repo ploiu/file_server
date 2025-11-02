@@ -504,6 +504,22 @@
         }
       }
     },
+    "/files/previews": {
+      "post": {
+        "tags": [
+          "files"
+        ],
+        "description": "Triggers regeneration of all file previews by publishing all file IDs to the preview generation queue. Returns immediately with HTTP 202 while the preview generation happens asynchronously in the background.",
+        "responses": {
+          "202": {
+            "description": "Preview regeneration started successfully"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          }
+        }
+      }
+    },
     "/folders/metadata/{id}": {
       "parameters": [
         {

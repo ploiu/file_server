@@ -153,6 +153,33 @@ pub fn delete_file_preview(id: u32) {
     }
 }
 
+/// retrieves all file IDs from the database and publishes them to the preview generation queue.
+/// This function is intended to be called in a background thread as it may take some time
+/// to publish all messages depending on the number of files.
+pub fn load_all_files_in_preview_queue() {
+    use crate::repository::{file_repository, open_connection};
+    
+    let con = open_connection();
+    let file_ids = match file_repository::get_all_file_ids(&con) {
+        Ok(ids) => ids,
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve file IDs for preview regeneration: {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return;
+        }
+    };
+    
+    log::info!("Publishing {} file IDs to preview queue", file_ids.len());
+    
+    for id in file_ids {
+        crate::queue::publish_message("icon_gen", &id.to_string());
+    }
+    
+    log::info!("Successfully published all file IDs to preview queue");
+}
+
 /// checks if ffmpeg is installed on the system
 fn check_ffmpeg() -> bool {
     let output = Command::new("sh")

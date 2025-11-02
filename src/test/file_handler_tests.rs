@@ -710,3 +710,40 @@ fn test_update_file_trailing_name_fix() {
     assert_eq!(body.name, String::from("thing.txt"));
     cleanup();
 }
+
+#[test]
+fn regenerate_previews_path() {
+    set_password();
+    let client = client();
+    let res = client
+        .post(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(res.status(), Status::Accepted);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_method() {
+    set_password();
+    let client = client();
+    let res = client
+        .get(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    // 422 because the route doesn't match GET method properly (it tries to match /files/preview/{id} first)
+    assert_eq!(res.status(), Status::UnprocessableEntity);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_response_code() {
+    set_password();
+    let client = client();
+    let res = client
+        .post(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(res.status(), Status::Accepted);
+    cleanup();
+}
