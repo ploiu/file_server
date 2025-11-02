@@ -3,6 +3,7 @@ use crate::model::error::file_errors::GetPreviewError;
 use crate::model::file_types::FileTypes;
 use crate::service::file_service::{self, file_dir};
 use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
+use rocket::tokio::fs;
 use std::backtrace::Backtrace;
 use std::path::Path;
 use std::process::Command;
@@ -113,14 +114,9 @@ pub async fn generate_preview(message_data: String) -> bool {
 /// # Errors
 ///
 /// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
-pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
+pub async fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
     let preview_path = format!("{}/{id}.png", preview_dir());
-    let path = Path::new(&preview_path);
-    if !path.exists() {
-        return Err(GetPreviewError::NotFound);
-    }
-    // we know the file exists, so now we can return the contents
-    match std::fs::read(&preview_path) {
+    match fs::read(&preview_path).await {
         Ok(contents) => Ok(contents),
         Err(e) => {
             if e.kind() == std::io::ErrorKind::NotFound {

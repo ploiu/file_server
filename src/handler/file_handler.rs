@@ -217,7 +217,7 @@ pub fn update_file(
 }
 
 #[get("/preview/<id>")]
-pub fn get_file_preview(
+pub async fn get_file_preview(
     id: u32,
     auth: HeaderAuth,
     last_request_time: &State<Arc<Mutex<Instant>>>,
@@ -228,7 +228,7 @@ pub fn get_file_preview(
         ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match previews::get_file_preview(id) {
+    match previews::get_file_preview(id).await {
         Ok(preview) => GetPreviewResponse::Success(preview),
         Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
             "No preview for a file with that id could be found",

@@ -943,6 +943,8 @@ mod update_file_tests {
 
 #[cfg(test)]
 mod delete_file_with_id_tests {
+    use rocket::tokio;
+
     use crate::{
         model::error::file_errors,
         previews::get_file_preview,
@@ -950,8 +952,8 @@ mod delete_file_with_id_tests {
         test::{cleanup, create_file_db_entry, create_file_preview, init_db_folder},
     };
 
-    #[test]
-    fn test_deletes_file_properly() {
+    #[tokio::test]
+    async fn test_deletes_file_properly() {
         init_db_folder();
         create_file_db_entry("test.txt", None);
         let con = open_connection();
@@ -962,15 +964,15 @@ mod delete_file_with_id_tests {
         cleanup();
     }
 
-    #[test]
-    fn test_deletes_file_preview() {
+    #[tokio::test]
+    async fn test_deletes_file_preview() {
         init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_preview(1);
         let con = open_connection();
         delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        let preview = get_file_preview(1).unwrap_err();
+        let preview = get_file_preview(1).await.unwrap_err();
         assert_eq!(file_errors::GetPreviewError::NotFound, preview);
         cleanup();
     }
