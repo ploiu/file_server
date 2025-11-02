@@ -1,4 +1,5 @@
 #[cfg(not(test))]
+#[allow(clippy::module_inception)]
 pub mod config {
     use std::string::ToString;
 

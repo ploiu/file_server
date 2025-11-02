@@ -154,6 +154,7 @@ pub fn get_all_files(con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Erro
     rows.into_iter().collect()
 }
 
+// right now clippy says it's unused, but it _will_ be used later
 pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_file_ids.sql"))?;
     let res = pst.query_map([], |row| row.get(0))?;
@@ -338,7 +339,7 @@ mod get_files_by_all_tags_tests {
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::search_files_by_tags;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, init_db_folder};
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, init_db_folder, now};
 
     #[test]
     fn returns_files_with_all_tags() {
@@ -387,7 +388,7 @@ mod create_file_tests {
     use crate::{
         model::{file_types::FileTypes, repository::FileRecord},
         repository::open_connection,
-        test::{cleanup, create_folder_db_entry, now, init_db_folder},
+        test::{cleanup, create_folder_db_entry, init_db_folder, now},
     };
 
     #[test]
@@ -600,7 +601,7 @@ mod search_files_by_attributes {
     use crate::{
         model::request::attributes::*,
         repository::open_connection,
-        test::{cleanup, now, init_db_folder},
+        test::{cleanup, init_db_folder, now},
     };
 
     #[test]

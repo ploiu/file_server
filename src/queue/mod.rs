@@ -1,4 +1,5 @@
 #[cfg(not(test))]
+#[allow(clippy::module_inception)]
 pub mod queue {
     use crate::config::FILE_SERVER_CONFIG;
     use lapin::{Channel, Connection};
@@ -181,6 +182,7 @@ pub mod queue {
 }
 
 #[cfg(test)]
+#[allow(clippy::module_inception)]
 pub mod queue {
     use std::{
         sync::{Arc, Mutex},

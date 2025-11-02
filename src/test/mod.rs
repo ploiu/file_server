@@ -3,6 +3,9 @@ pub mod file_handler_tests;
 pub mod folder_handler_tests;
 
 #[cfg(test)]
+pub use tests::*;
+
+#[cfg(test)]
 mod tests {
     use crate::model::api::FileApi;
     use crate::model::repository::{FileRecord, Folder, Tag};
@@ -257,6 +260,3 @@ mod tests {
         }
     }
 }
-
-#[cfg(test)]
-pub use tests::*;
