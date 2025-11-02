@@ -255,7 +255,11 @@ pub fn regenerate_previews(
     update_last_request_time(last_request_time);
     
     std::thread::spawn(|| {
-        previews::load_all_files_in_preview_queue();
+        if let Err(e) = std::panic::catch_unwind(|| {
+            previews::load_all_files_in_preview_queue();
+        }) {
+            log::error!("Preview regeneration thread panicked: {e:?}");
+        }
     });
     
     Status::Accepted
