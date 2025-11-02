@@ -97,22 +97,27 @@ pub fn generate_all_file_types_and_sizes() {
 /// incrementally upgrades the database for each version the database is behind
 pub fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
     if table_version < 2 {
-        log::info!("Migrating database to v2...");
+        log_migration_version(2);
         migrate_v2(con)?;
     }
     if table_version < 3 {
-        log::info!("Migrating database to v3...");
+        log_migration_version(3);
         migrate_v3(con)?;
     }
     if table_version < 4 {
-        log::info!("Migrating database to v4...");
+        log_migration_version(4);
         migrate_v4(con)?;
     }
     if table_version < 5 {
-        log::info!("Migrating database to v5...");
+        log_migration_version(5);
         migrate_v5(con)?;
     }
     Ok(())
+}
+
+fn log_migration_version(version: u64) {
+    #[cfg(not(test))]
+    log::info!("Migrating database to v{version}...");
 }
 
 fn migrate_v2(con: &Connection) -> Result<()> {

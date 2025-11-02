@@ -1,7 +1,7 @@
 use super::preview_dir;
 use crate::model::error::file_errors::GetPreviewError;
 use crate::model::file_types::FileTypes;
-use crate::service::file_service;
+use crate::service::file_service::{self, file_dir};
 use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
 use std::backtrace::Backtrace;
 use std::path::Path;
@@ -26,6 +26,11 @@ pub fn ensure_preview_dir() {
 ///
 /// ## Parameters
 /// * [message_data] the rabbit message. Must correspond to a file id in the database
+///
+/// ## Returns
+/// - false if the message should not be removed from the queue
+/// - true if the message should be removed from the queue -
+///   will happen under many circumstances, including bad messages, previews being successfully generated, no file with that id found, etc
 pub async fn generate_preview(message_data: String) -> bool {
     ensure_preview_dir();
     if !check_ffmpeg() {
@@ -55,7 +60,7 @@ pub async fn generate_preview(message_data: String) -> bool {
         }
     };
     let path = match get_file_path(id) {
-        Ok(p) => format!("./files/{p}"),
+        Ok(p) => format!("{}/{p}", file_dir()),
         Err(GetFileError::NotFound) => {
             // file is no longer on disk, meaning it was deleted
             return true;
@@ -71,7 +76,9 @@ pub async fn generate_preview(message_data: String) -> bool {
     };
     let preview_path = preview_dir();
     let output_file_name = format!("./{id}.png");
-    let command = if Some(FileTypes::Image) == file_data.file_type {
+    let command = if Some(FileTypes::Image) == file_data.file_type
+        && !file_data.name.ends_with(".gif")
+    {
         format!("ffmpeg -i {path} -vf scale=150:-1 {preview_path}/{output_file_name}")
     } else if Some(FileTypes::Video) == file_data.file_type {
         format!("ffmpeg -i {path} -vf scale=150:-1 -frames:v 1 {preview_path}/{output_file_name}")
@@ -79,6 +86,7 @@ pub async fn generate_preview(message_data: String) -> bool {
         // invalid file type
         return true;
     };
+    log::debug!("running ffmpeg: {command:?}");
     let output = match Command::new("sh").arg("-c").arg(&command).output() {
         Ok(o) => o.status,
         Err(e) => {

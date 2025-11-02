@@ -57,13 +57,9 @@ fn init_log() -> Result<(), fern::InitError> {
     Ok(())
 }
 
-#[cfg(test)]
-fn init_log() -> Result<(), fern::InitError> {
-    Ok(())
-}
-
 #[launch]
 pub fn rocket() -> Rocket<Build> {
+    #[cfg(not(test))]
     init_log().unwrap();
     initialize_db().unwrap();
     generate_all_file_types_and_sizes();

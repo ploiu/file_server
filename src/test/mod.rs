@@ -10,7 +10,7 @@ mod tests {
     use crate::repository::{
         file_repository, folder_repository, initialize_db, open_connection, tag_repository,
     };
-    use crate::service::file_service::file_dir;
+    use crate::service::file_service::{determine_file_type, file_dir};
     use crate::temp_dir;
     use std::fs;
     use std::fs::{remove_dir_all, remove_file};
@@ -20,6 +20,13 @@ mod tests {
     pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
 
     pub fn init_db_folder() {
+        // since this is just for testing, we don't need to unwrap the logging
+        let _ = fern::Dispatch::new()
+            .level(log::LevelFilter::Debug)
+            .level_for("rocket", log::LevelFilter::Off)
+            .level_for("file_server::db_migrations", log::LevelFilter::Off)
+            .chain(std::io::stdout())
+            .apply();
         let thread_name = current_thread_name();
         fs::create_dir_all(file_dir()).expect("Failed to create base file dir");
         remove_file(Path::new(format!("{thread_name}.sqlite").as_str())).unwrap_or(());
@@ -45,7 +52,7 @@ mod tests {
     /// for quick and easy storing of a basic file in the database without any extra fields
     /// see also [`FileRecord::save_to_db`]
     pub fn create_file_db_entry(name: &str, folder_id: Option<u32>) {
-        use crate::model::file_types::FileTypes;
+        let file_type = determine_file_type(name);
 
         let connection = open_connection();
         let file_id = file_repository::create_file(
@@ -55,7 +62,7 @@ mod tests {
                 parent_id: folder_id,
                 size: 0,
                 create_date: now(),
-                file_type: FileTypes::default(),
+                file_type,
             },
             &connection,
         )

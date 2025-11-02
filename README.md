@@ -63,6 +63,10 @@ preview generation for file uploads requires
 rabbit, and create an admin user with username `admin` and password `admin`. To
 turn off this feature, set `RabbitMq.enabled` to `false` in `FileServer.toml`
 
+## Testing
+- some tests require ffmpeg to run (specifically all tests for generating file previews)
+- the same tests that require ffmpeg require a png file named `test.png` in `./test_assets` and an mp4 file named `test.mp4` in `./test_assets`. They are ignored from git to reduce repository size and because I don't want to be liable if it turns out test data I used is copyrighted
+
 ## notes
 
 generating file previews requires rabbitmq to be running _when this application
