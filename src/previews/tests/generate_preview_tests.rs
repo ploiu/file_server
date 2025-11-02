@@ -3,7 +3,6 @@ use std::path::Path;
 use rocket::tokio;
 
 use crate::{
-    fail,
     previews::{self, preview_dir},
     service::file_service::file_dir,
     test::{self, cleanup, create_file_db_entry, init_db_folder},

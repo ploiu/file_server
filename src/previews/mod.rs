@@ -1,7 +1,7 @@
 mod preview_service;
 
 pub use preview_service::{
-    delete_file_preview, ensure_preview_dir, generate_preview, get_file_preview,
+    delete_file_preview, generate_preview, get_file_preview,
 };
 
 #[cfg(not(test))]
