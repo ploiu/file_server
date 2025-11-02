@@ -85,7 +85,8 @@ pub fn rocket() -> Rocket<Build> {
                 download_file,
                 update_file,
                 search_files,
-                get_file_preview
+                get_file_preview,
+                regenerate_previews
             ],
         )
         .mount(

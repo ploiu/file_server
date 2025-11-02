@@ -710,3 +710,64 @@ fn test_update_file_trailing_name_fix() {
     assert_eq!(body.name, String::from("thing.txt"));
     cleanup();
 }
+
+#[test]
+fn regenerate_previews_path() {
+    set_password();
+    let client = client();
+    let res = client
+        .post(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(res.status(), Status::Accepted);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_method() {
+    set_password();
+    let client = client();
+    let res = client
+        .get(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    // 422 because the route doesn't match GET method properly (it tries to match /files/preview/{id} first)
+    assert_eq!(res.status(), Status::UnprocessableEntity);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_response_code() {
+    set_password();
+    let client = client();
+    let res = client
+        .post(uri!("/files/previews"))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(res.status(), Status::Accepted);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_missing_auth() {
+    set_password();
+    let client = client();
+    let res = client
+        .post(uri!("/files/previews"))
+        .dispatch();
+    assert_eq!(res.status(), Status::Unauthorized);
+    cleanup();
+}
+
+#[test]
+fn regenerate_previews_bad_auth() {
+    set_password();
+    let client = client();
+    // wrong_user:wrong_pass in base64
+    let res = client
+        .post(uri!("/files/previews"))
+        .header(Header::new("Authorization", "Basic d3JvbmdfdXNlcjp3cm9uZ19wYXNz"))
+        .dispatch();
+    assert_eq!(res.status(), Status::Unauthorized);
+    cleanup();
+}
