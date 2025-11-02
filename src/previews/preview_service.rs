@@ -163,6 +163,7 @@ pub fn load_all_files_in_preview_queue() {
     let file_ids = match file_repository::get_all_file_ids(&con) {
         Ok(ids) => ids,
         Err(e) => {
+            con.close().unwrap_or(());
             log::error!(
                 "Failed to retrieve file IDs for preview regeneration: {e:?}\n{}",
                 Backtrace::force_capture()
@@ -171,13 +172,14 @@ pub fn load_all_files_in_preview_queue() {
         }
     };
     
-    log::info!("Publishing {} file IDs to preview queue", file_ids.len());
+    log::debug!("Publishing {} file IDs to preview queue", file_ids.len());
     
     for id in file_ids {
         crate::queue::publish_message("icon_gen", &id.to_string());
     }
     
-    log::info!("Successfully published all file IDs to preview queue");
+    con.close().unwrap_or(());
+    log::debug!("Successfully published all file IDs to preview queue");
 }
 
 /// checks if ffmpeg is installed on the system
