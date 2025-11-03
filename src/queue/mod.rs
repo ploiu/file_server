@@ -1,45 +1,46 @@
-use std::future::Future;
-use std::sync::{Arc, Mutex};
-
-use std::time::Instant;
+pub use queue::*;
 
 #[cfg(not(test))]
-use crate::config::FILE_SERVER_CONFIG;
-use lapin::{Channel, Connection};
+#[allow(clippy::module_inception)]
+pub mod queue {
+    use crate::config::FILE_SERVER_CONFIG;
+    use lapin::{Channel, Connection};
+    use std::future::Future;
+    use std::sync::{Arc, Mutex};
+    use std::time::Instant;
 
-struct RabbitProvider {
-    /// the connection to the rabbit mq
-    _connection: Connection,
-    /// the channel that we will be consuming messages from / publishing messages to
-    channel: Channel,
-}
+    struct RabbitProvider {
+        /// the connection to the rabbit mq
+        _connection: Connection,
+        /// the channel that we will be consuming messages from / publishing messages to
+        channel: Channel,
+    }
 
-/// sets up a long-running consumer job that invokes the passed [function](Fn)
-/// whenever there are items in the rabbit queue
-/// * `last_request_time` - the last time a request was made. A preview will not be generated as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
-/// * `function` - the async function to be called on the value consumed from the queue. It must take the data
-///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
-///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
-#[cfg(not(test))]
-pub fn file_preview_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
-where
-    F: Fn(String) -> Fut + Send + 'static,
-    Fut: Future<Output = bool> + Send,
-{
-    use lapin::options::BasicNackOptions;
-    use lapin::options::{BasicAckOptions, BasicConsumeOptions};
-    use lapin::types::FieldTable;
+    /// sets up a long-running consumer job that invokes the passed [function](Fn)
+    /// whenever there are items in the rabbit queue
+    /// * `last_request_time` - the last time a request was made. A preview will not be generated as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
+    /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
+    ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
+    ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
+    pub fn file_preview_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
+    where
+        F: Fn(String) -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send,
+    {
+        use lapin::options::BasicNackOptions;
+        use lapin::options::{BasicAckOptions, BasicConsumeOptions};
+        use lapin::types::FieldTable;
 
-    use rocket::futures::StreamExt;
+        use rocket::futures::StreamExt;
 
-    use std::time::Duration;
+        use std::time::Duration;
 
-    let config = FILE_SERVER_CONFIG.clone();
-    if config.rabbit_mq.enabled {
-        // using as_ref here because I definitely do _not_ want to clone the rabbit connection
-        let provider = RABBIT_PROVIDER.as_ref().unwrap();
-        let last_request_time = last_request_time.clone();
-        async_global_executor::spawn(async move {
+        let config = FILE_SERVER_CONFIG.clone();
+        if config.rabbit_mq.enabled {
+            // using as_ref here because I definitely do _not_ want to clone the rabbit connection
+            let provider = RABBIT_PROVIDER.as_ref().unwrap();
+            let last_request_time = last_request_time.clone();
+            async_global_executor::spawn(async move {
             let mut consumer = provider
                 .channel
                 .basic_consume(
@@ -100,99 +101,102 @@ where
             }
         })
         .detach();
-    }
-}
-
-/// publishes a message to the queue with the passed `queue_name`.
-/// failing to publish a message will not return an error, but will log the
-/// reason for failure. This is because rabbit is used to offload smaller tasks
-/// that aren't strictly necessary for the operation of the file server.
-#[cfg(not(test))]
-pub fn publish_message(queue_name: &str, message: &str) {
-    use std::backtrace::Backtrace;
-
-    use lapin::{BasicProperties, options::BasicPublishOptions};
-
-    if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
-        return;
+        }
     }
 
-    let provider = RABBIT_PROVIDER.as_ref().unwrap();
-    let channel = &provider.channel;
-    let payload: &[u8] = message.as_bytes();
-    let res = async_global_executor::block_on(channel.basic_publish(
-        "",
-        queue_name,
-        BasicPublishOptions::default(),
-        payload,
-        BasicProperties::default(),
-    ));
-    if let Err(e) = res {
-        log::error!(
-            "Failed to publish message {message} to queue {queue_name}. Exception is {e:?}\n{}",
-            Backtrace::force_capture()
-        );
+    /// publishes a message to the queue with the passed `queue_name`.
+    /// failing to publish a message will not return an error, but will log the
+    /// reason for failure. This is because rabbit is used to offload smaller tasks
+    /// that aren't strictly necessary for the operation of the file server.
+    pub fn publish_message(queue_name: &str, message: &str) {
+        use std::backtrace::Backtrace;
+
+        use lapin::{BasicProperties, options::BasicPublishOptions};
+
+        if !FILE_SERVER_CONFIG.clone().rabbit_mq.enabled {
+            return;
+        }
+
+        let provider = RABBIT_PROVIDER.as_ref().unwrap();
+        let channel = &provider.channel;
+        let payload: &[u8] = message.as_bytes();
+        let res = async_global_executor::block_on(channel.basic_publish(
+            "",
+            queue_name,
+            BasicPublishOptions::default(),
+            payload,
+            BasicProperties::default(),
+        ));
+        if let Err(e) = res {
+            log::error!(
+                "Failed to publish message {message} to queue {queue_name}. Exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+        }
     }
-}
 
-/// should only be called if RabbitConfig.enabled = true
-#[cfg(not(test))]
-impl RabbitProvider {
-    fn init() -> Self {
-        use lapin::ConnectionProperties;
-        use lapin::options::QueueDeclareOptions;
-        use lapin::types::FieldTable;
+    /// should only be called if RabbitConfig.enabled = true
+    impl RabbitProvider {
+        fn init() -> Self {
+            use lapin::ConnectionProperties;
+            use lapin::options::QueueDeclareOptions;
+            use lapin::types::FieldTable;
 
-        let config = FILE_SERVER_CONFIG.clone();
-        let (connection, channel) = async_global_executor::block_on(async {
-            let rabbit_connection = Connection::connect(
-                &config.rabbit_mq.address.unwrap(),
-                ConnectionProperties::default(),
-            )
-            .await
-            .unwrap();
-            let channel = rabbit_connection.create_channel().await.unwrap();
-            // even though this isn't used anywhere, we need to declare the queue or else it won't exist when we go to consume it
-            let queue_options = QueueDeclareOptions {
-                passive: false,
-                durable: true,
-                exclusive: false,
-                auto_delete: false,
-                nowait: false,
-            };
-            channel
-                .queue_declare("icon_gen", queue_options, FieldTable::default())
+            let config = FILE_SERVER_CONFIG.clone();
+            let (connection, channel) = async_global_executor::block_on(async {
+                let rabbit_connection = Connection::connect(
+                    &config.rabbit_mq.address.unwrap(),
+                    ConnectionProperties::default(),
+                )
                 .await
                 .unwrap();
-            (rabbit_connection, channel)
-        });
-        RabbitProvider {
-            _connection: connection,
-            channel,
+                let channel = rabbit_connection.create_channel().await.unwrap();
+                // even though this isn't used anywhere, we need to declare the queue or else it won't exist when we go to consume it
+                let queue_options = QueueDeclareOptions {
+                    passive: false,
+                    durable: true,
+                    exclusive: false,
+                    auto_delete: false,
+                    nowait: false,
+                };
+                channel
+                    .queue_declare("icon_gen", queue_options, FieldTable::default())
+                    .await
+                    .unwrap();
+                (rabbit_connection, channel)
+            });
+            RabbitProvider {
+                _connection: connection,
+                channel,
+            }
         }
     }
-}
 
-#[cfg(not(test))]
-static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
-    once_cell::sync::Lazy::new(|| {
-        let config = FILE_SERVER_CONFIG.clone();
-        if config.rabbit_mq.enabled {
-            Some(RabbitProvider::init())
-        } else {
-            None
-        }
-    });
-
-// ---------------------------- test implementations that don't start up rabbit
-
-#[cfg(test)]
-pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
-where
-    F: Fn(String) -> Fut + Send + 'static,
-    Fut: Future<Output = bool> + Send,
-{
+    static RABBIT_PROVIDER: once_cell::sync::Lazy<Option<RabbitProvider>> =
+        once_cell::sync::Lazy::new(|| {
+            let config = FILE_SERVER_CONFIG.clone();
+            if config.rabbit_mq.enabled {
+                Some(RabbitProvider::init())
+            } else {
+                None
+            }
+        });
 }
 
 #[cfg(test)]
-pub fn publish_message(_: &str, _: &str) {}
+#[allow(clippy::module_inception)]
+pub mod queue {
+    use std::{
+        sync::{Arc, Mutex},
+        time::Instant,
+    };
+
+    pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
+    where
+        F: Fn(String) -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send,
+    {
+    }
+
+    pub fn publish_message(_: &str, _: &str) {}
+}

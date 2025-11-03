@@ -6,7 +6,7 @@
 		"body": [
 			"#[test]",
 			"fn $1() {",
-			"\trefresh_db();",
+			"\tinit_db_folder();",
 			"\tcrate::fail!();",
 			"\tcleanup();",
 			"}"

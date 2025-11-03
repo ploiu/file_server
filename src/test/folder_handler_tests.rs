@@ -20,7 +20,7 @@ fn client() -> Client {
 }
 
 fn set_password() {
-    refresh_db();
+    init_db_folder();
     let client = client();
     let uri = uri!("/api/password");
     client

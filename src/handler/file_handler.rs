@@ -3,6 +3,7 @@ use std::time::Instant;
 
 use rocket::State;
 use rocket::form::{Form, Strict};
+use rocket::http::Status;
 use rocket::serde::json::Json;
 
 use crate::guard::HeaderAuth;
@@ -19,6 +20,7 @@ use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
     GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
 };
+use crate::previews;
 use crate::service::file_service::save_file;
 use crate::service::{file_service, search_service};
 use crate::util::update_last_request_time;
@@ -216,7 +218,7 @@ pub fn update_file(
 }
 
 #[get("/preview/<id>")]
-pub fn get_file_preview(
+pub async fn get_file_preview(
     id: u32,
     auth: HeaderAuth,
     last_request_time: &State<Arc<Mutex<Instant>>>,
@@ -227,7 +229,7 @@ pub fn get_file_preview(
         ValidateResult::Invalid => return GetPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match file_service::get_file_preview(id) {
+    match previews::get_file_preview(id).await {
         Ok(preview) => GetPreviewResponse::Success(preview),
         Err(GetPreviewError::NotFound) => GetPreviewResponse::NotFound(BasicMessage::new(
             "No preview for a file with that id could be found",
@@ -236,4 +238,25 @@ pub fn get_file_preview(
             format!("Failed to get file preview. Exception is {e:?}").as_str(),
         )),
     }
+}
+
+/// triggers regeneration of all file previews by publishing all file IDs to the preview queue.
+/// Returns immediately with a 202 status while the preview generation happens asynchronously.
+#[post("/preview")]
+pub fn regenerate_previews(
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> Status {
+    match auth.validate() {
+        ValidateResult::Ok => { /*no op*/ }
+        ValidateResult::NoPasswordSet => return Status::Unauthorized,
+        ValidateResult::Invalid => return Status::Unauthorized,
+    };
+    update_last_request_time(last_request_time);
+
+    std::thread::spawn(|| {
+        previews::load_all_files_in_preview_queue();
+    });
+
+    Status::Accepted
 }

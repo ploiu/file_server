@@ -18,8 +18,17 @@ pub enum GetFileError {
 
 #[derive(PartialEq, Debug)]
 pub enum GetPreviewError {
+    /// a generic error reading from the file system
+    FileSystemError,
+    /// no preview found for the requested file
     NotFound,
-    DbFailure,
+}
+
+/// represents error states that can arise from retrieving all previews for files in a folder
+#[derive(PartialEq, Debug)]
+pub enum GetBulkPreviewError {
+    /// error retrieving files from the database
+    Db,
 }
 
 #[derive(PartialEq, Debug)]

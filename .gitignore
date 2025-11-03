@@ -13,3 +13,5 @@ FileServer.toml
 *.log
 # failed test folders and files stick around for debugging, and have `::` in them because of how threads are named in rust
 *::*
+file_previews
+test_assets

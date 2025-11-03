@@ -10,7 +10,7 @@ use rusqlite::Connection;
 use model::repository::Folder;
 
 use crate::model::api::FileApi;
-use crate::model::error::file_errors::{DeleteFileError, GetPreviewError};
+use crate::model::error::file_errors::{DeleteFileError, GetBulkPreviewError};
 use crate::model::error::folder_errors::{
     CreateFolderError, DeleteFolderError, DownloadFolderError, GetChildFilesError, GetFolderError,
     UpdateFolderError,
@@ -20,7 +20,8 @@ use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
 use crate::model::response::TagApi;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
+use crate::previews;
+use crate::repository::{folder_repository, open_connection, tag_repository};
 use crate::service::file_service::{check_root_dir, file_dir};
 use crate::service::{file_service, tag_service};
 use crate::{model, repository};
@@ -298,7 +299,9 @@ pub fn reduce_folders_by_tag(
     Ok(copied)
 }
 
-pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, GetPreviewError> {
+pub async fn get_file_previews_for_folder(
+    id: u32,
+) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
     let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
@@ -309,7 +312,7 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
                 "Failed to query files for folder {id}. Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            return Err(GetPreviewError::DbFailure);
+            return Err(GetBulkPreviewError::Db);
         }
         Err(_e) => vec![],
     }
@@ -318,22 +321,9 @@ pub fn get_file_previews_for_folder(id: u32) -> Result<HashMap<u32, Vec<u8>>, Ge
     .collect();
     let mut map: HashMap<u32, Vec<u8>> = HashMap::new();
     for id in file_ids {
-        let preview = match file_repository::get_file_preview(id, &con) {
+        let preview = match previews::get_file_preview(id).await {
             Ok(p) => p,
-            // no preview for 1 specific file is common and fine
-            Err(rusqlite::Error::QueryReturnedNoRows) => continue,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to get preview for file {id}. Error is {e:?}\n{}",
-                    Backtrace::force_capture()
-                );
-                if rusqlite::Error::QueryReturnedNoRows == e {
-                    return Err(GetPreviewError::NotFound);
-                } else {
-                    return Err(GetPreviewError::DbFailure);
-                }
-            }
+            Err(_) => continue,
         };
         map.insert(id, preview);
     }
@@ -779,11 +769,11 @@ mod get_folder_tests {
     use crate::model::response::TagApi;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::get_folder;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, refresh_db};
+    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, init_db_folder};
 
     #[test]
     fn get_folder_works() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None);
         let folder = get_folder(Some(1)).unwrap();
         assert_eq!(
@@ -803,7 +793,7 @@ mod get_folder_tests {
 
     #[test]
     fn get_folder_not_found() {
-        refresh_db();
+        init_db_folder();
         let err = get_folder(Some(1)).unwrap_err();
         assert_eq!(GetFolderError::NotFound, err);
         cleanup();
@@ -811,7 +801,7 @@ mod get_folder_tests {
 
     #[test]
     fn get_folder_retrieves_tags() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None);
         create_tag_folder("tag1", 1);
         let expected = FolderResponse {
@@ -839,12 +829,12 @@ mod update_folder_tests {
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::{get_folder, update_folder};
     use crate::test::{
-        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, refresh_db,
+        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, init_db_folder,
     };
 
     #[test]
     fn update_folder_adds_tags() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None);
         create_folder_disk("test");
         update_folder(&UpdateFolderRequest {
@@ -875,7 +865,7 @@ mod update_folder_tests {
 
     #[test]
     fn update_folder_already_exists() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None);
         create_folder_db_entry("test2", None);
         let res = update_folder(&UpdateFolderRequest {
@@ -893,7 +883,7 @@ mod update_folder_tests {
 
     #[test]
     fn update_folder_removes_tags() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None);
         create_folder_disk("test");
         create_tag_folder("tag1", 1);
@@ -927,12 +917,12 @@ mod reduce_folders_by_tag_tests {
     use crate::service::folder_service::reduce_folders_by_tag;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,
-        create_tag_folders, refresh_db,
+        create_tag_folders, init_db_folder,
     };
 
     #[test]
     fn reduce_folders_by_tag_works() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("A", None); // 1
         create_folder_db_entry("AB", Some(1)); // 2
         create_folder_db_entry("ABB", Some(1)); // 3
@@ -1194,7 +1184,7 @@ mod reduce_folders_by_tag_tests {
 
     #[test]
     fn reduce_folders_by_tag_keeps_first_folder_with_all_tags() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("middle", Some(1)); // 2
         create_folder_db_entry("bottom", Some(2)); // 3
@@ -1262,12 +1252,12 @@ mod reduce_folders_by_tag_tests {
 mod download_folder_tests {
     use crate::{
         service::folder_service::download_folder,
-        test::{cleanup, create_folder_db_entry, create_folder_disk, refresh_db},
+        test::{cleanup, create_folder_db_entry, create_folder_disk, init_db_folder},
     };
 
     #[test]
     fn works() {
-        refresh_db();
+        init_db_folder();
         create_folder_disk("test/top/middle/bottom");
         create_folder_db_entry("test", None);
         create_folder_db_entry("top", Some(1));

@@ -342,7 +342,7 @@ mod get_tag_tests {
 
     #[test]
     fn test_get_tag() {
-        refresh_db();
+        init_db_folder();
         let expected = create_tag("test".to_string()).unwrap();
         let actual = get_tag(1).unwrap();
         assert_eq!(actual, expected);
@@ -351,7 +351,7 @@ mod get_tag_tests {
 
     #[test]
     fn test_get_tag_non_existent() {
-        refresh_db();
+        init_db_folder();
         let res = get_tag(1).expect_err("Retrieving a nonexistent tag should return an error");
         assert_eq!(GetTagError::TagNotFound, res);
         cleanup();
@@ -363,11 +363,11 @@ mod update_tag_tests {
     use crate::model::error::tag_errors::UpdateTagError;
     use crate::model::response::TagApi;
     use crate::service::tag_service::{create_tag, get_tag, update_tag};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn update_tag_works() {
-        refresh_db();
+        init_db_folder();
         let tag = create_tag("test_tag".to_string()).unwrap();
         let updated_tag = update_tag(TagApi {
             id: tag.id,
@@ -384,7 +384,7 @@ mod update_tag_tests {
 
     #[test]
     fn update_tag_not_found() {
-        refresh_db();
+        init_db_folder();
         let res = update_tag(TagApi {
             id: Some(1),
             title: "what".to_string(),
@@ -395,7 +395,7 @@ mod update_tag_tests {
 
     #[test]
     fn update_tag_already_exists() {
-        refresh_db();
+        init_db_folder();
         create_tag("first".to_string()).unwrap();
         create_tag("second".to_string()).unwrap();
         let res = update_tag(TagApi {
@@ -411,11 +411,11 @@ mod update_tag_tests {
 mod delete_tag_tests {
     use crate::model::error::tag_errors::GetTagError;
     use crate::service::tag_service::{create_tag, delete_tag, get_tag};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn delete_tag_works() {
-        refresh_db();
+        init_db_folder();
         create_tag("test".to_string()).unwrap();
         delete_tag(1).unwrap();
         let res = get_tag(1).unwrap_err();
@@ -432,11 +432,11 @@ mod update_file_tag_test {
     use crate::model::response::TagApi;
     use crate::repository::{file_repository, open_connection};
     use crate::service::tag_service::{create_tag, get_tags_on_file, update_file_tags};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn update_file_tags_works() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test".to_string()).unwrap();
         file_repository::create_file(
@@ -483,7 +483,7 @@ mod update_file_tag_test {
 
     #[test]
     fn update_file_tags_removes_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         file_repository::create_file(
             &FileRecord {
@@ -513,7 +513,7 @@ mod update_file_tag_test {
 
     #[test]
     fn update_file_tags_throws_error_if_file_not_found() {
-        refresh_db();
+        init_db_folder();
         let res = update_file_tags(1, vec![]).unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, res);
         cleanup();
@@ -527,11 +527,11 @@ mod update_folder_tag_test {
     use crate::model::response::TagApi;
     use crate::repository::{folder_repository, open_connection};
     use crate::service::tag_service::{create_tag, get_tags_on_folder, update_folder_tags};
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn update_folder_tags_works() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         create_tag("test".to_string()).unwrap();
         folder_repository::create_folder(
@@ -575,7 +575,7 @@ mod update_folder_tag_test {
 
     #[test]
     fn update_folder_tags_removes_tags() {
-        refresh_db();
+        init_db_folder();
         let con = open_connection();
         folder_repository::create_folder(
             &Folder {
@@ -602,7 +602,7 @@ mod update_folder_tag_test {
 
     #[test]
     fn update_folder_tags_throws_error_if_folder_not_found() {
-        refresh_db();
+        init_db_folder();
         let res = update_folder_tags(1, vec![]).unwrap_err();
         assert_eq!(TagRelationError::FolderNotFound, res);
         cleanup();
@@ -613,11 +613,11 @@ mod update_folder_tag_test {
 mod get_tags_on_file_tests {
     use crate::model::error::tag_errors::TagRelationError;
     use crate::service::tag_service::get_tags_on_file;
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn throws_error_if_file_not_found() {
-        refresh_db();
+        init_db_folder();
         let err = get_tags_on_file(1).unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, err);
         cleanup();
@@ -628,11 +628,11 @@ mod get_tags_on_file_tests {
 mod get_tags_on_folder_tests {
     use crate::model::error::tag_errors::TagRelationError;
     use crate::service::tag_service::get_tags_on_folder;
-    use crate::test::{cleanup, refresh_db};
+    use crate::test::{cleanup, init_db_folder};
 
     #[test]
     fn throws_error_if_file_not_found() {
-        refresh_db();
+        init_db_folder();
         let err = get_tags_on_folder(1).unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, err);
         cleanup();

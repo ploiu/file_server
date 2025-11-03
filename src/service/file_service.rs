@@ -14,13 +14,14 @@ use rusqlite::Connection;
 
 use crate::model::api::FileApi;
 use crate::model::error::file_errors::{
-    CreateFileError, DeleteFileError, GetFileError, GetPreviewError, UpdateFileError,
+    CreateFileError, DeleteFileError, GetFileError, UpdateFileError,
 };
 use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
+use crate::previews;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{folder_service, tag_service};
 use crate::{queue, repository};
@@ -82,7 +83,6 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("epub", Document),
         ("abw", Document),
         ("md", Document),
-        ("odp", Document),
         ("azw", Document),
         ("docx", Document),
         ("eot", Font),
@@ -282,27 +282,26 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
     // we first need to delete the file preview
-    let preview_delete_result = file_repository::delete_file_preview(id, con);
-    // we don't necessarily care if the preview wasn't deleted or not for this return value, but it's best to log it if error
-    if preview_delete_result.is_err() {
-        log::warn!(
-            "Failed to delete file preview for file {id}. Exception is {:?}",
-            preview_delete_result.unwrap_err()
-        );
-    }
+    previews::delete_file_preview(id);
     let delete_result = file_repository::delete_file(id, con);
-    if delete_result.is_ok() {
-        Ok(())
-    } else if Err(rusqlite::Error::QueryReturnedNoRows) == delete_result {
-        return Err(DeleteFileError::NotFound);
-    } else {
-        log::error!(
-            "Failed to delete file record from database! Nested exception is {:?}\n{}",
-            delete_result.unwrap_err(),
-            Backtrace::force_capture()
-        );
-        return Err(DeleteFileError::DbError);
+    match delete_result {
+        Ok(_) => {}
+        Err(e) => {
+            if e == rusqlite::Error::QueryReturnedNoRows {
+                log::warn!(
+                    "attempted to delete a file with id {id} that does not exist in the database"
+                );
+            } else {
+                log::error!(
+                    "Failed to delete file record from database! Nested exception is {:?}\n{}",
+                    e,
+                    Backtrace::force_capture()
+                );
+                return Err(DeleteFileError::DbError);
+            }
+        }
     }
+    Ok(())
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
@@ -406,31 +405,6 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
             GetFileError::NotFound
         } else {
             GetFileError::DbFailure
-        }
-    });
-    con.close().unwrap();
-    result
-}
-
-/// Retrieves the preview contents of the file with the passed id in png format.
-/// The preview might not immediately exist in the database at the time this function is called,
-/// so extra care needs to be taken to not blow up if (when) that happens.
-///
-/// # Errors
-///
-/// This function will return an error if the preview doesn't exist in the database, or if the database fails. Regardless, a log will be emitted
-pub fn get_file_preview(id: u32) -> Result<Vec<u8>, GetPreviewError> {
-    let con: Connection = repository::open_connection();
-    let result = file_repository::get_file_preview(id, &con).map_err(|e| {
-        if e == rusqlite::Error::QueryReturnedNoRows {
-            log::warn!("Failed to get file preview because no preview exists in the db!");
-            GetPreviewError::NotFound
-        } else {
-            log::error!(
-                "Failed to get file preview! Nested exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            GetPreviewError::DbFailure
         }
     });
     con.close().unwrap();
@@ -596,7 +570,7 @@ fn determine_file_name(root_name: &str, extension: &Option<String>) -> String {
 }
 
 #[cfg(test)]
-mod deterine_file_name_tests {
+mod determine_file_name_tests {
     use super::determine_file_name;
 
     #[test]
@@ -630,12 +604,12 @@ mod update_file_tests {
     use crate::service::folder_service;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, now, refresh_db,
+        create_folder_disk, create_tag_file, init_db_folder, now,
     };
 
     #[test]
     fn update_file_adds_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         update_file(FileApi {
@@ -669,7 +643,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_removes_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         create_tag_file("tag1", 1);
@@ -695,7 +669,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_not_found() {
-        refresh_db();
+        init_db_folder();
         let res = update_file(FileApi {
             id: 1,
             folder_id: None,
@@ -712,7 +686,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_target_folder_not_found() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         let res = update_file(FileApi {
             id: 1,
@@ -730,7 +704,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_file_already_exists_root() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_db_entry("test2.txt", None);
         create_file_disk("test.txt", "test");
@@ -756,7 +730,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_file_already_exists_target_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // id 1
         create_folder_db_entry("target", None); // id 2
         // put the files in the folders
@@ -783,7 +757,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_no_extension() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_disk("test.txt", "test");
         update_file(FileApi {
@@ -806,7 +780,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_works() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("target_folder", None); // id 1
         create_file_db_entry("test.txt", None); // id 1
         create_file_db_entry("other.txt", Some(1)); // id 2
@@ -832,7 +806,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_root() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // id 1
         create_file_db_entry("file", None); // id 1
         let res = update_file(FileApi {
@@ -861,7 +835,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_same_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
         create_file_db_entry("file", None); // file id 1
@@ -884,7 +858,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_to_folder_with_same_name_different_folder() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("test", None); // folder id 1
         create_folder_db_entry("a", Some(1)); // folder id 2
         create_file_db_entry("file", None); // file id 1; from root to folder id 1
@@ -918,7 +892,7 @@ mod update_file_tests {
 
     #[test]
     fn update_file_trailing_name_fix() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test_thing.txt", None);
         create_file_disk("test_thing.txt", "test_thing");
         create_folder_db_entry("inner", None);
@@ -948,7 +922,7 @@ mod update_file_tests {
 
     #[test]
     fn updates_file_type() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test", None);
         create_file_disk("test", "");
         let file = FileApi {
@@ -969,14 +943,18 @@ mod update_file_tests {
 
 #[cfg(test)]
 mod delete_file_with_id_tests {
+    use rocket::tokio;
+
     use crate::{
+        model::error::file_errors,
+        previews::get_file_preview,
         service::file_service::*,
-        test::{cleanup, create_file_db_entry, create_file_preview, refresh_db},
+        test::{cleanup, create_file_db_entry, create_file_preview, init_db_folder},
     };
 
-    #[test]
-    fn test_deletes_file_properly() {
-        refresh_db();
+    #[tokio::test]
+    async fn test_deletes_file_properly() {
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         let con = open_connection();
         delete_file_by_id_with_connection(1, &con).unwrap();
@@ -986,16 +964,16 @@ mod delete_file_with_id_tests {
         cleanup();
     }
 
-    #[test]
-    fn test_deletes_file_preview() {
-        refresh_db();
+    #[tokio::test]
+    async fn test_deletes_file_preview() {
+        init_db_folder();
         create_file_db_entry("test.txt", None);
         create_file_preview(1);
         let con = open_connection();
         delete_file_by_id_with_connection(1, &con).unwrap();
         con.close().unwrap();
-        let preview = get_file_preview(1).unwrap_err();
-        assert_eq!(GetPreviewError::NotFound, preview);
+        let preview = get_file_preview(1).await.unwrap_err();
+        assert_eq!(file_errors::GetPreviewError::NotFound, preview);
         cleanup();
     }
 }

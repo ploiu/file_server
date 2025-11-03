@@ -7,11 +7,11 @@ use std::{fs, time::Instant};
 
 use rocket::{Build, Rocket};
 
-use db_migrations::{generate_all_file_types_and_sizes, generate_all_previews};
+use db_migrations::generate_all_file_types_and_sizes;
 use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
-use service::preview_service::generate_preview;
 
 use crate::handler::api_handler::update_password;
+use crate::previews::generate_preview;
 use crate::queue::file_preview_consumer;
 use crate::repository::initialize_db;
 
@@ -20,6 +20,7 @@ mod db_migrations;
 mod guard;
 mod handler;
 mod model;
+mod previews;
 mod queue;
 mod repository;
 mod service;
@@ -56,16 +57,11 @@ fn init_log() -> Result<(), fern::InitError> {
     Ok(())
 }
 
-#[cfg(test)]
-fn init_log() -> Result<(), fern::InitError> {
-    Ok(())
-}
-
 #[launch]
 pub fn rocket() -> Rocket<Build> {
+    #[cfg(not(test))]
     init_log().unwrap();
     initialize_db().unwrap();
-    generate_all_previews();
     generate_all_file_types_and_sizes();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
@@ -89,7 +85,8 @@ pub fn rocket() -> Rocket<Build> {
                 download_file,
                 update_file,
                 search_files,
-                get_file_preview
+                get_file_preview,
+                regenerate_previews
             ],
         )
         .mount(

@@ -187,7 +187,7 @@ pub fn delete_folder(
 }
 
 #[get("/preview/<id>")]
-pub fn get_child_file_previews(
+pub async fn get_child_file_previews(
     id: u32,
     auth: HeaderAuth,
     last_request_time: &State<Arc<Mutex<Instant>>>,
@@ -198,7 +198,7 @@ pub fn get_child_file_previews(
         ValidateResult::Invalid => return GetMultiPreviewResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match folder_service::get_file_previews_for_folder(id) {
+    match folder_service::get_file_previews_for_folder(id).await {
         Ok(res) => GetMultiPreviewResponse::Success(json::Json(res)),
         Err(_) => GetMultiPreviewResponse::GenericError(BasicMessage::new(
             "Failed to retrieve file previews for folder",

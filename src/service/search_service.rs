@@ -393,12 +393,12 @@ mod search_files_tests {
     use crate::model::response::TagApi;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
-        create_tag_folder, create_tag_folders, refresh_db,
+        create_tag_folder, create_tag_folders, init_db_folder,
     };
 
     #[test]
     fn search_files_works() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("test", None);
         create_file_db_entry("test2", None);
         let res = search_files("test2", vec![], vec![].try_into().unwrap())
@@ -418,7 +418,7 @@ mod search_files_tests {
 
     #[test]
     fn search_files_includes_file_tags() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("first", None);
         create_file_db_entry("second", None);
         create_tag_file("tag1", 1);
@@ -456,7 +456,7 @@ mod search_files_tests {
 
     #[test]
     fn search_files_tags_and_title() {
-        refresh_db();
+        init_db_folder();
         create_file_db_entry("first", None);
         create_file_db_entry("second", None);
         create_tag_files("tag", vec![1, 2]);
@@ -483,7 +483,7 @@ mod search_files_tests {
 
     #[test]
     fn search_files_includes_parent_folder_tags() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("middle", Some(1)); // 2
         create_folder_db_entry("bottom", Some(2)); // 3
@@ -530,7 +530,7 @@ mod search_files_tests {
 
     #[test]
     fn search_files_handles_partial_tag_folders() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("top", None);
         create_file_db_entry("good", Some(1));
         create_file_db_entry("bad", Some(1));
@@ -551,7 +551,7 @@ mod search_files_tests {
 
     #[test]
     fn search_files_handles_folder_tag_and_file_tag_with_folder_separate() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("middle", Some(1)); // 2
         create_tag_folder("top", 1);
@@ -594,7 +594,7 @@ mod search_files_tests {
 
     #[test]
     fn search_attributes() {
-        refresh_db();
+        init_db_folder();
         let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
         let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
         let good = FileRecord {
@@ -630,7 +630,7 @@ mod search_files_tests {
 
     #[test]
     fn search_title_and_attributes() {
-        refresh_db();
+        init_db_folder();
         let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
         let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
         let good = FileRecord {
@@ -666,7 +666,7 @@ mod search_files_tests {
 
     #[test]
     fn search_tags_and_attributes() {
-        refresh_db();
+        init_db_folder();
         let day = NaiveDate::from_ymd_opt(2022, 8, 26).unwrap();
         let time = NaiveTime::from_hms_opt(21, 48, 00).unwrap();
         FileRecord {

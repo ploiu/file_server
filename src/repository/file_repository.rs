@@ -147,18 +147,6 @@ pub fn search_files_by_attributes(
     res.into_iter().collect()
 }
 
-pub fn create_file_preview(
-    file_id: u32,
-    contents: Vec<u8>,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/file/create_file_preview.sql"
-    ))?;
-    pst.insert(params![file_id, contents])?;
-    Ok(())
-}
-
 /// retrieves all [FileRecord]s from the database
 pub fn get_all_files(con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_files.sql"))?;
@@ -166,23 +154,7 @@ pub fn get_all_files(con: &Connection) -> Result<Vec<FileRecord>, rusqlite::Erro
     rows.into_iter().collect()
 }
 
-pub fn get_file_preview(file_id: u32, con: &Connection) -> Result<Vec<u8>, rusqlite::Error> {
-    let mut pst = con.prepare(&format!(
-        include_str!("../assets/queries/file/get_file_preview.sql"),
-        file_id
-    ))?;
-    let res: Vec<u8> = pst.query_row([], |row| row.get(0))?;
-    Ok(res)
-}
-
-pub fn delete_file_preview(file_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/file/delete_file_preview.sql"
-    ))?;
-    pst.execute(params![file_id])?;
-    Ok(())
-}
-
+// right now clippy says it's unused, but it _will_ be used later
 pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_file_ids.sql"))?;
     let res = pst.query_map([], |row| row.get(0))?;
@@ -367,11 +339,11 @@ mod get_files_by_all_tags_tests {
     use crate::model::repository::FileRecord;
     use crate::repository::file_repository::search_files_by_tags;
     use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, create_tag_files, now, refresh_db};
+    use crate::test::{cleanup, create_file_db_entry, create_tag_files, init_db_folder, now};
 
     #[test]
     fn returns_files_with_all_tags() {
-        refresh_db();
+        init_db_folder();
         let con: Connection = open_connection();
         create_file_db_entry("bad", None);
         create_file_db_entry("has some", None); // 2
@@ -412,57 +384,16 @@ mod get_files_by_all_tags_tests {
 }
 
 #[cfg(test)]
-mod file_preview_tests {
-    use rusqlite::Connection;
-
-    use crate::repository::file_repository::{
-        create_file_preview, delete_file_preview, get_file_preview,
-    };
-    use crate::repository::open_connection;
-    use crate::test::{cleanup, create_file_db_entry, refresh_db};
-
-    #[test]
-    fn test_create_file_preview_works() {
-        refresh_db();
-        let con: Connection = open_connection();
-        create_file_db_entry("test.txt", None);
-        let preview_contents: Vec<u8> = vec![72, 105];
-
-        create_file_preview(1, preview_contents.clone(), &con).unwrap();
-        let preview = get_file_preview(1, &con).unwrap();
-
-        assert_eq!(preview_contents, preview);
-
-        cleanup();
-    }
-
-    #[test]
-    fn test_delete_file_preview_works() {
-        refresh_db();
-        let con: Connection = open_connection();
-        create_file_db_entry("test.txt", None);
-        create_file_preview(1, vec![72, 105], &con).unwrap();
-
-        delete_file_preview(1, &con).unwrap();
-
-        let err = get_file_preview(1, &con).unwrap_err();
-        assert_eq!(rusqlite::Error::QueryReturnedNoRows, err);
-
-        cleanup();
-    }
-}
-
-#[cfg(test)]
 mod create_file_tests {
     use crate::{
         model::{file_types::FileTypes, repository::FileRecord},
         repository::open_connection,
-        test::{cleanup, create_folder_db_entry, now, refresh_db},
+        test::{cleanup, create_folder_db_entry, init_db_folder, now},
     };
 
     #[test]
     fn saves_all_fields_to_db() {
-        refresh_db();
+        init_db_folder();
         create_folder_db_entry("whatever", None);
         let create_date = now();
         let name = "bg3_bugbear.mp4".to_string();
@@ -670,12 +601,12 @@ mod search_files_by_attributes {
     use crate::{
         model::request::attributes::*,
         repository::open_connection,
-        test::{cleanup, now, refresh_db},
+        test::{cleanup, init_db_folder, now},
     };
 
     #[test]
     fn properly_retrieves_files_with_1_attr() {
-        refresh_db();
+        init_db_folder();
         let good = FileRecord {
             id: None,
             name: "good.txt".to_string(),
@@ -685,7 +616,7 @@ mod search_files_by_attributes {
             file_type: FileTypes::Text,
         }
         .save_to_db();
-        let bad = FileRecord {
+        let _bad = FileRecord {
             id: None,
             name: "bad.gif".to_string(),
             parent_id: None,
@@ -709,10 +640,10 @@ mod search_files_by_attributes {
 
     #[test]
     fn properly_retrieves_files_with_multiple_attr() {
-        let date = chrono::NaiveDate::from_ymd_opt(2020, 01, 15).unwrap();
+        let date = chrono::NaiveDate::from_ymd_opt(2020, 1, 15).unwrap();
         let time = NaiveTime::from_hms_opt(12, 0, 0).unwrap();
         let date_time = NaiveDateTime::new(date, time);
-        refresh_db();
+        init_db_folder();
         let expected: HashSet<FileRecord> = [
             FileRecord {
                 id: None,
