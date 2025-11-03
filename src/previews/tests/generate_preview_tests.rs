@@ -156,3 +156,36 @@ async fn generate_preview_does_not_generate_for_other_file_types() {
 
     cleanup();
 }
+
+#[tokio::test]
+async fn generate_preview_does_not_overwrite_existing_preview() {
+    init_db_folder();
+    std::fs::copy("test_assets/test.png", format!("{}/test.png", file_dir()))
+        .expect("Failed to copy test file to the file directory");
+    create_file_db_entry("test.png", None);
+    
+    // Ensure preview directory exists
+    previews::ensure_preview_dir();
+    
+    // Create a "preview" with specific bytes
+    let preview_path = format!("{}/1.png", preview_dir());
+    std::fs::write(&preview_path, &[0x01, 0x02, 0x03])
+        .expect("Failed to write preview file");
+    
+    // Call generate_preview
+    let res = previews::generate_preview("1".to_string()).await;
+    
+    // Assert that it returns true (to remove from queue)
+    assert!(res, "generate_preview should return true when preview already exists");
+    
+    // Assert that the preview wasn't overwritten
+    let preview_contents = std::fs::read(&preview_path)
+        .expect("Failed to read preview file");
+    assert_eq!(
+        preview_contents,
+        vec![0x01, 0x02, 0x03],
+        "Preview should not be overwritten when it already exists"
+    );
+    
+    cleanup();
+}

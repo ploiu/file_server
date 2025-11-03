@@ -91,8 +91,15 @@ pub async fn generate_preview(message_data: String) -> bool {
     };
     let preview_path = preview_dir();
     let output_file_name = format!("{id}.png");
+    let output_path = PathBuf::from(&preview_path).join(&output_file_name);
+    
+    // Check if preview already exists
+    if output_path.exists() {
+        log::debug!("Preview already exists for file id [{id}], skipping generation");
+        return true;
+    }
+    
     let mut command = Command::new("ffmpeg");
-    let output_path = PathBuf::from(preview_path).join(output_file_name);
     let output_path = output_path.to_string_lossy();
     if Some(FileTypes::Image) == file_data.file_type
         && !file_data.name.to_lowercase().ends_with(".gif")
