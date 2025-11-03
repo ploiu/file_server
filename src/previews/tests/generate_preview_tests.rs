@@ -169,7 +169,7 @@ async fn generate_preview_does_not_overwrite_existing_preview() {
     
     // Create a "preview" with specific bytes
     let preview_path = format!("{}/1.png", preview_dir());
-    std::fs::write(&preview_path, &[0x01, 0x02, 0x03])
+    std::fs::write(&preview_path, [0x01, 0x02, 0x03])
         .expect("Failed to write preview file");
     
     // Call generate_preview
