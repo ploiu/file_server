@@ -5,7 +5,8 @@ use crate::service::file_service::{self, file_dir};
 use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
 use rocket::tokio::fs;
 use std::backtrace::Backtrace;
-use std::path::Path;
+use std::io::ErrorKind;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 /// checks if the ./file_previews directory exists. If not, it creates it.
@@ -15,6 +16,16 @@ use std::process::Command;
 pub fn ensure_preview_dir() {
     let dir_path = preview_dir();
     let path = Path::new(&dir_path);
+    match std::fs::create_dir(path) {
+        Ok(_) => {}
+        Err(e) => {
+            if e.kind() == ErrorKind::AlreadyExists {
+                return;
+            } else {
+                panic!("Failed to create preview directory: {e:?}")
+            }
+        }
+    }
     if !path.exists() {
         std::fs::create_dir(path).expect("Failed to create previews directory!");
     }
@@ -61,7 +72,10 @@ pub async fn generate_preview(message_data: String) -> bool {
         }
     };
     let path = match get_file_path(id) {
-        Ok(p) => format!("{}/{p}", file_dir()),
+        Ok(p) => {
+            let path = PathBuf::from(file_dir()).join(p);
+            path.to_string_lossy().into_owned()
+        }
         Err(GetFileError::NotFound) => {
             // file is no longer on disk, meaning it was deleted
             return true;
@@ -76,20 +90,33 @@ pub async fn generate_preview(message_data: String) -> bool {
         }
     };
     let preview_path = preview_dir();
-    let output_file_name = format!("./{id}.png");
-    let command = if Some(FileTypes::Image) == file_data.file_type
-        && !file_data.name.ends_with(".gif")
+    let output_file_name = format!("{id}.png");
+    let mut command = Command::new("ffmpeg");
+    let output_path = PathBuf::from(preview_path).join(output_file_name);
+    let output_path = output_path.to_string_lossy();
+    if Some(FileTypes::Image) == file_data.file_type
+        && !file_data.name.to_lowercase().ends_with(".gif")
     {
-        format!("ffmpeg -i {path} -vf scale=150:-1 {preview_path}/{output_file_name}")
-    } else if Some(FileTypes::Video) == file_data.file_type || file_data.name.ends_with(".gif") {
-        format!("ffmpeg -i {path} -vf scale=150:-1 -frames:v 1 {preview_path}/{output_file_name}")
+        command.args(["-i", &path, "-vf", "scale=150:-1", &output_path]);
+    } else if Some(FileTypes::Video) == file_data.file_type
+        || file_data.name.to_lowercase().ends_with(".gif")
+    {
+        command.args([
+            "-i",
+            &path,
+            "-vf",
+            "scale=150:-1",
+            "-frames:v",
+            "1",
+            &output_path,
+        ]);
     } else {
         // invalid file type
         return true;
     };
     log::debug!("running ffmpeg: {command:?}");
-    let output = match Command::new("sh").arg("-c").arg(&command).output() {
-        Ok(o) => o.status,
+    let output = match command.output() {
+        Ok(o) => o,
         Err(e) => {
             log::error!(
                 "Catastrophic error trying to execute ffmpeg after it was already checked!: {e:?}\n{}",
@@ -98,10 +125,14 @@ pub async fn generate_preview(message_data: String) -> bool {
             return true;
         }
     };
-    if !output.success() {
+    if !output.status.success() {
+        if cfg!(test) {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            log::warn!("ffmpeg stderr: {stderr}");
+        }
         log::warn!(
             "Failed to perform ffmpeg conversion for file with id [{id}]. Status code is {:?}",
-            output.code()
+            output.status.code()
         );
     }
     true
@@ -158,7 +189,7 @@ pub fn delete_file_preview(id: u32) {
 /// to publish all messages depending on the number of files.
 pub fn load_all_files_in_preview_queue() {
     use crate::repository::{file_repository, open_connection};
-    
+
     let con = open_connection();
     let file_ids = match file_repository::get_all_file_ids(&con) {
         Ok(ids) => ids,
@@ -171,22 +202,21 @@ pub fn load_all_files_in_preview_queue() {
             return;
         }
     };
-    
+
     log::debug!("Publishing {} file IDs to preview queue", file_ids.len());
-    
+
     for id in file_ids {
         crate::queue::publish_message("icon_gen", &id.to_string());
     }
-    
+
     con.close().unwrap_or(());
     log::debug!("Successfully published all file IDs to preview queue");
 }
 
 /// checks if ffmpeg is installed on the system
 fn check_ffmpeg() -> bool {
-    let output = Command::new("sh")
-        .arg("-c")
-        .arg("ffmpeg -h")
+    let output = Command::new("ffmpeg")
+        .arg("-h")
         .output()
         .expect("Failed to check if ffmpeg is installed due to a fatal error!");
     let code = output.status.code();

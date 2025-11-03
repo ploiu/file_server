@@ -504,7 +504,7 @@
         }
       }
     },
-    "/files/previews": {
+    "/files/preview": {
       "post": {
         "tags": [
           "files"

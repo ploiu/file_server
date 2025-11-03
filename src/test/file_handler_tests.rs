@@ -716,7 +716,7 @@ fn regenerate_previews_path() {
     set_password();
     let client = client();
     let res = client
-        .post(uri!("/files/previews"))
+        .post(uri!("/files/preview"))
         .header(Header::new("Authorization", AUTH))
         .dispatch();
     assert_eq!(res.status(), Status::Accepted);
@@ -728,7 +728,7 @@ fn regenerate_previews_method() {
     set_password();
     let client = client();
     let res = client
-        .get(uri!("/files/previews"))
+        .get(uri!("/files/preview"))
         .header(Header::new("Authorization", AUTH))
         .dispatch();
     // 422 because the route doesn't match GET method properly (it tries to match /files/preview/{id} first)
@@ -741,7 +741,7 @@ fn regenerate_previews_response_code() {
     set_password();
     let client = client();
     let res = client
-        .post(uri!("/files/previews"))
+        .post(uri!("/files/preview"))
         .header(Header::new("Authorization", AUTH))
         .dispatch();
     assert_eq!(res.status(), Status::Accepted);
@@ -752,9 +752,7 @@ fn regenerate_previews_response_code() {
 fn regenerate_previews_missing_auth() {
     set_password();
     let client = client();
-    let res = client
-        .post(uri!("/files/previews"))
-        .dispatch();
+    let res = client.post(uri!("/files/preview")).dispatch();
     assert_eq!(res.status(), Status::Unauthorized);
     cleanup();
 }
@@ -765,8 +763,11 @@ fn regenerate_previews_bad_auth() {
     let client = client();
     // wrong_user:wrong_pass in base64
     let res = client
-        .post(uri!("/files/previews"))
-        .header(Header::new("Authorization", "Basic d3JvbmdfdXNlcjp3cm9uZ19wYXNz"))
+        .post(uri!("/files/preview"))
+        .header(Header::new(
+            "Authorization",
+            "Basic d3JvbmdfdXNlcjp3cm9uZ19wYXNz",
+        ))
         .dispatch();
     assert_eq!(res.status(), Status::Unauthorized);
     cleanup();

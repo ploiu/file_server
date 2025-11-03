@@ -1,9 +1,9 @@
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
-use rocket::http::Status;
 use rocket::State;
 use rocket::form::{Form, Strict};
+use rocket::http::Status;
 use rocket::serde::json::Json;
 
 use crate::guard::HeaderAuth;
@@ -242,7 +242,7 @@ pub async fn get_file_preview(
 
 /// triggers regeneration of all file previews by publishing all file IDs to the preview queue.
 /// Returns immediately with a 202 status while the preview generation happens asynchronously.
-#[post("/previews")]
+#[post("/preview")]
 pub fn regenerate_previews(
     auth: HeaderAuth,
     last_request_time: &State<Arc<Mutex<Instant>>>,
@@ -253,10 +253,10 @@ pub fn regenerate_previews(
         ValidateResult::Invalid => return Status::Unauthorized,
     };
     update_last_request_time(last_request_time);
-    
+
     std::thread::spawn(|| {
         previews::load_all_files_in_preview_queue();
     });
-    
+
     Status::Accepted
 }
