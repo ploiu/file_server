@@ -91,13 +91,19 @@ pub async fn generate_preview(message_data: String) -> bool {
     };
     let preview_path = preview_dir();
     let output_file_name = format!("{id}.png");
+    let preview_file_path = PathBuf::from(preview_path).join(output_file_name);
+    
+    // Skip generation if preview exists to avoid redundant ffmpeg processing
+    if preview_file_path.exists() {
+        log::debug!("Preview already exists for file id [{id}], skipping generation");
+        return true;
+    }
+    
     let mut command = Command::new("ffmpeg");
-    let output_path = PathBuf::from(preview_path).join(output_file_name);
-    let output_path = output_path.to_string_lossy();
     if Some(FileTypes::Image) == file_data.file_type
         && !file_data.name.to_lowercase().ends_with(".gif")
     {
-        command.args(["-i", &path, "-vf", "scale=150:-1", &output_path]);
+        command.args(["-i", &path, "-vf", "scale=150:-1"]).arg(&preview_file_path);
     } else if Some(FileTypes::Video) == file_data.file_type
         || file_data.name.to_lowercase().ends_with(".gif")
     {
@@ -108,8 +114,7 @@ pub async fn generate_preview(message_data: String) -> bool {
             "scale=150:-1",
             "-frames:v",
             "1",
-            &output_path,
-        ]);
+        ]).arg(&preview_file_path);
     } else {
         // invalid file type
         return true;
