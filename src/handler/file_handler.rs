@@ -18,9 +18,10 @@ use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::BasicMessage;
 use crate::model::response::file_responses::{
     CreateFileResponse, DeleteFileResponse, DownloadFileResponse, GetFileResponse,
-    GetPreviewResponse, SearchFileResponse, UpdateFileResponse,
+    SearchFileResponse, UpdateFileResponse,
 };
 use crate::previews;
+use crate::previews::models::GetPreviewResponse;
 use crate::service::file_service::save_file;
 use crate::service::{file_service, search_service};
 use crate::util::update_last_request_time;

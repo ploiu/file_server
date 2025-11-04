@@ -163,19 +163,21 @@ async fn generate_preview_does_not_overwrite_existing_preview() {
     test::create_file_disk("test.png", "fake image contents");
     create_file_db_entry("test.png", None);
     test::create_file_preview(1);
-    
+
     let res = previews::generate_preview("1".to_string()).await;
-    
-    assert!(res, "generate_preview should return true when preview already exists");
-    
+
+    assert!(
+        res,
+        "generate_preview should return true when preview already exists"
+    );
+
     let preview_path = format!("{}/1.png", preview_dir());
-    let preview_contents = std::fs::read(&preview_path)
-        .expect("Failed to read preview file");
+    let preview_contents = std::fs::read(&preview_path).expect("Failed to read preview file");
     assert_eq!(
         preview_contents,
         vec![0x01, 0x02, 0x03],
         "Preview should not be overwritten when it already exists"
     );
-    
+
     cleanup();
 }

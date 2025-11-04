@@ -104,6 +104,7 @@ pub fn rocket() -> Rocket<Build> {
             "/tags",
             routes![get_tag, create_tag, update_tag, delete_tag],
         )
+        .mount("/previews", routes![previews::handler::get_folder_previews])
         .manage(last_request_time)
 }
 

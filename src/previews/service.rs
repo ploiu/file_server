@@ -1,9 +1,13 @@
 use super::preview_dir;
 use crate::model::error::file_errors::GetPreviewError;
 use crate::model::file_types::FileTypes;
+use crate::model::response::BasicMessage;
+use crate::previews::models::{GetFolderPreviewsError, PreviewEvent};
+use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{self, file_dir};
 use crate::{model::error::file_errors::GetFileError, service::file_service::get_file_path};
-use rocket::tokio::fs;
+use rocket::futures::{Stream, StreamExt, stream};
+use rocket::tokio::{self, fs};
 use std::backtrace::Backtrace;
 use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
@@ -92,29 +96,26 @@ pub async fn generate_preview(message_data: String) -> bool {
     let preview_path = preview_dir();
     let output_file_name = format!("{id}.png");
     let preview_file_path = PathBuf::from(preview_path).join(output_file_name);
-    
+
     // Skip generation if preview exists to avoid redundant ffmpeg processing
     if preview_file_path.exists() {
         log::debug!("Preview already exists for file id [{id}], skipping generation");
         return true;
     }
-    
+
     let mut command = Command::new("ffmpeg");
     if Some(FileTypes::Image) == file_data.file_type
         && !file_data.name.to_lowercase().ends_with(".gif")
     {
-        command.args(["-i", &path, "-vf", "scale=150:-1"]).arg(&preview_file_path);
+        command
+            .args(["-i", &path, "-vf", "scale=150:-1"])
+            .arg(&preview_file_path);
     } else if Some(FileTypes::Video) == file_data.file_type
         || file_data.name.to_lowercase().ends_with(".gif")
     {
-        command.args([
-            "-i",
-            &path,
-            "-vf",
-            "scale=150:-1",
-            "-frames:v",
-            "1",
-        ]).arg(&preview_file_path);
+        command
+            .args(["-i", &path, "-vf", "scale=150:-1", "-frames:v", "1"])
+            .arg(&preview_file_path);
     } else {
         // invalid file type
         return true;
@@ -216,6 +217,45 @@ pub fn load_all_files_in_preview_queue() {
 
     con.close().unwrap_or(());
     log::debug!("Successfully published all file IDs to preview queue");
+}
+
+/// Reads the previews for all files under a folder with the passed `folder_id` and returns a stream of them
+pub fn get_previews_for_folder(
+    folder_id: u32,
+) -> Result<impl Stream<Item = PreviewEvent>, GetFolderPreviewsError> {
+    let con = open_connection();
+    let folder_res = folder_repository::get_child_files([folder_id], &con);
+    con.close().unwrap();
+    let files = match folder_res {
+        Ok(f) => f,
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            return Err(GetFolderPreviewsError::NotFound(BasicMessage::new(
+                "no folder with the passed id was found",
+            )));
+        }
+        Err(e) => {
+            log::error!(
+                "Database error attempting to get all file previews for folder: {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return Err(GetFolderPreviewsError::Database(BasicMessage::new(
+                "Failed to connect to database",
+            )));
+        }
+    };
+    let file_ids = files
+        .into_iter()
+        .map(|it| {
+            it.id
+                .expect("file id should never be None when pulled from database")
+        })
+        .map(|id| (id, PathBuf::from(preview_dir()).join(format!("{id}.png"))));
+    Ok(stream::iter(file_ids)
+        .map(|(id, path)| async move {
+            let data = tokio::fs::read(path).await.unwrap_or_default();
+            return PreviewEvent { id, data };
+        })
+        .buffer_unordered(2))
 }
 
 /// checks if ffmpeg is installed on the system

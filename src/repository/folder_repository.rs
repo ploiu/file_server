@@ -106,7 +106,7 @@ pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
     // `is_empty` is not part of a trait, so we have to convert ids
-    let ids: HashSet<u32> = ids.clone().into_iter().collect();
+    let ids: HashSet<u32> = ids.into_iter().collect();
     if ids.is_empty() {
         get_child_files_root(con)
     } else {
