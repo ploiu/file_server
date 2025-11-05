@@ -26,10 +26,10 @@ pub struct PreviewEvent {
     pub data: Vec<u8>,
 }
 
-impl Into<Event> for PreviewEvent {
-    fn into(self) -> Event {
-        let base64 = general_purpose::STANDARD.encode(self.data);
-        Event::data(base64).id(self.id.to_string())
+impl From<PreviewEvent> for Event {
+    fn from(val: PreviewEvent) -> Self {
+        let base64 = general_purpose::STANDARD.encode(val.data);
+        Event::data(base64).id(val.id.to_string())
     }
 }
 

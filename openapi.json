@@ -520,6 +520,46 @@
         }
       }
     },
+    "/previews/folder/{id}": {
+      "parameters": [
+        {
+          "name": "id",
+          "required": true,
+          "schema": {
+            "type": "number"
+          },
+          "in": "path",
+          "description": "the id of the folder to stream file previews for"
+        }
+      ],
+      "get": {
+        "tags": [
+          "previews"
+        ],
+        "description": "Server-Sent Events (SSE) stream of previews for files in the specified folder. Each SSE event uses `id` equal to the file id and `data` containing base64-encoded PNG bytes. Files that do not have a preview generated are omitted from the stream.",
+        "responses": {
+          "200": {
+            "description": "SSE stream of previews",
+            "content": {
+              "text/event-stream": {
+                "schema": {
+                  "type": "string",
+                  "description": "SSE stream; send events with `id` (file id) and `data` (base64 PNG content)"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ]
+      }
+    },
     "/folders/metadata/{id}": {
       "parameters": [
         {
@@ -766,10 +806,11 @@
         }
       ],
       "get": {
+        "deprecated": true,
         "tags": [
           "folders"
         ],
-        "description": "downloads all file previews under the folder with the passed id",
+        "description": "DEPRECATED: downloads all file previews under the folder with the passed id. This endpoint is deprecated and may be removed in a future release. Use the SSE endpoint /previews/folder/{id} for streaming previews or /files/preview for batch operations.",
         "responses": {
           "200": {
             "description": "folder found and previews returned",

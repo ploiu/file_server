@@ -271,7 +271,7 @@ pub fn get_previews_for_folder(
     Ok(stream::iter(file_ids)
         .map(|(id, path)| async move {
             let data = tokio::fs::read(path).await.unwrap_or_default();
-            return PreviewEvent { id, data };
+            PreviewEvent { id, data }
         })
         .buffer_unordered(2))
 }
