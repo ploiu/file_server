@@ -224,7 +224,12 @@ pub fn get_previews_for_folder(
     folder_id: u32,
 ) -> Result<impl Stream<Item = PreviewEvent>, GetFolderPreviewsError> {
     let con = open_connection();
-    let folder_res = folder_repository::get_child_files([folder_id], &con);
+    let repo_folder_id: Vec<u32> = if folder_id == 0 {
+        vec![]
+    } else {
+        vec![folder_id]
+    };
+    let folder_res = folder_repository::get_child_files(repo_folder_id, &con);
     con.close().unwrap();
     let files = match folder_res {
         Ok(f) => f,
@@ -243,6 +248,7 @@ pub fn get_previews_for_folder(
             )));
         }
     };
+    log::debug!("files: {files:?}");
     let file_ids = files
         .into_iter()
         .map(|it| {

@@ -51,7 +51,11 @@ fn init_log() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Info)
+        .level(if cfg!(debug_assertions) {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .chain(fern::log_file("output.log")?)
         .apply()?;
     Ok(())

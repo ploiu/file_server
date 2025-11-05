@@ -101,6 +101,33 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
     Ok(())
 }
 
+/// Retrieve files that are children of the given folder IDs.
+///
+/// This function accepts any iterable collection of u32 folder IDs and returns
+/// a Vec of repository::FileRecord for files directly under those folder IDs.
+/// If the provided collection of IDs is empty, the function
+/// treats that as a request for files in the root folder and will return files
+/// directly under the root folder.
+///
+/// Important: to retrieve files in the root folder pass an empty collection for
+/// `ids`. Passing a collection containing 0 (or other sentinel values) is not
+/// treated as the root — the collection must be empty for root behavior.
+///
+/// # Parameters
+/// - `ids`: an iterable collection of u32 folder IDs. If empty, root files are returned.
+/// - `con`: reference to an active rusqlite::Connection.
+///
+/// # Returns
+/// On success, returns Ok(Vec<repository::FileRecord>) containing the child files.
+/// Otherwise returns a rusqlite::Error.
+///
+/// # Examples
+/// ```no_run
+/// // get files in root
+/// let files = get_child_files([], &con)?;
+/// // get files in folders 1 and 2
+/// let files = get_child_files([1u32, 2u32], &con)?;
+/// ```
 pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
     ids: T,
     con: &Connection,

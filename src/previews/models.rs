@@ -1,6 +1,7 @@
-use rocket::serde::json::Json;
+use rocket::{response::stream::Event, serde::json::Json};
 
 use crate::model::response::BasicMessage;
+use base64::{Engine as _, engine::general_purpose};
 
 #[derive(Responder)]
 pub enum GetPreviewResponse {
@@ -23,6 +24,13 @@ pub struct PreviewEvent {
     pub id: u32,
     /// the UTF-8 bytes of the preview
     pub data: Vec<u8>,
+}
+
+impl Into<Event> for PreviewEvent {
+    fn into(self) -> Event {
+        let base64 = general_purpose::STANDARD.encode(self.data);
+        Event::data(base64).id(self.id.to_string())
+    }
 }
 
 #[derive(Responder)]
