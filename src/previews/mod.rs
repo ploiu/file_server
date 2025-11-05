@@ -3,8 +3,7 @@ pub mod models;
 mod service;
 
 pub use service::{
-    delete_file_preview, generate_preview, get_file_preview,
-    load_all_files_in_preview_queue,
+    delete_file_preview, generate_preview, get_file_preview, load_all_files_in_preview_queue,
 };
 
 #[cfg(not(test))]
@@ -23,4 +22,4 @@ pub fn preview_dir() -> String {
 mod tests;
 
 #[cfg(test)]
-pub use service::ensure_preview_dir;
+pub use service::{ensure_preview_dir, get_previews_for_folder};
