@@ -128,7 +128,7 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
 /// // get files in folders 1 and 2
 /// let files = get_child_files([1u32, 2u32], &con)?;
 /// ```
-pub fn get_child_files<T: IntoIterator<Item = u32> + Clone>(
+pub fn get_child_files<T: IntoIterator<Item = u32>>(
     ids: T,
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
