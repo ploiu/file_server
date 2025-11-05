@@ -51,7 +51,11 @@ fn init_log() -> Result<(), fern::InitError> {
                 message
             ))
         })
-        .level(log::LevelFilter::Info)
+        .level(if cfg!(debug_assertions) {
+            log::LevelFilter::Debug
+        } else {
+            log::LevelFilter::Info
+        })
         .chain(fern::log_file("output.log")?)
         .apply()?;
     Ok(())
@@ -104,6 +108,7 @@ pub fn rocket() -> Rocket<Build> {
             "/tags",
             routes![get_tag, create_tag, update_tag, delete_tag],
         )
+        .mount("/previews", routes![previews::handler::get_folder_previews])
         .manage(last_request_time)
 }
 

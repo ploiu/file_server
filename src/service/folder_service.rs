@@ -299,6 +299,7 @@ pub fn reduce_folders_by_tag(
     Ok(copied)
 }
 
+#[deprecated(note = "prefer to use the streaming version in preview_service")]
 pub async fn get_file_previews_for_folder(
     id: u32,
 ) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
