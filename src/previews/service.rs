@@ -230,8 +230,6 @@ pub fn load_all_files_in_preview_queue() {
 /// - If the folder does not exist, the function returns `Err(GetFolderPreviewsError::NotFound)` with a
 ///   BasicMessage indicating that no folder with the passed id was found.
 /// - On database errors the function returns `Err(GetFolderPreviewsError::Database(...))`.
-/// - If a preview file does not exist on disk for a file id, the stream will still yield a PreviewEvent for that
-///   file with an empty Vec<u8> as the data (the read is attempted with tokio::fs::read and .unwrap_or_default()).
 ///
 /// # Errors
 /// Returns [`GetFolderPreviewsError::NotFound`] when the folder is missing, or
