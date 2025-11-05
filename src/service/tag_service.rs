@@ -309,7 +309,7 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationErro
     // make sure the folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
         log::warn!("Cannot get tags on folder with id {folder_id}, because that folder does not exist");
-        return Err(TagRelationError::FileNotFound);
+        return Err(TagRelationError::FolderNotFound);
     }
     let con: rusqlite::Connection = open_connection();
     let db_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
@@ -628,7 +628,7 @@ mod get_tags_on_folder_tests {
     fn throws_error_if_file_not_found() {
         init_db_folder();
         let err = get_tags_on_folder(1).unwrap_err();
-        assert_eq!(TagRelationError::FileNotFound, err);
+        assert_eq!(TagRelationError::FolderNotFound, err);
         cleanup();
     }
 }
