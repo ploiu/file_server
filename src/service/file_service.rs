@@ -150,6 +150,7 @@ pub fn file_dir() -> String {
 
 /// ensures that the passed directory exists on the file system
 pub async fn check_root_dir(dir: String) {
+    log::debug!("entered check_root_dir");
     let path = Path::new(dir.as_str());
     if !path.exists() {
         if let Err(e) = create_dir(path).await {
