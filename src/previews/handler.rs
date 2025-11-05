@@ -3,10 +3,7 @@ use std::{
     time::Instant,
 };
 
-use rocket::{
-    State,
-    response::stream::EventStream,
-};
+use rocket::{State, response::stream::EventStream};
 
 use crate::{
     guard::HeaderAuth,

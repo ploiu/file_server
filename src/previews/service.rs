@@ -219,7 +219,23 @@ pub fn load_all_files_in_preview_queue() {
     log::debug!("Successfully published all file IDs to preview queue");
 }
 
-/// Reads the previews for all files under a folder with the passed `folder_id` and returns a stream of them
+/// Reads the previews for all files in the given folder and returns an async stream of [`PreviewEvent`] items.
+///
+/// This function queries the database for files contained in the specified `folder_id` and returns a Stream that
+/// yields a PreviewEvent for each file. Each PreviewEvent contains the file id and the preview image bytes
+/// created in [`generate_preview`]. Files without a preview will not be included in the stream
+///
+/// Behavior and special cases:
+/// - `folder_id == 0` is treated as the root folder and will return files that live at the root (no parent folder).
+/// - If the folder does not exist, the function returns `Err(GetFolderPreviewsError::NotFound)` with a
+///   BasicMessage indicating that no folder with the passed id was found.
+/// - On database errors the function returns `Err(GetFolderPreviewsError::Database(...))`.
+/// - If a preview file does not exist on disk for a file id, the stream will still yield a PreviewEvent for that
+///   file with an empty Vec<u8> as the data (the read is attempted with tokio::fs::read and .unwrap_or_default()).
+///
+/// # Errors
+/// Returns [`GetFolderPreviewsError::NotFound`] when the folder is missing, or
+/// [`GetFolderPreviewsError::Database`] when the database query failed.
 pub fn get_previews_for_folder(
     folder_id: u32,
 ) -> Result<impl Stream<Item = PreviewEvent>, GetFolderPreviewsError> {
@@ -255,7 +271,8 @@ pub fn get_previews_for_folder(
             it.id
                 .expect("file id should never be None when pulled from database")
         })
-        .map(|id| (id, PathBuf::from(preview_dir()).join(format!("{id}.png"))));
+        .map(|id| (id, PathBuf::from(preview_dir()).join(format!("{id}.png"))))
+        .filter(|it| it.1.exists());
     Ok(stream::iter(file_ids)
         .map(|(id, path)| async move {
             let data = tokio::fs::read(path).await.unwrap_or_default();
