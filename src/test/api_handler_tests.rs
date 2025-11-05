@@ -1,4 +1,5 @@
 use rocket::http::Status;
+use rocket::http::Header;
 use rocket::local::blocking::Client;
 
 use crate::rocket;
@@ -61,5 +62,42 @@ fn set_password_if_pass_exists() {
         .body(r#"{"username":"user","password":"password"}"#)
         .dispatch();
     assert_eq!(res.status(), Status::BadRequest);
+    cleanup();
+}
+
+#[test]
+fn ping_without_credentials() {
+    init_db_folder();
+    let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+    let uri = uri!("/api/ping");
+    let res = client.get(uri).dispatch();
+    assert_eq!(res.status(), Status::Unauthorized);
+    cleanup();
+}
+
+#[test]
+fn ping_with_valid_credentials() {
+    set_password();
+    let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+    let uri = uri!("/api/ping");
+    let res = client
+        .get(uri)
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+    assert_eq!(res.status(), Status::NoContent);
+    cleanup();
+}
+
+#[test]
+fn ping_with_invalid_credentials() {
+    set_password();
+    let client = Client::tracked(rocket()).expect("Valid Rocket Instance");
+    let uri = uri!("/api/ping");
+    // wrong password
+    let res = client
+        .get(uri)
+        .header(Header::new("Authorization", "Basic dXNlcm5hbWU6d3Jvbmc="))
+        .dispatch();
+    assert_eq!(res.status(), Status::Unauthorized);
     cleanup();
 }

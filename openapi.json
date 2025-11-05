@@ -71,6 +71,25 @@
         }
       }
     },
+    "/api/ping": {
+      "get": {
+        "tags": ["api"],
+        "description": "Validates authentication credentials without performing any data operations. Returns 204 No Content for valid credentials, 401 Unauthorized otherwise.",
+        "responses": {
+          "204": {
+            "description": "Authentication successful"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
+          }
+        },
+        "security": [
+          {
+            "BasicAuth": []
+          }
+        ]
+      }
+    },
     "/api/password": {
       "post": {
         "requestBody": {

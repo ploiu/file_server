@@ -2,6 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Instant;
 
 use rocket::State;
+use rocket::http::Status;
 use rocket::serde::{Serialize, json::Json};
 
 use crate::guard::HeaderAuth;
@@ -55,6 +56,20 @@ pub fn update_password(auth: Json<UpdateAuth>) -> UpdatePasswordResponse {
     match api_service::update_auth(auth.into_inner()) {
         Ok(_) => UpdatePasswordResponse::Success(()),
         Err(_) => UpdatePasswordResponse::Unauthorized(()),
+    }
+}
+
+#[get("/ping")]
+pub fn ping(
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> Status {
+    match auth.validate() {
+        ValidateResult::Ok => {
+            update_last_request_time(last_request_time);
+            Status::NoContent
+        }
+        ValidateResult::NoPasswordSet | ValidateResult::Invalid => Status::Unauthorized,
     }
 }
 
