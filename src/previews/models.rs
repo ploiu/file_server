@@ -33,7 +33,7 @@ impl Into<Event> for PreviewEvent {
     }
 }
 
-#[derive(Responder)]
+#[derive(Responder, Debug)]
 pub enum GetFolderPreviewsError {
     #[response(status = 500)]
     Database(Json<BasicMessage>),

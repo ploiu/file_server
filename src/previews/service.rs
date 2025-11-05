@@ -249,11 +249,6 @@ pub fn get_previews_for_folder(
     con.close().unwrap();
     let files = match folder_res {
         Ok(f) => f,
-        Err(rusqlite::Error::QueryReturnedNoRows) => {
-            return Err(GetFolderPreviewsError::NotFound(BasicMessage::new(
-                "no folder with the passed id was found",
-            )));
-        }
         Err(e) => {
             log::error!(
                 "Database error attempting to get all file previews for folder: {e:?}\n{}",

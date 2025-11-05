@@ -3,7 +3,8 @@ pub mod models;
 mod service;
 
 pub use service::{
-    delete_file_preview, generate_preview, get_file_preview, load_all_files_in_preview_queue,
+    delete_file_preview, generate_preview, get_file_preview, get_previews_for_folder,
+    load_all_files_in_preview_queue,
 };
 
 #[cfg(not(test))]
