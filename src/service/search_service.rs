@@ -18,6 +18,7 @@ pub fn search_files(
     search_tags: Vec<String>,
     search_attributes: AttributeSearch,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
+    log::debug!("entered search_files");
     let search_tags: HashSet<String> = HashSet::from_iter(search_tags);
     let con: Connection = open_connection();
     let mut search_results: Vec<Result<HashSet<FileApi>, SearchFileError>> = vec![];

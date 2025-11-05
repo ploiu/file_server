@@ -27,6 +27,7 @@ use crate::service::{file_service, tag_service};
 use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
+    log::debug!("entered get_folder");
     let db_id = if Some(0) == id || id.is_none() {
         None
     } else {
@@ -82,6 +83,7 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
 pub async fn create_folder(
     folder: &CreateFolderRequest,
 ) -> Result<FolderResponse, CreateFolderError> {
+    log::debug!("entered create_folder");
     check_root_dir(file_dir()).await;
     // the client can pass 0 for the folder id, in which case it needs to be translated to None for the database
     let db_folder = if let Some(0) = folder.parent_id {
@@ -108,6 +110,7 @@ pub async fn create_folder(
 }
 
 pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, UpdateFolderError> {
+    log::debug!("entered update_folder");
     if folder.id == 0 {
         return Err(UpdateFolderError::NotFound);
     }
@@ -165,6 +168,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
 }
 
 pub fn folder_exists(id: Option<u32>) -> bool {
+    log::debug!("entered folder_exists");
     let con: Connection = open_connection();
     let db_id = if Some(0) == id || id.is_none() {
         None
@@ -177,6 +181,7 @@ pub fn folder_exists(id: Option<u32>) -> bool {
 }
 
 pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
+    log::debug!("entered delete_folder");
     if id == 0 {
         return Err(DeleteFolderError::FolderNotFound);
     }
@@ -199,6 +204,7 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
 pub fn get_folders_by_any_tag(
     tags: &HashSet<String>,
 ) -> Result<HashSet<FolderResponse>, GetFolderError> {
+    log::debug!("entered get_folders_by_any_tag");
     let con: Connection = open_connection();
     let folders = match folder_repository::get_folders_by_any_tag(tags, &con) {
         Ok(f) => f,
@@ -237,6 +243,7 @@ pub fn reduce_folders_by_tag(
     folders: &HashSet<FolderResponse>,
     tags: &HashSet<String>,
 ) -> Result<HashSet<FolderResponse>, GetFolderError> {
+    log::debug!("entered reduce_folders_by_tag");
     // an index of the contents of condensed, to easily look up entries.
     let mut condensed_list: HashMap<u32, FolderResponse> = HashMap::new();
     // this will never change, because sometimes we need to pull folder info no longer in the condensed list if we're a child
@@ -303,6 +310,7 @@ pub fn reduce_folders_by_tag(
 pub async fn get_file_previews_for_folder(
     id: u32,
 ) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
+    log::debug!("entered get_file_previews_for_folder");
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
     let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
@@ -337,6 +345,7 @@ pub async fn get_file_previews_for_folder(
 /// be downloaded in its entirety - that just seems suspicious. Regular backups should be made outside of the api, and I don't want this endpoint to be
 /// used in place of properly backup up your stuff
 pub fn download_folder(id: u32) -> Result<File, DownloadFolderError> {
+    log::debug!("entered download_folder");
     if id == 0 {
         return Err(DownloadFolderError::RootFolder);
     }
@@ -455,7 +464,10 @@ fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
     let con = repository::open_connection();
     let result = match folder_repository::get_by_id(db_folder, &con) {
         Ok(folder) => Ok(folder),
-        Err(rusqlite::Error::QueryReturnedNoRows) => Err(GetFolderError::NotFound),
+        Err(rusqlite::Error::QueryReturnedNoRows) => {
+            log::warn!("Folder with id {id:?} not found in database");
+            Err(GetFolderError::NotFound)
+        }
         Err(err) => {
             log::error!(
                 "Failed to pull folder info from database! Nested exception is {err:?}\n{}",

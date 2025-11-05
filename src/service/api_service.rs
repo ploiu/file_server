@@ -33,6 +33,7 @@ pub enum DiskInfoError {
 }
 
 pub fn create_auth(auth: BodyAuth) -> Result<(), CreatePasswordError> {
+    log::debug!("entered create_auth");
     if is_password_set() {
         return Err(CreatePasswordError::AlreadyExists);
     }
@@ -49,6 +50,7 @@ pub fn create_auth(auth: BodyAuth) -> Result<(), CreatePasswordError> {
 
 /// Checks if the passed `auth` object matches the password in the database
 pub fn check_auth(auth: HeaderAuth) -> CheckAuthResult {
+    log::debug!("entered check_auth");
     let con = repository::open_connection();
     let result = metadata_repository::check_auth(auth, &con);
     con.close().unwrap();
@@ -60,6 +62,7 @@ pub fn check_auth(auth: HeaderAuth) -> CheckAuthResult {
 }
 
 pub fn update_auth(auth: UpdateAuth) -> Result<(), UpdatePasswordError> {
+    log::debug!("entered update_auth");
     log::info!("Attempting to update password...");
     let check_res = check_auth(auth.old_auth.into_auth());
     if check_res != CheckAuthResult::Valid {
@@ -86,6 +89,7 @@ pub fn update_auth(auth: UpdateAuth) -> Result<(), UpdatePasswordError> {
 /// retrieves the basic information for the disk our files folder is stored on (the result of [super::file_service::file_dir])
 #[cfg(unix)]
 pub fn get_disk_info() -> Result<DiskInfo, DiskInfoError> {
+    log::debug!("entered get_disk_info");
     let files_dir = match Path::new(&file_dir()).canonicalize() {
         Ok(path) => path,
         Err(e) => {

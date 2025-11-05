@@ -12,6 +12,7 @@ use crate::service::{file_service, folder_service};
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
 pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
+    log::debug!("entered create_tag");
     let con = open_connection();
     let existing_tag: Option<repository::Tag> = match tag_repository::get_tag_by_title(&name, &con)
     {
@@ -47,14 +48,12 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
 
 /// will return the tag with the passed id
 pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
+    log::debug!("entered get_tag");
     let con = open_connection();
     let tag: repository::Tag = match tag_repository::get_tag(id, &con) {
         Ok(t) => t,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
-            log::error!(
-                "No tag with id {id} exists!\n{}",
-                Backtrace::force_capture()
-            );
+            log::warn!("No tag with id {id} exists");
             con.close().unwrap();
             return Err(GetTagError::TagNotFound);
         }
@@ -74,15 +73,15 @@ pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
 /// updates the tag with the passed id to the passed name.
 /// Will fail if a tag already exists with that name
 pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
+    log::debug!("entered update_tag");
     let con: rusqlite::Connection = open_connection();
     // make sure the tag exists first TODO cleanup - use if let Err pattern since Ok branch is empty
     match tag_repository::get_tag(request.id.unwrap(), &con) {
         Ok(_) => { /* no op */ }
         Err(rusqlite::Error::QueryReturnedNoRows) => {
-            log::error!(
-                "Could not update tag with id {:?}, because it does not exist!\n{}",
-                request.id,
-                Backtrace::force_capture()
+            log::warn!(
+                "Could not update tag with id {:?}, because it does not exist",
+                request.id
             );
             con.close().unwrap();
             return Err(UpdateTagError::TagNotFound);
@@ -101,10 +100,9 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
     // now make sure the database doesn't already have a tag with the new name TODO maybe see if can clean up, 2 empty branches is a smell
     match tag_repository::get_tag_by_title(&new_title, &con) {
         Ok(Some(_)) => {
-            log::error!(
-                "Could not update tag with id {:?} to name {new_title}, because a tag with that name already exists!\n{}",
-                request.id,
-                Backtrace::force_capture()
+            log::warn!(
+                "Could not update tag with id {:?} to name {new_title}, because a tag with that name already exists",
+                request.id
             );
             con.close().unwrap();
             return Err(UpdateTagError::NewNameAlreadyExists);
@@ -146,6 +144,7 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
 
 /// deletes the tag with the passed id. Does nothing if that tag doesn't exist
 pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
+    log::debug!("entered delete_tag");
     let con: rusqlite::Connection = open_connection();
     // TODO change to if let Err pattern, Ok branch is empty
     match tag_repository::delete_tag(id, &con) {
@@ -165,12 +164,10 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 
 /// removes all the tags on the file with the passed id and sets them all to be the passed list
 pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
+    log::debug!("entered update_file_tags");
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
-        log::error!(
-            "Cannot update tag for file {file_id}, because that file does not exist!\n{}",
-            Backtrace::force_capture()
-        );
+        log::warn!("Cannot update tag for file {file_id}, because that file does not exist");
         return Err(TagRelationError::FileNotFound);
     }
     let existing_tags = get_tags_on_file(file_id)?;
@@ -222,9 +219,10 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
 
 /// removes all the tags on the folder with the passed id and sets them all to be the passed list
 pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
+    log::debug!("entered update_folder_tags");
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
-        log::error!("Cannot update tags for a folder that does not exist (id {folder_id}!");
+        log::warn!("Cannot update tags for a folder that does not exist (id {folder_id})");
         return Err(TagRelationError::FolderNotFound);
     }
     let existing_tags = get_tags_on_folder(folder_id)?;
@@ -281,12 +279,10 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
 
 /// retrieves all the tags on the file with the passed id
 pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
+    log::debug!("entered get_tags_on_file");
     // make sure the file exists
     if !file_service::check_file_exists(file_id) {
-        log::error!(
-            "Cannot get tags on file with id {file_id}, because that file does not exist!\n{}",
-            Backtrace::force_capture()
-        );
+        log::warn!("Cannot get tags on file with id {file_id}, because that file does not exist");
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
@@ -309,12 +305,10 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
 /// retrieves all the tags on the folder with the passed id.
 /// This will always be empty if requesting with the root folder id (0 or None)
 pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
+    log::debug!("entered get_tags_on_folder");
     // make sure the folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
-        log::error!(
-            "Cannot get tags on folder with id {folder_id}, because that folder does not exist!\n{}",
-            Backtrace::force_capture()
-        );
+        log::warn!("Cannot get tags on folder with id {folder_id}, because that folder does not exist");
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();

@@ -164,6 +164,7 @@ pub async fn save_file(
     file_input: &mut CreateFileRequest<'_>,
     force: bool,
 ) -> Result<FileApi, CreateFileError> {
+    log::debug!("entered save_file");
     let file_name = String::from(file_input.file.name().unwrap());
     check_root_dir(file_dir()).await;
     if !force {
@@ -211,18 +212,20 @@ pub async fn save_file(
 
 /// retrieves the file from the database with the passed id
 pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
+    log::debug!("entered get_file_metadata");
     let con: Connection = repository::open_connection();
     let file = match file_repository::get_file(id, &con) {
         Ok(f) => f,
         Err(e) => {
             con.close().unwrap();
-            log::error!(
-                "Failed to pull file info from database. Nested exception is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
             return if e == rusqlite::Error::QueryReturnedNoRows {
+                log::warn!("File with id {id} not found in database");
                 Err(GetFileError::NotFound)
             } else {
+                log::error!(
+                    "Failed to pull file info from database. Nested exception is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 Err(GetFileError::DbFailure)
             };
         }
@@ -239,6 +242,7 @@ pub fn get_file_metadata(id: u32) -> Result<FileApi, GetFileError> {
 }
 
 pub fn check_file_exists(id: u32) -> bool {
+    log::debug!("entered check_file_exists");
     let con: Connection = open_connection();
     if file_repository::get_file(id, &con).is_err() {
         con.close().unwrap();
@@ -250,6 +254,7 @@ pub fn check_file_exists(id: u32) -> bool {
 
 /// reads the contents of the file with the passed id from the disk and returns it
 pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
+    log::debug!("entered get_file_contents");
     let res = get_file_path(id);
     if let Ok(path) = res {
         let path = format!("{}/{}", file_dir(), path);
@@ -260,6 +265,7 @@ pub fn get_file_contents(id: u32) -> Result<File, GetFileError> {
 }
 
 pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
+    log::debug!("entered delete_file");
     let file_path = match get_file_path(id) {
         Ok(path) => format!("{}/{}", file_dir(), path),
         Err(GetFileError::NotFound) => return Err(DeleteFileError::NotFound),
@@ -281,6 +287,7 @@ pub fn delete_file(id: u32) -> Result<(), DeleteFileError> {
 
 /// uses an existing connection to delete file. Exists as an optimization to avoid having to open tons of repository connections when deleting a folder
 pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<(), DeleteFileError> {
+    log::debug!("entered delete_file_by_id_with_connection");
     // we first need to delete the file preview
     previews::delete_file_preview(id);
     let delete_result = file_repository::delete_file(id, con);
@@ -305,6 +312,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
+    log::debug!("entered update_file");
     let mut file = file;
     // first check if the file exists
     let con: Connection = repository::open_connection();
@@ -395,15 +403,17 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
 
 /// retrieves the full path to the file with the passed id
 pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
+    log::debug!("entered get_file_path");
     let con = repository::open_connection();
     let result = file_repository::get_file_path(id, &con).map_err(|e| {
-        log::error!(
-            "Failed to get file path for file id {id}! Nested exception is {e:?}\n{}",
-            Backtrace::force_capture()
-        );
         if e == rusqlite::Error::QueryReturnedNoRows {
+            log::warn!("File path not found for file id {id}");
             GetFileError::NotFound
         } else {
+            log::error!(
+                "Failed to get file path for file id {id}! Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
             GetFileError::DbFailure
         }
     });
@@ -413,6 +423,7 @@ pub fn get_file_path(id: u32) -> Result<String, GetFileError> {
 
 /// looks at the passed `file_name`'s file extension and guesses which file type(s) are associated with that file.
 pub fn determine_file_type(file_name: &str) -> FileTypes {
+    log::debug!("entered determine_file_type");
     let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
     if let Some(ext) = extension {
         FILE_TYPE_MAPPING

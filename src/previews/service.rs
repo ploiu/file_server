@@ -183,8 +183,7 @@ pub fn delete_file_preview(id: u32) {
         Ok(_) => {}
         Err(e) => {
             log::warn!(
-                "Failed to delete preview file at path {file_path}! Exception is {e:?}\n{}",
-                Backtrace::force_capture()
+                "Failed to delete preview file at path {file_path}! Exception is {e:?}"
             );
         }
     }
