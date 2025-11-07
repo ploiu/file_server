@@ -78,7 +78,13 @@ pub fn rocket() -> Rocket<Build> {
     rocket::build()
         .mount(
             "/api",
-            routes![api_version, set_password, update_password, get_disk_info, ping],
+            routes![
+                api_version,
+                set_password,
+                update_password,
+                get_disk_info,
+                ping
+            ],
         )
         .mount(
             "/files",
