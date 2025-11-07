@@ -222,7 +222,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
             }
         };
         let tag_id = created_tag.id.unwrap();
-        // Skip if we've already added this tag (it was in the existing tags list)
+        // Skip if we've already added this tag (prevents duplicates)
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
@@ -301,7 +301,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
             }
         };
         let tag_id = created_tag.id.unwrap();
-        // Skip if we've already added this tag (it was in the existing tags list)
+        // Skip if we've already added this tag (prevents duplicates)
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
