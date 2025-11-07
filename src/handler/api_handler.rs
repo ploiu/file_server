@@ -60,7 +60,10 @@ pub fn update_password(auth: Json<UpdateAuth>) -> UpdatePasswordResponse {
 }
 
 #[get("/ping")]
-pub fn ping(auth: HeaderAuth, last_request_time: &State<Arc<Mutex<Instant>>>) -> Status {
+pub fn ping(
+    auth: HeaderAuth,
+    last_request_time: &State<Arc<Mutex<Instant>>>,
+) -> Status {
     match auth.validate() {
         ValidateResult::Ok => {
             update_last_request_time(last_request_time);

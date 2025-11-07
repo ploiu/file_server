@@ -1,4 +1,5 @@
 use std::backtrace::Backtrace;
+use std::collections::HashSet;
 
 use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
@@ -163,8 +164,25 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
     Ok(())
 }
 
-/// Removes all the tags on the file with the passed id and sets them all to be the passed list.
-/// Duplicate tags in the input list will be automatically deduplicated.
+/// Updates the tags on a file by replacing all existing tags with the provided list.
+///
+/// This function will:
+/// 1. Remove all existing tags from the file
+/// 2. Add tags that already exist in the database (those with an `id`)
+/// 3. Create and add new tags (those without an `id`)
+///
+/// Duplicate tags in the input list will be automatically deduplicated to prevent
+/// database constraint violations.
+///
+/// # Parameters
+/// - `file_id`: The ID of the file to update tags for
+/// - `tags`: A vector of tags to set on the file. Tags with an `id` will be linked directly,
+///   tags without an `id` will be created first (or retrieved if they already exist by name)
+///
+/// # Returns
+/// - `Ok(())` if the tags were successfully updated
+/// - `Err(TagRelationError::FileNotFound)` if the file does not exist
+/// - `Err(TagRelationError::DbError)` if there was a database error
 pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
@@ -190,7 +208,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
     }
 
     // Track which tag IDs have been added to avoid duplicates
-    let mut added_tag_ids: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut added_tag_ids: HashSet<u32> = HashSet::new();
 
     // First, add all existing tags (those with an id)
     let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
@@ -241,8 +259,25 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
     Ok(())
 }
 
-/// Removes all the tags on the folder with the passed id and sets them all to be the passed list.
-/// Duplicate tags in the input list will be automatically deduplicated.
+/// Updates the tags on a folder by replacing all existing tags with the provided list.
+///
+/// This function will:
+/// 1. Remove all existing tags from the folder
+/// 2. Add tags that already exist in the database (those with an `id`)
+/// 3. Create and add new tags (those without an `id`)
+///
+/// Duplicate tags in the input list will be automatically deduplicated to prevent
+/// database constraint violations.
+///
+/// # Parameters
+/// - `folder_id`: The ID of the folder to update tags for
+/// - `tags`: A vector of tags to set on the folder. Tags with an `id` will be linked directly,
+///   tags without an `id` will be created first (or retrieved if they already exist by name)
+///
+/// # Returns
+/// - `Ok(())` if the tags were successfully updated
+/// - `Err(TagRelationError::FolderNotFound)` if the folder does not exist
+/// - `Err(TagRelationError::DbError)` if there was a database error
 pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
@@ -265,7 +300,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     }
 
     // Track which tag IDs have been added to avoid duplicates
-    let mut added_tag_ids: std::collections::HashSet<u32> = std::collections::HashSet::new();
+    let mut added_tag_ids: HashSet<u32> = HashSet::new();
 
     // First, add all existing tags (those with an id)
     let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
@@ -478,21 +513,16 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_works() {
         init_db_folder();
-        let con = open_connection();
         create_tag("test".to_string()).unwrap();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test_file".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
         update_file_tags(
             1,
             vec![
@@ -525,20 +555,15 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_removes_tags() {
         init_db_folder();
-        let con = open_connection();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
         update_file_tags(
             1,
             vec![TagApi {
@@ -563,21 +588,16 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_deduplicates_existing_tags() {
         init_db_folder();
-        let con = open_connection();
         create_tag("test".to_string()).unwrap();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test_file".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
 
         // Try to add the same tag twice - should not fail and should only add it once
         update_file_tags(
@@ -605,20 +625,15 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_deduplicates_new_tags_with_same_name() {
         init_db_folder();
-        let con = open_connection();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test_file".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
 
         // Create tag implicitly by name twice - should only create once
         update_file_tags(
@@ -646,20 +661,15 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_skips_duplicate_after_creating() {
         init_db_folder();
-        let con = open_connection();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test_file".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: chrono::offset::Local::now().naive_local(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
 
         // Mix of new tag by name and existing tag by id (same tag)
         update_file_tags(
