@@ -27,6 +27,33 @@ pub mod queue {
         F: Fn(String) -> Fut + Send + 'static,
         Fut: Future<Output = bool> + Send,
     {
+        consumer_impl("icon_gen", "icon_gen_consumer", last_request_time, function);
+    }
+
+    /// sets up a long-running consumer job for EXIF processing that invokes the passed [function](Fn)
+    /// whenever there are items in the rabbit queue
+    /// * `last_request_time` - the last time a request was made. EXIF processing will not occur as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
+    /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
+    ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
+    ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
+    pub fn exif_consumer<F, Fut>(last_request_time: &Arc<Mutex<Instant>>, function: F)
+    where
+        F: Fn(String) -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send,
+    {
+        consumer_impl("exif_process", "exif_process_consumer", last_request_time, function);
+    }
+
+    fn consumer_impl<F, Fut>(
+        queue_name: &'static str,
+        consumer_name: &'static str,
+        last_request_time: &Arc<Mutex<Instant>>,
+        function: F,
+    )
+    where
+        F: Fn(String) -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send,
+    {
         use lapin::options::BasicNackOptions;
         use lapin::options::{BasicAckOptions, BasicConsumeOptions};
         use lapin::types::FieldTable;
@@ -44,8 +71,8 @@ pub mod queue {
             let mut consumer = provider
                 .channel
                 .basic_consume(
-                    "icon_gen",
-                    "icon_gen_consumer",
+                    queue_name,
+                    consumer_name,
                     BasicConsumeOptions::default(),
                     FieldTable::default(),
                 )
@@ -67,7 +94,7 @@ pub mod queue {
                 } as u32;
                 if time_since_last_request <= config.file_preview.sleep_time_millis {
                     log::info!(
-                        "Not generating previews since the time since last request is only {time_since_last_request:?}"
+                        "Not processing queue {queue_name} since the time since last request is only {time_since_last_request:?}"
                     );
                     // we haven't waited enough time since the last request, so unack the message, sleep, and then skip this item
                     delivery
@@ -89,7 +116,7 @@ pub mod queue {
                         .await
                         .expect("ack failed");
                 } else {
-                    log::info!("not acking message because preview generator returned false");
+                    log::info!("not acking message on queue {queue_name} because consumer function returned false");
                     delivery
                         .nack(BasicNackOptions {
                             multiple: false,
@@ -163,6 +190,10 @@ pub mod queue {
                     .queue_declare("icon_gen", queue_options, FieldTable::default())
                     .await
                     .unwrap();
+                channel
+                    .queue_declare("exif_process", queue_options, FieldTable::default())
+                    .await
+                    .unwrap();
                 (rabbit_connection, channel)
             });
             RabbitProvider {
@@ -186,12 +217,20 @@ pub mod queue {
 #[cfg(test)]
 #[allow(clippy::module_inception)]
 pub mod queue {
+    use std::future::Future;
     use std::{
         sync::{Arc, Mutex},
         time::Instant,
     };
 
     pub fn file_preview_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
+    where
+        F: Fn(String) -> Fut + Send + 'static,
+        Fut: Future<Output = bool> + Send,
+    {
+    }
+
+    pub fn exif_consumer<F, Fut>(_: &Arc<Mutex<Instant>>, _: F)
     where
         F: Fn(String) -> Fut + Send + 'static,
         Fut: Future<Output = bool> + Send,

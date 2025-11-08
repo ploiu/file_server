@@ -495,13 +495,21 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     // remove the './' from the file name
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
-    let now = chrono::offset::Local::now();
     let file_type = determine_file_type(name);
+    
+    // Try to parse EXIF data for creation date if it's an image or video
+    let create_date = match file_type {
+        FileTypes::Image | FileTypes::Video => {
+            parse_exif_create_date(name).unwrap_or_else(|| chrono::offset::Local::now().naive_local())
+        }
+        _ => chrono::offset::Local::now().naive_local(),
+    };
+    
     let mut file_record = FileRecord {
         id: None,
         name: formatted_name.to_string(),
         parent_id: None,
-        create_date: now.naive_local(),
+        create_date,
         size,
         file_type,
     };
@@ -511,6 +519,49 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     con.close().unwrap();
     file_record.id = Some(res.unwrap());
     Ok(file_record)
+}
+
+/// Attempts to parse EXIF data from a newly uploaded file to extract the creation date.
+/// Returns None if parsing fails or no date is found.
+fn parse_exif_create_date(file_path: &str) -> Option<chrono::NaiveDateTime> {
+    use std::io::Cursor;
+    
+    let file_data = match std::fs::read(file_path) {
+        Ok(data) => data,
+        Err(_) => return None,
+    };
+
+    let mut cursor = Cursor::new(&file_data);
+    let exif_iter = match nom_exif::parse_exif(&mut cursor, None) {
+        Ok(Some(exif)) => exif,
+        Ok(None) => return None,
+        Err(_) => return None,
+    };
+
+    // Look for DateTimeOriginal tag (0x9003)
+    for entry in exif_iter {
+        if entry.tag() == Some(nom_exif::ExifTag::DateTimeOriginal) {
+            // Format entry using Debug and try to extract date string
+            let debug_str = format!("{:?}", entry);
+            // The debug format may contain the date, try to extract it
+            // Try to find a date-like pattern in the output
+            if let Some(date_str) = extract_date_from_debug(&debug_str) {
+                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S") {
+                    return Some(dt);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+/// Helper function to extract date string from debug output
+fn extract_date_from_debug(debug_str: &str) -> Option<String> {
+    use regex::Regex;
+    // Match EXIF date format: "YYYY:MM:DD HH:MM:SS"
+    let re = Regex::new(r"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").ok()?;
+    re.find(debug_str).map(|m| m.as_str().to_string())
 }
 
 /// adds a link to the folder for the passed file in the database

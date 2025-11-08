@@ -1,0 +1,1 @@
+select value from metadata where name = 'exif processed'

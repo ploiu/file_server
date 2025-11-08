@@ -17,6 +17,7 @@ use crate::repository::initialize_db;
 
 mod config;
 mod db_migrations;
+mod exif;
 mod guard;
 mod handler;
 mod model;
@@ -67,11 +68,37 @@ pub fn rocket() -> Rocket<Build> {
     init_log().unwrap();
     initialize_db().unwrap();
     generate_all_file_types_and_sizes();
+    
+    // Check if EXIF processing has been done, if not queue all files
+    #[cfg(not(test))]
+    {
+        use crate::exif::service::mass_exif_process;
+        use crate::repository::{metadata_repository, open_connection};
+        
+        let con = open_connection();
+        let exif_flag = metadata_repository::get_exif_processed_flag(&con);
+        if let Ok(false) = exif_flag {
+            log::info!("EXIF processing flag not set, queuing all image/video files for processing");
+            mass_exif_process();
+            let _ = metadata_repository::set_exif_processed_flag(&con);
+        }
+        con.close().unwrap();
+    }
+    
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     // keep track of when the last request was made. This will let us wait for the server to be free before processing file previews
     let last_request_time: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
     file_preview_consumer(&last_request_time, generate_preview);
+    
+    // Set up EXIF processing consumer
+    #[cfg(not(test))]
+    {
+        use crate::exif::service::process_single_file_exif;
+        use crate::queue::exif_consumer;
+        exif_consumer(&last_request_time, process_single_file_exif);
+    }
+    
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
@@ -119,4 +146,4 @@ pub fn rocket() -> Rocket<Build> {
 }
 
 #[cfg(test)]
-mod test;
+pub mod test;

@@ -90,6 +90,26 @@ pub fn set_generated_file_types_flag(con: &Connection) -> Result<(), rusqlite::E
     Ok(())
 }
 
+pub fn get_exif_processed_flag(con: &Connection) -> Result<bool, rusqlite::Error> {
+    let mut check_flag_statement = con.prepare(include_str!(
+        "../assets/queries/metadata/get_exif_processed_flag.sql"
+    ))?;
+    let query_res: Result<(), rusqlite::Error> = check_flag_statement.query_row([], |_| Ok(()));
+    match query_res {
+        Ok(()) => Ok(true),
+        Err(rusqlite::Error::QueryReturnedNoRows) => Ok(false),
+        Err(e) => Err(e),
+    }
+}
+
+pub fn set_exif_processed_flag(con: &Connection) -> Result<(), rusqlite::Error> {
+    let mut statement = con.prepare(include_str!(
+        "../assets/queries/metadata/set_exif_processed_flag.sql"
+    ))?;
+    statement.execute([])?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use rusqlite::Connection;
