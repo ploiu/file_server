@@ -112,10 +112,6 @@ pub fn migrate_db(con: &Connection, table_version: u64) -> Result<()> {
         log_migration_version(5);
         migrate_v5(con)?;
     }
-    if table_version < 6 {
-        log_migration_version(6);
-        migrate_v6(con)?;
-    }
     Ok(())
 }
 
@@ -141,8 +137,4 @@ fn migrate_v4(con: &Connection) -> Result<()> {
 
 fn migrate_v5(con: &Connection) -> Result<()> {
     con.execute_batch(include_str!("./assets/migration/v5.sql"))
-}
-
-fn migrate_v6(con: &Connection) -> Result<()> {
-    con.execute_batch(include_str!("./assets/migration/v6.sql"))
 }

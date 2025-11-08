@@ -1,1 +1,1 @@
-select value from metadata where name = 'exif processed'
+select value from metadata where name = 'massProcessesExif'
