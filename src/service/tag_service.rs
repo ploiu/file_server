@@ -508,7 +508,7 @@ mod update_file_tag_test {
     use crate::model::response::TagApi;
     use crate::repository::{file_repository, open_connection};
     use crate::service::tag_service::{create_tag, get_tags_on_file, update_file_tags};
-    use crate::test::{cleanup, init_db_folder};
+    use crate::test::{cleanup, init_db_folder, now};
 
     #[test]
     fn update_file_tags_works() {
@@ -519,7 +519,7 @@ mod update_file_tag_test {
             name: "test_file".to_string(),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         }
         .save_to_db();
@@ -560,7 +560,7 @@ mod update_file_tag_test {
             name: "test".to_string(),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         }
         .save_to_db();
@@ -594,7 +594,7 @@ mod update_file_tag_test {
             name: "test_file".to_string(),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         }
         .save_to_db();
@@ -630,7 +630,7 @@ mod update_file_tag_test {
             name: "test_file".to_string(),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         }
         .save_to_db();
@@ -666,7 +666,7 @@ mod update_file_tag_test {
             name: "test_file".to_string(),
             parent_id: None,
             size: 0,
-            create_date: chrono::offset::Local::now().naive_local(),
+            create_date: now(),
             file_type: FileTypes::Unknown,
         }
         .save_to_db();
