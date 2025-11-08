@@ -676,7 +676,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -694,7 +694,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -715,7 +715,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -742,7 +742,7 @@ mod update_file_tests {
             folder_id: Some(2),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -766,7 +766,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap();
@@ -793,7 +793,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap();
@@ -815,7 +815,7 @@ mod update_file_tests {
             name: "test".to_string(),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -845,7 +845,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -868,7 +868,7 @@ mod update_file_tests {
             folder_id: Some(1),
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap_err();
@@ -905,7 +905,7 @@ mod update_file_tests {
             folder_id: None,
             tags: vec![],
             size: Some(0),
-            date_created: Some(chrono::offset::Local::now().naive_local()),
+            date_created: Some(now()),
             file_type: None,
         })
         .unwrap();

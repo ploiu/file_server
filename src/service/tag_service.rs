@@ -1,4 +1,5 @@
 use std::backtrace::Backtrace;
+use std::collections::HashSet;
 
 use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
@@ -163,7 +164,25 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
     Ok(())
 }
 
-/// removes all the tags on the file with the passed id and sets them all to be the passed list
+/// Updates the tags on a file by replacing all existing tags with the provided list.
+///
+/// This function will:
+/// 1. Remove all existing tags from the file
+/// 2. Add tags that already exist in the database (those with an `id`)
+/// 3. Create and add new tags (those without an `id`)
+///
+/// Duplicate tags in the input list will be automatically deduplicated to prevent
+/// database constraint violations.
+///
+/// # Parameters
+/// - `file_id`: The ID of the file to update tags for
+/// - `tags`: A vector of tags to set on the file. Tags with an `id` will be linked directly,
+///   tags without an `id` will be created first (or retrieved if they already exist by name)
+///
+/// # Returns
+/// - `Ok(())` if the tags were successfully updated
+/// - `Err(TagRelationError::FileNotFound)` if the file does not exist
+/// - `Err(TagRelationError::DbError)` if there was a database error
 pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
@@ -175,6 +194,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
     }
     let existing_tags = get_tags_on_file(file_id)?;
     let con: rusqlite::Connection = open_connection();
+    // Remove all existing tags from the file
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
         if let Err(e) = tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con) {
@@ -186,7 +206,30 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
             return Err(TagRelationError::DbError);
         }
     }
-    // for all the new tags, create them first
+
+    // Track which tag IDs have been added to avoid duplicates
+    let mut added_tag_ids: HashSet<u32> = HashSet::new();
+
+    // First, add all existing tags (those with an id)
+    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    for tag in existing_tags {
+        let tag_id = tag.id.unwrap();
+        // Skip if we've already added this tag
+        if added_tag_ids.contains(&tag_id) {
+            continue;
+        }
+        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag_id, &con) {
+            log::error!(
+                "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+        added_tag_ids.insert(tag_id);
+    }
+
+    // Then, create and add new tags (those without an id)
     let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
     for tag in new_tags {
         let created_tag = match create_tag(tag.title.clone()) {
@@ -196,7 +239,12 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
                 return Err(TagRelationError::DbError);
             }
         };
-        if let Err(e) = tag_repository::add_tag_to_file(file_id, created_tag.id.unwrap(), &con) {
+        let tag_id = created_tag.id.unwrap();
+        // Skip if we've already added this tag (prevents duplicates)
+        if added_tag_ids.contains(&tag_id) {
+            continue;
+        }
+        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag_id, &con) {
             log::error!(
                 "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -204,23 +252,32 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
+        added_tag_ids.insert(tag_id);
     }
-    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
-    for tag in existing_tags {
-        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag.id.unwrap(), &con) {
-            log::error!(
-                "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
-        }
-    }
+
     con.close().unwrap();
     Ok(())
 }
 
-/// removes all the tags on the folder with the passed id and sets them all to be the passed list
+/// Updates the tags on a folder by replacing all existing tags with the provided list.
+///
+/// This function will:
+/// 1. Remove all existing tags from the folder
+/// 2. Add tags that already exist in the database (those with an `id`)
+/// 3. Create and add new tags (those without an `id`)
+///
+/// Duplicate tags in the input list will be automatically deduplicated to prevent
+/// database constraint violations.
+///
+/// # Parameters
+/// - `folder_id`: The ID of the folder to update tags for
+/// - `tags`: A vector of tags to set on the folder. Tags with an `id` will be linked directly,
+///   tags without an `id` will be created first (or retrieved if they already exist by name)
+///
+/// # Returns
+/// - `Ok(())` if the tags were successfully updated
+/// - `Err(TagRelationError::FolderNotFound)` if the folder does not exist
+/// - `Err(TagRelationError::DbError)` if there was a database error
 pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
@@ -229,6 +286,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     }
     let existing_tags = get_tags_on_folder(folder_id)?;
     let con: rusqlite::Connection = open_connection();
+    // Remove all existing tags from the folder
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
         if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con) {
@@ -240,7 +298,30 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
             return Err(TagRelationError::DbError);
         }
     }
-    // for all the new tags, create them first
+
+    // Track which tag IDs have been added to avoid duplicates
+    let mut added_tag_ids: HashSet<u32> = HashSet::new();
+
+    // First, add all existing tags (those with an id)
+    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    for tag in existing_tags {
+        let tag_id = tag.id.unwrap();
+        // Skip if we've already added this tag
+        if added_tag_ids.contains(&tag_id) {
+            continue;
+        }
+        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
+            log::error!(
+                "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+        added_tag_ids.insert(tag_id);
+    }
+
+    // Then, create and add new tags (those without an id)
     let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
     for tag in new_tags {
         let created_tag = match create_tag(tag.title.clone()) {
@@ -254,8 +335,12 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
                 return Err(TagRelationError::DbError);
             }
         };
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, created_tag.id.unwrap(), &con)
-        {
+        let tag_id = created_tag.id.unwrap();
+        // Skip if we've already added this tag (prevents duplicates)
+        if added_tag_ids.contains(&tag_id) {
+            continue;
+        }
+        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
             log::error!(
                 "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -263,18 +348,9 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
+        added_tag_ids.insert(tag_id);
     }
-    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
-    for tag in existing_tags {
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag.id.unwrap(), &con) {
-            log::error!(
-                "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
-        }
-    }
+
     con.close().unwrap();
     Ok(())
 }
@@ -430,28 +506,23 @@ mod update_file_tag_test {
     use crate::model::file_types::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::model::response::TagApi;
-    use crate::repository::{file_repository, open_connection};
+    
     use crate::service::tag_service::{create_tag, get_tags_on_file, update_file_tags};
-    use crate::test::{cleanup, init_db_folder};
+    use crate::test::{cleanup, init_db_folder, now};
 
     #[test]
     fn update_file_tags_works() {
         init_db_folder();
-        let con = open_connection();
         create_tag("test".to_string()).unwrap();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test_file".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: now(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
         update_file_tags(
             1,
             vec![
@@ -484,20 +555,15 @@ mod update_file_tag_test {
     #[test]
     fn update_file_tags_removes_tags() {
         init_db_folder();
-        let con = open_connection();
-        file_repository::create_file(
-            &FileRecord {
-                id: None,
-                name: "test".to_string(),
-                parent_id: None,
-                size: 0,
-                create_date: chrono::offset::Local::now().naive_local(),
-                file_type: FileTypes::Unknown,
-            },
-            &con,
-        )
-        .unwrap();
-        con.close().unwrap();
+        FileRecord {
+            id: None,
+            name: "test".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: now(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
         update_file_tags(
             1,
             vec![TagApi {
@@ -516,6 +582,125 @@ mod update_file_tag_test {
         init_db_folder();
         let res = update_file_tags(1, vec![]).unwrap_err();
         assert_eq!(TagRelationError::FileNotFound, res);
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_tags_deduplicates_existing_tags() {
+        init_db_folder();
+        create_tag("test".to_string()).unwrap();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: now(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+
+        // Try to add the same tag twice - should not fail and should only add it once
+        update_file_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_file(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_tags_deduplicates_new_tags_with_same_name() {
+        init_db_folder();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: now(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+
+        // Create tag implicitly by name twice - should only create once
+        update_file_tags(
+            1,
+            vec![
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_file(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_tags_skips_duplicate_after_creating() {
+        init_db_folder();
+        FileRecord {
+            id: None,
+            name: "test_file".to_string(),
+            parent_id: None,
+            size: 0,
+            create_date: now(),
+            file_type: FileTypes::Unknown,
+        }
+        .save_to_db();
+
+        // Mix of new tag by name and existing tag by id (same tag)
+        update_file_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "test".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Now update with both the id and a new tag with same name
+        update_file_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_file(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
         cleanup();
     }
 }
@@ -605,6 +790,131 @@ mod update_folder_tag_test {
         init_db_folder();
         let res = update_folder_tags(1, vec![]).unwrap_err();
         assert_eq!(TagRelationError::FolderNotFound, res);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_tags_deduplicates_existing_tags() {
+        init_db_folder();
+        let con = open_connection();
+        create_tag("test".to_string()).unwrap();
+        folder_repository::create_folder(
+            &Folder {
+                parent_id: None,
+                id: None,
+                name: "test_folder".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+
+        // Try to add the same tag twice - should not fail and should only add it once
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_folder(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_tags_deduplicates_new_tags_with_same_name() {
+        init_db_folder();
+        let con = open_connection();
+        folder_repository::create_folder(
+            &Folder {
+                parent_id: None,
+                id: None,
+                name: "test_folder".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+
+        // Create tag implicitly by name twice - should only create once
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_folder(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_tags_skips_duplicate_after_creating() {
+        init_db_folder();
+        let con = open_connection();
+        folder_repository::create_folder(
+            &Folder {
+                parent_id: None,
+                id: None,
+                name: "test_folder".to_string(),
+            },
+            &con,
+        )
+        .unwrap();
+        con.close().unwrap();
+
+        // Mix of new tag by name and existing tag by id (same tag)
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "test".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Now update with both the id and a new tag with same name
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: Some(1),
+                    title: "test".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "test".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        let actual = get_tags_on_folder(1).unwrap();
+        assert_eq!(actual.len(), 1);
+        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].title, "test");
         cleanup();
     }
 }

@@ -1,5 +1,5 @@
-use rocket::http::Status;
 use rocket::http::Header;
+use rocket::http::Status;
 use rocket::local::blocking::Client;
 
 use crate::rocket;
