@@ -506,7 +506,7 @@ mod update_file_tag_test {
     use crate::model::file_types::FileTypes;
     use crate::model::repository::FileRecord;
     use crate::model::response::TagApi;
-    use crate::repository::{file_repository, open_connection};
+    
     use crate::service::tag_service::{create_tag, get_tags_on_file, update_file_tags};
     use crate::test::{cleanup, init_db_folder, now};
 
