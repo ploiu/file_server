@@ -1,3 +1,4 @@
+use crate::exif::repository::update_file_create_date;
 use crate::model::file_types::FileTypes;
 use crate::repository::{file_repository, open_connection};
 use crate::service::file_service::{file_dir, get_file_path};
@@ -14,11 +15,11 @@ use std::path::PathBuf;
 /// ## Returns
 /// * `Some(NaiveDateTime)` if EXIF data was successfully parsed and contains a creation date
 /// * `None` if EXIF parsing failed or no creation date was found
-fn parse_exif_date(file_path: &str) -> Option<NaiveDateTime> {
+pub fn parse_exif_date(file_path: &str) -> Option<NaiveDateTime> {
     let mut parser = MediaParser::new();
     let ms = match MediaSource::file_path(file_path) {
         Ok(src) => src,
-        Err(e) => {
+        Err(_) => {
             return None;
         }
     };
@@ -112,23 +113,12 @@ pub async fn process_single_file_exif(message_data: String) -> bool {
         parse_exif_date(&path).unwrap_or_else(|| chrono::offset::Local::now().naive_local());
 
     // Update file record in database with the extracted date
-    let update_result = con.execute(
-        "UPDATE FileRecords SET dateCreated = ?1 WHERE id = ?2",
-        rusqlite::params![create_date, id],
-    );
-
+    let update_result = update_file_create_date(id, create_date, &con);
     con.close().unwrap();
 
     match update_result {
-        Ok(_) => {
-            log::debug!("Successfully updated creation date for file id {id}");
-            true
-        }
-        Err(e) => {
-            log::error!(
-                "Failed to update creation date for file id {id}: {e:?}\n{}",
-                Backtrace::force_capture()
-            );
+        Ok(_) => true,
+        Err(_) => {
             // Database error, might be temporary, re-queue
             false
         }
@@ -141,18 +131,19 @@ pub fn mass_exif_process() {
     use crate::queue::publish_message;
 
     let con = open_connection();
-    let all_files = match file_repository::get_all_files(&con) {
+    let all_files = file_repository::get_all_files(&con);
+    con.close().unwrap();
+    
+    let all_files = match all_files {
         Ok(files) => files,
         Err(e) => {
             log::error!(
                 "Failed to retrieve files for mass EXIF processing: {e:?}\n{}",
                 Backtrace::force_capture()
             );
-            con.close().unwrap();
             return;
         }
     };
-    con.close().unwrap();
 
     let mut queued_count = 0;
     for file in all_files {

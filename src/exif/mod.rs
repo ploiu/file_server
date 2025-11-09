@@ -1,3 +1,4 @@
+pub mod repository;
 pub mod service;
 
 #[cfg(test)]
@@ -14,6 +15,7 @@ pub fn load_all_exif_data() {
     if let Ok(false) = exif_flag {
         log::info!("EXIF processing flag not set, queuing all image/video files for processing");
         service::mass_exif_process();
+        // Ignore result - if setting the flag fails, we'll just re-process next time
         let _ = metadata_repository::set_exif_processed_flag(&con);
     }
     con.close().unwrap();

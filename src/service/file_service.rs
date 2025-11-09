@@ -499,7 +499,7 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
 
     // Try to parse EXIF data for creation date if it's an image or video
     let create_date = match file_type {
-        FileTypes::Image | FileTypes::Video => parse_exif_create_date(name)
+        FileTypes::Image | FileTypes::Video => crate::exif::service::parse_exif_date(name)
             .unwrap_or_else(|| chrono::offset::Local::now().naive_local()),
         _ => chrono::offset::Local::now().naive_local(),
     };
@@ -520,51 +520,6 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     Ok(file_record)
 }
 
-/// Attempts to parse EXIF data from a newly uploaded file to extract the creation date.
-/// Returns None if parsing fails or no date is found.
-fn parse_exif_create_date(file_path: &str) -> Option<chrono::NaiveDateTime> {
-    use std::io::Cursor;
-
-    let file_data = match std::fs::read(file_path) {
-        Ok(data) => data,
-        Err(_) => return None,
-    };
-
-    let mut cursor = Cursor::new(&file_data);
-    let exif_iter = match nom_exif::parse_exif(&mut cursor, None) {
-        Ok(Some(exif)) => exif,
-        Ok(None) => return None,
-        Err(_) => return None,
-    };
-
-    // Look for DateTimeOriginal tag (0x9003)
-    for entry in exif_iter {
-        if entry.tag() == Some(nom_exif::ExifTag::DateTimeOriginal) {
-            // Format entry using Debug and try to extract date string
-            let debug_str = format!("{:?}", entry);
-            // The debug format may contain the date, try to extract it
-            // Try to find a date-like pattern in the output
-            if let Some(date_str) = extract_date_from_debug(&debug_str) {
-                if let Ok(dt) =
-                    chrono::NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S")
-                {
-                    return Some(dt);
-                }
-            }
-        }
-    }
-
-    None
-}
-
-/// Helper function to extract date string from debug output
-fn extract_date_from_debug(debug_str: &str) -> Option<String> {
-    use regex::Regex;
-    // Match EXIF date format: "YYYY:MM:DD HH:MM:SS"
-    let re = Regex::new(r"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").ok()?;
-    re.find(debug_str).map(|m| m.as_str().to_string())
-}
-
 /// adds a link to the folder for the passed file in the database
 fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderError> {
     let con = repository::open_connection();
@@ -574,6 +529,54 @@ fn link_folder_to_file(file_id: u32, folder_id: u32) -> Result<(), LinkFolderErr
         return Err(LinkFolderError::DbError);
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod save_file_record_tests {
+    use super::*;
+    use crate::test::{cleanup, init_db_folder};
+
+    #[test]
+    fn save_file_record_uses_exif_date_for_images() {
+        init_db_folder();
+        // Create a test image file (won't have real EXIF but will test the code path)
+        let file_path = format!("{}/test.jpg", file_dir());
+        std::fs::create_dir_all(file_dir()).unwrap();
+        std::fs::write(&file_path, "fake image data").unwrap();
+
+        let result = save_file_record(&file_path, 100);
+        assert!(result.is_ok(), "Should successfully save file record");
+
+        let record = result.unwrap();
+        // Verify that the file type is Image
+        assert_eq!(record.file_type, FileTypes::Image);
+        // Verify that create_date is set (will be current date since no EXIF)
+        assert!(record.create_date.timestamp() > 0);
+
+        cleanup();
+    }
+
+    #[test]
+    fn save_file_record_uses_current_date_for_non_images() {
+        init_db_folder();
+        // Create a test text file
+        let file_path = format!("{}/test.txt", file_dir());
+        std::fs::create_dir_all(file_dir()).unwrap();
+        std::fs::write(&file_path, "test content").unwrap();
+
+        let before_time = chrono::offset::Local::now().naive_local();
+        let result = save_file_record(&file_path, 100);
+        assert!(result.is_ok(), "Should successfully save file record");
+
+        let record = result.unwrap();
+        // Verify that the file type is Text
+        assert_eq!(record.file_type, FileTypes::Text);
+        // Verify that create_date is close to current time
+        let diff = (record.create_date.timestamp() - before_time.timestamp()).abs();
+        assert!(diff < 5, "Date should be within 5 seconds of current time");
+
+        cleanup();
+    }
 }
 
 /// checks the db to see if we have a record of the passed file

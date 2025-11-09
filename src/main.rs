@@ -128,4 +128,4 @@ pub fn rocket() -> Rocket<Build> {
 }
 
 #[cfg(test)]
-pub mod test;
+mod test;
