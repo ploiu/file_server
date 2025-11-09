@@ -3,7 +3,7 @@ use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::repository::{file_repository, open_connection};
 use crate::service::file_service::file_dir;
-use crate::test::{cleanup, init_db_folder};
+use crate::test::{cleanup, create_file_disk, init_db_folder};
 use rocket::tokio;
 
 #[cfg(not(ci))]
@@ -30,7 +30,6 @@ async fn successfully_parsing_exif_data_stores_in_db() {
     // Verify the initial date
     let con = open_connection();
     let initial_record = file_repository::get_file(file_id, &con).unwrap();
-    con.close().unwrap();
     assert_eq!(initial_record.create_date, old_date, "Initial date should be the old date");
 
     // Process the file
@@ -41,7 +40,6 @@ async fn successfully_parsing_exif_data_stores_in_db() {
     );
 
     // Verify the date was updated to something greater than the old date
-    let con = open_connection();
     let updated_record = file_repository::get_file(file_id, &con).unwrap();
     con.close().unwrap();
 
@@ -58,8 +56,7 @@ async fn failing_to_parse_exif_stores_current_date() {
     init_db_folder();
     // Create a file without EXIF data - use an image extension but with non-image content
     let file_content = "This is not an image file";
-    std::fs::write(format!("{}/test.jpg", file_dir()), file_content)
-        .expect("Failed to create test file");
+    create_file_disk("test.jpg", file_content);
     
     // Create a file record with a hard-coded old date way in the past
     let old_date = chrono::NaiveDateTime::parse_from_str("1900-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();

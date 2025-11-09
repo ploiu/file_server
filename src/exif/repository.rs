@@ -17,10 +17,8 @@ pub fn update_file_create_date(
     create_date: NaiveDateTime,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    let update_result = con.execute(
-        "UPDATE FileRecords SET dateCreated = ?1 WHERE id = ?2",
-        rusqlite::params![create_date, file_id],
-    );
+    let mut stmt = con.prepare("UPDATE FileRecords SET dateCreated = ?1 WHERE id = ?2")?;
+    let update_result = stmt.execute(rusqlite::params![create_date, file_id]);
 
     match update_result {
         Ok(_) => {
@@ -66,12 +64,10 @@ mod tests {
         let new_date = NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let con = open_connection();
         let result = update_file_create_date(file_id, new_date, &con);
-        con.close().unwrap();
 
         assert!(result.is_ok(), "Should successfully update the date");
 
         // Verify the date was updated
-        let con = open_connection();
         let updated_record = crate::repository::file_repository::get_file(file_id, &con).unwrap();
         con.close().unwrap();
 
