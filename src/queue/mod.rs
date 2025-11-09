@@ -41,7 +41,12 @@ pub mod queue {
         F: Fn(String) -> Fut + Send + 'static,
         Fut: Future<Output = bool> + Send,
     {
-        consumer_impl("exif_process", "exif_process_consumer", last_request_time, function);
+        consumer_impl(
+            "exif_process",
+            "exif_process_consumer",
+            last_request_time,
+            function,
+        );
     }
 
     fn consumer_impl<F, Fut>(
@@ -49,8 +54,7 @@ pub mod queue {
         consumer_name: &'static str,
         last_request_time: &Arc<Mutex<Instant>>,
         function: F,
-    )
-    where
+    ) where
         F: Fn(String) -> Fut + Send + 'static,
         Fut: Future<Output = bool> + Send,
     {

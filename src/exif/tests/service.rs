@@ -9,16 +9,16 @@ use rocket::tokio;
 async fn successfully_parsing_exif_data_stores_in_db() {
     init_db_folder();
     // Copy a test file with EXIF data from test_assets
-    std::fs::copy(
-        "test_assets/test.png",
-        format!("{}/test.png", file_dir()),
-    )
-    .expect("Failed to copy test file to the file directory");
+    std::fs::copy("test_assets/test.png", format!("{}/test.png", file_dir()))
+        .expect("Failed to copy test file to the file directory");
     create_file_db_entry("test.png", None);
 
     // Process the file
     let res = process_single_file_exif("1".to_string()).await;
-    assert!(res, "process_single_file_exif should return true on success");
+    assert!(
+        res,
+        "process_single_file_exif should return true on success"
+    );
 
     // Verify the date was updated in the database
     let con = open_connection();

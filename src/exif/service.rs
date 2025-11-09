@@ -2,69 +2,57 @@ use crate::model::file_types::FileTypes;
 use crate::repository::{file_repository, open_connection};
 use crate::service::file_service::{file_dir, get_file_path};
 use chrono::NaiveDateTime;
+use nom_exif::{Exif, ExifIter, ExifTag, MediaParser, MediaSource, TrackInfo};
 use std::backtrace::Backtrace;
 use std::path::PathBuf;
 
 /// Attempts to parse EXIF data from a file and extract the original creation date.
-/// 
+///
 /// ## Parameters
 /// * `file_path` - The path to the file to parse
-/// 
+///
 /// ## Returns
 /// * `Some(NaiveDateTime)` if EXIF data was successfully parsed and contains a creation date
 /// * `None` if EXIF parsing failed or no creation date was found
 fn parse_exif_date(file_path: &str) -> Option<NaiveDateTime> {
-    use std::io::Cursor;
-    
-    let file_data = match std::fs::read(file_path) {
-        Ok(data) => data,
+    let mut parser = MediaParser::new();
+    let ms = match MediaSource::file_path(file_path) {
+        Ok(src) => src,
         Err(e) => {
-            log::debug!("Failed to read file {file_path} for EXIF parsing: {e:?}");
             return None;
         }
     };
-
-    let mut cursor = Cursor::new(&file_data);
-    let exif_iter = match nom_exif::parse_exif(&mut cursor, None) {
-        Ok(Some(exif)) => exif,
-        Ok(None) => return None,
-        Err(e) => {
-            log::debug!("Failed to parse EXIF data for {file_path}: {e:?}");
-            return None;
-        }
-    };
-
-    // Look for DateTimeOriginal tag (0x9003)
-    for entry in exif_iter {
-        if entry.tag() == Some(nom_exif::ExifTag::DateTimeOriginal) {
-            // Format entry using Debug and try to extract date string
-            let debug_str = format!("{:?}", entry);
-            // The debug format may contain the date, try to extract it
-            // Try to find a date-like pattern in the output
-            if let Some(date_str) = extract_date_from_debug(&debug_str) {
-                if let Ok(dt) = NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S") {
-                    return Some(dt);
-                }
+    if ms.has_exif() {
+        let iter: ExifIter = match parser.parse(ms) {
+            Ok(iter) => iter,
+            Err(_) => {
+                return None;
             }
-        }
+        };
+        let exif: Exif = iter.into();
+        exif.get(ExifTag::DateTimeOriginal)
+            .map(|it| it.as_time())
+            .flatten()
+            .map(|it| it.naive_local())
+    } else if ms.has_track() {
+        let data: TrackInfo = match parser.parse(ms) {
+            Ok(td) => td,
+            Err(_) => return None,
+        };
+        data.get(nom_exif::TrackInfoTag::CreateDate)
+            .map(|it| it.as_time())
+            .flatten()
+            .map(|it| it.naive_local())
+    } else {
+        None
     }
-
-    None
-}
-
-/// Helper function to extract date string from debug output
-fn extract_date_from_debug(debug_str: &str) -> Option<String> {
-    use regex::Regex;
-    // Match EXIF date format: "YYYY:MM:DD HH:MM:SS"
-    let re = Regex::new(r"\d{4}:\d{2}:\d{2} \d{2}:\d{2}:\d{2}").ok()?;
-    re.find(debug_str).map(|m| m.as_str().to_string())
 }
 
 /// Processes a single file to extract EXIF data and update its creation date in the database.
-/// 
+///
 /// ## Parameters
 /// * `file_id` - The ID of the file to process
-/// 
+///
 /// ## Returns
 /// * `true` if the message should be removed from the queue (success or unrecoverable error)
 /// * `false` if the message should be re-queued (temporary failure)
@@ -120,7 +108,8 @@ pub async fn process_single_file_exif(message_data: String) -> bool {
     };
 
     // Parse EXIF date or use current date as fallback
-    let create_date = parse_exif_date(&path).unwrap_or_else(|| chrono::offset::Local::now().naive_local());
+    let create_date =
+        parse_exif_date(&path).unwrap_or_else(|| chrono::offset::Local::now().naive_local());
 
     // Update file record in database with the extracted date
     let update_result = con.execute(

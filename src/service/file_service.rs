@@ -496,15 +496,14 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
     let begin_path_regex = Regex::new("\\.?(/.*/)+?").unwrap();
     let formatted_name = begin_path_regex.replace(name, "");
     let file_type = determine_file_type(name);
-    
+
     // Try to parse EXIF data for creation date if it's an image or video
     let create_date = match file_type {
-        FileTypes::Image | FileTypes::Video => {
-            parse_exif_create_date(name).unwrap_or_else(|| chrono::offset::Local::now().naive_local())
-        }
+        FileTypes::Image | FileTypes::Video => parse_exif_create_date(name)
+            .unwrap_or_else(|| chrono::offset::Local::now().naive_local()),
         _ => chrono::offset::Local::now().naive_local(),
     };
-    
+
     let mut file_record = FileRecord {
         id: None,
         name: formatted_name.to_string(),
@@ -525,7 +524,7 @@ fn save_file_record(name: &str, size: u64) -> Result<FileRecord, CreateFileError
 /// Returns None if parsing fails or no date is found.
 fn parse_exif_create_date(file_path: &str) -> Option<chrono::NaiveDateTime> {
     use std::io::Cursor;
-    
+
     let file_data = match std::fs::read(file_path) {
         Ok(data) => data,
         Err(_) => return None,
@@ -546,7 +545,9 @@ fn parse_exif_create_date(file_path: &str) -> Option<chrono::NaiveDateTime> {
             // The debug format may contain the date, try to extract it
             // Try to find a date-like pattern in the output
             if let Some(date_str) = extract_date_from_debug(&debug_str) {
-                if let Ok(dt) = chrono::NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S") {
+                if let Ok(dt) =
+                    chrono::NaiveDateTime::parse_from_str(&date_str, "%Y:%m:%d %H:%M:%S")
+                {
                     return Some(dt);
                 }
             }
