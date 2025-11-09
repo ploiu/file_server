@@ -18,7 +18,7 @@ pub mod queue {
 
     /// sets up a long-running consumer job that invokes the passed [function](Fn)
     /// whenever there are items in the rabbit queue
-    /// * `last_request_time` - the last time a request was made. A preview will not be generated as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
+    /// * `last_request_time` - the last time a request was made. A queue job will not be processed as long as this value is less than the configured `QueueJobs.sleepTimeMillis` value
     /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
     ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
     ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
@@ -32,7 +32,7 @@ pub mod queue {
 
     /// sets up a long-running consumer job for EXIF processing that invokes the passed [function](Fn)
     /// whenever there are items in the rabbit queue
-    /// * `last_request_time` - the last time a request was made. EXIF processing will not occur as long as this value is less than the configured `FilePreview.sleepTimeMillis` value
+    /// * `last_request_time` - the last time a request was made. EXIF processing will not occur as long as this value is less than the configured `QueueJobs.sleepTimeMillis` value
     /// * `function` - the async function to be called on the value consumed from the queue. It must take the data
     ///   as a [String] and output `true` if the operation was a success, and `false` if the operation was a failure
     ///   That boolean status will be used to determine if the rabbit message should be acknowledged or not
@@ -96,7 +96,7 @@ pub mod queue {
                         0
                     }
                 } as u32;
-                if time_since_last_request <= config.file_preview.sleep_time_millis {
+                if time_since_last_request <= config.queue_jobs.sleep_time_millis {
                     log::info!(
                         "Not processing queue {queue_name} since the time since last request is only {time_since_last_request:?}"
                     );
@@ -109,7 +109,7 @@ pub mod queue {
                         .await
                         .unwrap();
                     std::thread::sleep(Duration::from_millis(
-                        config.file_preview.sleep_time_millis as u64,
+                        config.queue_jobs.sleep_time_millis as u64,
                     ));
                     continue;
                 }
