@@ -21,8 +21,8 @@ pub mod config {
     }
 
     #[derive(Deserialize, Clone, Debug)]
-    pub struct FilePreviewConfig {
-        /// The amount of time to wait since the last request to process each preview
+    pub struct QueueJobsConfig {
+        /// The amount of time to wait since the last request to process each queued job
         #[serde(rename = "sleepTimeMillis")]
         pub sleep_time_millis: u32,
     }
@@ -32,8 +32,8 @@ pub mod config {
     pub struct FileServerConfig {
         #[serde(rename = "RabbitMq")]
         pub rabbit_mq: RabbitMqConfig,
-        #[serde(rename = "FilePreview")]
-        pub file_preview: FilePreviewConfig,
+        #[serde(rename = "QueueJobs", alias = "FilePreview")]
+        pub queue_jobs: QueueJobsConfig,
         #[serde(rename = "Database")]
         pub database: DbConfig,
     }
@@ -75,7 +75,7 @@ pub mod config {
             address: Some("amqp://127.0.0.1:5672".to_string()),
             enabled: true,
         },
-        file_preview: FilePreviewConfig {
+        queue_jobs: QueueJobsConfig {
             sleep_time_millis: 30_000,
         },
         database: DbConfig {

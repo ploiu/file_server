@@ -10,13 +10,18 @@ use rocket::{Build, Rocket};
 use db_migrations::generate_all_file_types_and_sizes;
 use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
 
+use crate::exif::load_all_exif_data;
 use crate::handler::api_handler::update_password;
 use crate::previews::generate_preview;
 use crate::queue::file_preview_consumer;
 use crate::repository::initialize_db;
 
+use crate::exif::service::process_single_file_exif;
+use crate::queue::exif_consumer;
+
 mod config;
 mod db_migrations;
+mod exif;
 mod guard;
 mod handler;
 mod model;
@@ -67,11 +72,13 @@ pub fn rocket() -> Rocket<Build> {
     init_log().unwrap();
     initialize_db().unwrap();
     generate_all_file_types_and_sizes();
+    load_all_exif_data();
     fs::remove_dir_all(Path::new(temp_dir().as_str())).unwrap_or(());
     fs::create_dir(Path::new(temp_dir().as_str())).unwrap();
     // keep track of when the last request was made. This will let us wait for the server to be free before processing file previews
     let last_request_time: Arc<Mutex<Instant>> = Arc::new(Mutex::new(Instant::now()));
     file_preview_consumer(&last_request_time, generate_preview);
+    exif_consumer(&last_request_time, process_single_file_exif);
     // ik this isn't the right place for this, but it's a single line to prevent us from losing the directory
     // rocket needs this even during tests because it's configured in rocket.toml, and I can't change that value per test
     fs::write("./.file_server_temp/.gitkeep", "").unwrap();
