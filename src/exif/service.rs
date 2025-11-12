@@ -32,8 +32,7 @@ pub fn parse_exif_date(file_path: &str) -> Option<NaiveDateTime> {
         };
         let exif: Exif = iter.into();
         exif.get(ExifTag::DateTimeOriginal)
-            .map(|it| it.as_time())
-            .flatten()
+            .and_then(|it| it.as_time())
             .map(|it| it.naive_local())
     } else if ms.has_track() {
         let data: TrackInfo = match parser.parse(ms) {
@@ -41,8 +40,7 @@ pub fn parse_exif_date(file_path: &str) -> Option<NaiveDateTime> {
             Err(_) => return None,
         };
         data.get(nom_exif::TrackInfoTag::CreateDate)
-            .map(|it| it.as_time())
-            .flatten()
+            .and_then(|it| it.as_time())
             .map(|it| it.naive_local())
     } else {
         None
