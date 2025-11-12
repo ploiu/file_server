@@ -133,7 +133,7 @@ pub fn mass_exif_process() {
     let con = open_connection();
     let all_files = file_repository::get_all_files(&con);
     con.close().unwrap();
-    
+
     let all_files = match all_files {
         Ok(files) => files,
         Err(e) => {

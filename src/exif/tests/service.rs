@@ -13,9 +13,10 @@ async fn successfully_parsing_exif_data_stores_in_db() {
     // Copy a test file with EXIF data from test_assets
     std::fs::copy("test_assets/test.png", format!("{}/test.png", file_dir()))
         .expect("Failed to copy test file to the file directory");
-    
+
     // Create a file record with a hard-coded old date
-    let old_date = chrono::NaiveDateTime::parse_from_str("0001-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let old_date =
+        chrono::NaiveDateTime::parse_from_str("0001-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let file_record = FileRecord {
         id: None,
         name: "test.png".to_string(),
@@ -23,14 +24,18 @@ async fn successfully_parsing_exif_data_stores_in_db() {
         create_date: old_date,
         size: 100,
         file_type: FileTypes::Image,
-    }.save_to_db();
+    }
+    .save_to_db();
 
     let file_id = file_record.id.unwrap();
 
     // Verify the initial date
     let con = open_connection();
     let initial_record = file_repository::get_file(file_id, &con).unwrap();
-    assert_eq!(initial_record.create_date, old_date, "Initial date should be the old date");
+    assert_eq!(
+        initial_record.create_date, old_date,
+        "Initial date should be the old date"
+    );
 
     // Process the file
     let res = process_single_file_exif(file_id.to_string()).await;
@@ -57,9 +62,10 @@ async fn failing_to_parse_exif_stores_current_date() {
     // Create a file without EXIF data - use an image extension but with non-image content
     let file_content = "This is not an image file";
     create_file_disk("test.jpg", file_content);
-    
+
     // Create a file record with a hard-coded old date way in the past
-    let old_date = chrono::NaiveDateTime::parse_from_str("1900-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let old_date =
+        chrono::NaiveDateTime::parse_from_str("1900-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let file_record = FileRecord {
         id: None,
         name: "test.jpg".to_string(),
@@ -67,7 +73,8 @@ async fn failing_to_parse_exif_stores_current_date() {
         create_date: old_date,
         size: file_content.len() as u64,
         file_type: FileTypes::Image,
-    }.save_to_db();
+    }
+    .save_to_db();
 
     let file_id = file_record.id.unwrap();
     let before_time = chrono::offset::Local::now().naive_local();
@@ -90,7 +97,7 @@ async fn failing_to_parse_exif_stores_current_date() {
         diff < 5,
         "Date should be within 5 seconds of current time when EXIF parsing fails"
     );
-    
+
     // Also verify it's much greater than the old date
     assert!(
         updated_record.create_date > old_date,
@@ -104,7 +111,8 @@ async fn failing_to_parse_exif_stores_current_date() {
 async fn missing_file_from_filesystem_is_silently_ignored() {
     init_db_folder();
     // Create a file record with an old date but don't create the file on disk
-    let old_date = chrono::NaiveDateTime::parse_from_str("1900-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+    let old_date =
+        chrono::NaiveDateTime::parse_from_str("1900-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
     let file_record = FileRecord {
         id: None,
         name: "missing.png".to_string(),
@@ -112,7 +120,8 @@ async fn missing_file_from_filesystem_is_silently_ignored() {
         create_date: old_date,
         size: 100,
         file_type: FileTypes::Image,
-    }.save_to_db();
+    }
+    .save_to_db();
 
     let file_id = file_record.id.unwrap();
 

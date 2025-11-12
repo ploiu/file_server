@@ -46,9 +46,10 @@ mod tests {
     #[test]
     fn update_file_create_date_updates_date() {
         init_db_folder();
-        
+
         // Create a file with an old date
-        let old_date = NaiveDateTime::parse_from_str("2000-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let old_date =
+            NaiveDateTime::parse_from_str("2000-01-01 00:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let file_record = FileRecord {
             id: None,
             name: "test.png".to_string(),
@@ -56,12 +57,14 @@ mod tests {
             create_date: old_date,
             size: 100,
             file_type: FileTypes::Image,
-        }.save_to_db();
+        }
+        .save_to_db();
 
         let file_id = file_record.id.unwrap();
 
         // Update the date
-        let new_date = NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+        let new_date =
+            NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let con = open_connection();
         let result = update_file_create_date(file_id, new_date, &con);
 
@@ -71,23 +74,27 @@ mod tests {
         let updated_record = crate::repository::file_repository::get_file(file_id, &con).unwrap();
         con.close().unwrap();
 
-        assert_eq!(updated_record.create_date, new_date, "Date should be updated");
-        
+        assert_eq!(
+            updated_record.create_date, new_date,
+            "Date should be updated"
+        );
+
         cleanup();
     }
 
     #[test]
     fn update_file_create_date_fails_for_nonexistent_file() {
         init_db_folder();
-        
-        let new_date = NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
+
+        let new_date =
+            NaiveDateTime::parse_from_str("2024-01-01 12:00:00", "%Y-%m-%d %H:%M:%S").unwrap();
         let con = open_connection();
         let result = update_file_create_date(999, new_date, &con);
         con.close().unwrap();
 
         // Should succeed but not update any rows (SQLite doesn't error for 0 rows updated)
         assert!(result.is_ok());
-        
+
         cleanup();
     }
 }
