@@ -32,7 +32,7 @@ pub mod config {
     pub struct FileServerConfig {
         #[serde(rename = "RabbitMq")]
         pub rabbit_mq: RabbitMqConfig,
-        #[serde(rename = "QueueJobs")]
+        #[serde(rename = "QueueJobs", alias = "FilePreview")]
         pub queue_jobs: QueueJobsConfig,
         #[serde(rename = "Database")]
         pub database: DbConfig,
