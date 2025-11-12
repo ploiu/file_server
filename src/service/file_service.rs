@@ -1156,4 +1156,19 @@ mod determine_file_type_tests {
     fn test_no_extension() {
         assert_eq!(determine_file_type("test"), FileTypes::Unknown);
     }
+
+    #[test]
+    fn test_case_insensitivity() {
+        // Test that extensions are case-insensitive
+        assert_eq!(determine_file_type("test.TXT"), FileTypes::Text);
+        assert_eq!(determine_file_type("test.Txt"), FileTypes::Text);
+        assert_eq!(determine_file_type("test.MP4"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.Mp4"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.PNG"), FileTypes::Image);
+        assert_eq!(determine_file_type("test.Png"), FileTypes::Image);
+        assert_eq!(determine_file_type("test.PDF"), FileTypes::Document);
+        assert_eq!(determine_file_type("test.Pdf"), FileTypes::Document);
+        assert_eq!(determine_file_type("test.ZIP"), FileTypes::Archive);
+        assert_eq!(determine_file_type("test.Zip"), FileTypes::Archive);
+    }
 }
