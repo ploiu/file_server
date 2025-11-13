@@ -56,6 +56,9 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("ogx", Audio),
         ("aac", Audio),
         ("cda", Audio),
+        ("flac", Audio),
+        ("m4a", Audio),
+        ("wma", Audio),
         ("f3d", Cad),
         ("php", Code),
         ("csh", Code),
@@ -70,10 +73,24 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("html", Code),
         ("ts", Code),
         ("css", Code),
+        ("py", Code),
+        ("rs", Code),
+        ("java", Code),
+        ("c", Code),
+        ("cpp", Code),
+        ("h", Code),
+        ("hpp", Code),
+        ("go", Code),
+        ("rb", Code),
+        ("kt", Code),
+        ("swift", Code),
         ("ini", Configuration),
         ("toml", Configuration),
         ("yml", Configuration),
+        ("yaml", Configuration),
         ("properties", Configuration),
+        ("conf", Configuration),
+        ("config", Configuration),
         ("vsd", Diagram),
         ("rtf", Document),
         ("arc", Document),
@@ -112,8 +129,18 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("tif", Image),
         ("tiff", Image),
         ("gif", Image),
+        ("heic", Image),
+        ("heif", Image),
         ("mtl", Material),
         ("stl", Model),
+        ("step", Model),
+        ("stp", Model),
+        ("fcstd", Model),
+        ("3mf", Model),
+        ("blend", Model),
+        ("fbx", Model),
+        ("gltf", Model),
+        ("glb", Model),
         ("obj", Object),
         ("pptx", Presentation),
         ("ppt", Presentation),
@@ -127,11 +154,17 @@ static FILE_TYPE_MAPPING: Lazy<HashMap<&'static str, FileTypes>> = Lazy::new(|| 
         ("ods", Spreadsheet),
         ("xlsx", Spreadsheet),
         ("txt", Text),
+        ("log", Text),
         ("mpeg", Video),
         ("avi", Video),
         ("ogv", Video),
         ("mp4", Video),
         ("webm", Video),
+        ("mov", Video),
+        ("mkv", Video),
+        ("flv", Video),
+        ("wmv", Video),
+        ("m4v", Video),
     ])
 });
 
@@ -416,7 +449,7 @@ pub fn determine_file_type(file_name: &str) -> FileTypes {
     let extension = Path::new(file_name).extension().and_then(OsStr::to_str);
     if let Some(ext) = extension {
         FILE_TYPE_MAPPING
-            .get(ext)
+            .get(ext.to_lowercase().as_str())
             .copied()
             .unwrap_or(FileTypes::Unknown)
     } else {
@@ -1030,5 +1063,112 @@ mod delete_file_with_id_tests {
         let preview = get_file_preview(1).await.unwrap_err();
         assert_eq!(file_errors::GetPreviewError::NotFound, preview);
         cleanup();
+    }
+}
+
+#[cfg(test)]
+mod determine_file_type_tests {
+    use super::*;
+
+    #[test]
+    fn test_step_file_is_model() {
+        assert_eq!(determine_file_type("test.step"), FileTypes::Model);
+        assert_eq!(determine_file_type("test.stp"), FileTypes::Model);
+    }
+
+    #[test]
+    fn test_mov_file_is_video() {
+        assert_eq!(determine_file_type("test.mov"), FileTypes::Video);
+    }
+
+    #[test]
+    fn test_fcstd_file_is_model() {
+        assert_eq!(determine_file_type("test.fcstd"), FileTypes::Model);
+        assert_eq!(determine_file_type("test.FCStd"), FileTypes::Model);
+    }
+
+    #[test]
+    fn test_3mf_file_is_model() {
+        assert_eq!(determine_file_type("test.3mf"), FileTypes::Model);
+    }
+
+    #[test]
+    fn test_conf_file_is_configuration() {
+        assert_eq!(determine_file_type("test.conf"), FileTypes::Configuration);
+        assert_eq!(determine_file_type("test.config"), FileTypes::Configuration);
+    }
+
+    #[test]
+    fn test_additional_video_formats() {
+        assert_eq!(determine_file_type("test.mkv"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.flv"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.wmv"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.m4v"), FileTypes::Video);
+    }
+
+    #[test]
+    fn test_additional_audio_formats() {
+        assert_eq!(determine_file_type("test.flac"), FileTypes::Audio);
+        assert_eq!(determine_file_type("test.m4a"), FileTypes::Audio);
+        assert_eq!(determine_file_type("test.wma"), FileTypes::Audio);
+    }
+
+    #[test]
+    fn test_additional_code_formats() {
+        assert_eq!(determine_file_type("test.py"), FileTypes::Code);
+        assert_eq!(determine_file_type("test.rs"), FileTypes::Code);
+        assert_eq!(determine_file_type("test.java"), FileTypes::Code);
+        assert_eq!(determine_file_type("test.c"), FileTypes::Code);
+        assert_eq!(determine_file_type("test.cpp"), FileTypes::Code);
+        assert_eq!(determine_file_type("test.go"), FileTypes::Code);
+    }
+
+    #[test]
+    fn test_additional_model_formats() {
+        assert_eq!(determine_file_type("test.blend"), FileTypes::Model);
+        assert_eq!(determine_file_type("test.fbx"), FileTypes::Model);
+        assert_eq!(determine_file_type("test.gltf"), FileTypes::Model);
+        assert_eq!(determine_file_type("test.glb"), FileTypes::Model);
+    }
+
+    #[test]
+    fn test_additional_image_formats() {
+        assert_eq!(determine_file_type("test.heic"), FileTypes::Image);
+        assert_eq!(determine_file_type("test.heif"), FileTypes::Image);
+    }
+
+    #[test]
+    fn test_yaml_configuration() {
+        assert_eq!(determine_file_type("test.yaml"), FileTypes::Configuration);
+    }
+
+    #[test]
+    fn test_log_text_file() {
+        assert_eq!(determine_file_type("test.log"), FileTypes::Text);
+    }
+
+    #[test]
+    fn test_unknown_extension() {
+        assert_eq!(determine_file_type("test.xyz"), FileTypes::Unknown);
+    }
+
+    #[test]
+    fn test_no_extension() {
+        assert_eq!(determine_file_type("test"), FileTypes::Unknown);
+    }
+
+    #[test]
+    fn test_case_insensitivity() {
+        // Test that extensions are case-insensitive
+        assert_eq!(determine_file_type("test.TXT"), FileTypes::Text);
+        assert_eq!(determine_file_type("test.Txt"), FileTypes::Text);
+        assert_eq!(determine_file_type("test.MP4"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.Mp4"), FileTypes::Video);
+        assert_eq!(determine_file_type("test.PNG"), FileTypes::Image);
+        assert_eq!(determine_file_type("test.Png"), FileTypes::Image);
+        assert_eq!(determine_file_type("test.PDF"), FileTypes::Document);
+        assert_eq!(determine_file_type("test.Pdf"), FileTypes::Document);
+        assert_eq!(determine_file_type("test.ZIP"), FileTypes::Archive);
+        assert_eq!(determine_file_type("test.Zip"), FileTypes::Archive);
     }
 }
