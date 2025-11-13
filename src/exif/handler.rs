@@ -24,7 +24,7 @@ pub fn regenerate_exif(
     update_last_request_time(last_request_time);
 
     std::thread::spawn(|| {
-        crate::exif::service::mass_exif_process();
+        super::service::mass_exif_process();
     });
 
     Status::Accepted
