@@ -122,6 +122,7 @@ pub fn rocket() -> Rocket<Build> {
             routes![get_tag, create_tag, update_tag, delete_tag],
         )
         .mount("/previews", routes![previews::handler::get_folder_previews])
+        .mount("/exif", routes![exif::handler::regenerate_exif])
         .manage(last_request_time)
 }
 
