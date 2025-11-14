@@ -32,7 +32,9 @@
     },
     "/api/disk": {
       "get": {
-        "tags": ["api"],
+        "tags": [
+          "api"
+        ],
         "description": "Returns current disk usage information",
         "responses": {
           "200": {
@@ -73,7 +75,9 @@
     },
     "/api/ping": {
       "get": {
-        "tags": ["api"],
+        "tags": [
+          "api"
+        ],
         "description": "Validates authentication credentials without performing any data operations. Returns 204 No Content for valid credentials, 401 Unauthorized otherwise.",
         "responses": {
           "204": {
@@ -1004,6 +1008,22 @@
           },
           "500": {
             "$ref": "#/components/responses/genericErrorResponse"
+          }
+        }
+      }
+    },
+    "/exif/regen": {
+      "get": {
+        "tags": [
+          "exif"
+        ],
+        "description": "Triggers regeneration of EXIF metadata for all image and video files by publishing all file IDs to the EXIF processing queue. Returns immediately with HTTP 202 while the EXIF processing happens asynchronously in the background.",
+        "responses": {
+          "202": {
+            "description": "EXIF regeneration started successfully"
+          },
+          "401": {
+            "$ref": "#/components/responses/unauthorizedResponse"
           }
         }
       }
