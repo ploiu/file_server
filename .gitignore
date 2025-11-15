@@ -3,7 +3,6 @@
 /files
 *.iml
 *.sqlite*
-*.db
 *.pem
 *.x509
 *.key

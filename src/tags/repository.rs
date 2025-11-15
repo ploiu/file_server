@@ -139,23 +139,8 @@ pub fn add_tag_to_folder(
     tag_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    // Check if folder already has this tag (either direct or inherited) BEFORE making any changes
-    let already_had_tag = {
-        let mut check_pst = con.prepare(
-            "SELECT 1 FROM TaggedItems WHERE folderId = ?1 AND tagId = ?2 LIMIT 1"
-        )?;
-        check_pst.exists(rusqlite::params![folder_id, tag_id])?
-    };
-    
-    // Insert or update the tag to be direct
     let mut pst = con.prepare(include_str!("../assets/queries/tags/add_tag_to_folder.sql"))?;
     pst.execute(rusqlite::params![folder_id, tag_id])?;
-    
-    // Only propagate to descendants if the folder didn't already have this tag
-    // If it had the tag (direct or inherited), descendants already have it too
-    if !already_had_tag {
-        add_inherited_tag_to_descendants(folder_id, tag_id, con)?;
-    }
     Ok(())
 }
 
@@ -185,106 +170,21 @@ pub fn remove_tag_from_folder(
         "../assets/queries/tags/remove_tag_from_folder.sql"
     ))?;
     pst.execute(rusqlite::params![folder_id, tag_id])?;
-    // Remove inherited tags from descendants
-    remove_inherited_tag_from_descendants(folder_id, tag_id, con)?;
-    // Re-establish inheritance from higher ancestors if applicable
-    reinherit_tag_for_descendants(folder_id, tag_id, con)?;
     Ok(())
 }
 
-/// Automatically inherit tags from all ancestor folders for a specific file.
-/// This should be called when a file is created or moved to a new folder.
-pub fn inherit_tags_for_file(file_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/inherit_tags_for_file.sql"
-    ))?;
-    pst.execute(rusqlite::params![file_id])?;
-    Ok(())
+/// Get all descendant folder IDs recursively
+pub fn get_descendant_folder_ids(folder_id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!("../assets/queries/tags/get_descendant_folder_ids.sql"))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
+    rows.collect()
 }
 
-/// Automatically inherit tags from all ancestor folders for a specific folder.
-/// This should be called when a folder is created or moved to a new parent.
-pub fn inherit_tags_for_folder(folder_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/inherit_tags_for_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![folder_id])?;
-    Ok(())
-}
-
-/// Add inherited tag entries to all descendants when a tag is directly added to a folder.
-/// This propagates the tag down the folder hierarchy.
-pub fn add_inherited_tag_to_descendants(
-    folder_id: u32,
-    tag_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    // Add to descendant folders
-    let folder_query = r"
-        with recursive descendants(folderId) as (
-            select id from Folders where parentId = ?
-            union all
-            select f.id
-            from Folders f
-            join descendants d on f.parentId = d.folderId
-        )
-        insert into TaggedItems(tagId, folderId, inheritedFromId)
-        select DISTINCT ?, d.folderId, ?
-        from descendants d
-        where not exists (
-            select 1 from TaggedItems ti 
-            where ti.tagId = ? and ti.folderId = d.folderId
-        )";
-    
-    con.execute(folder_query, rusqlite::params![folder_id, tag_id, folder_id, tag_id])?;
-    
-    // Add to descendant files
-    let file_query = r"
-        with recursive descendants(folderId) as (
-            select ? as folderId
-            union all
-            select id from Folders where parentId = ?
-            union all
-            select f.id
-            from Folders f
-            join descendants d on f.parentId = d.folderId
-        )
-        insert into TaggedItems(tagId, fileId, inheritedFromId)
-        select DISTINCT ?, ff.fileId, ?
-        from descendants d
-        join Folder_Files ff on ff.folderId = d.folderId
-        where not exists (
-            select 1 from TaggedItems ti 
-            where ti.tagId = ? and ti.fileId = ff.fileId
-        )";
-    
-    con.execute(file_query, rusqlite::params![folder_id, folder_id, tag_id, folder_id, tag_id])?;
-    
-    Ok(())
-}
-
-/// Remove inherited tag entries from descendants when a direct tag is removed from a folder.
-/// Only removes tags that were inherited from this specific folder.
-pub fn remove_inherited_tag_from_descendants(
-    folder_id: u32,
-    tag_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/remove_inherited_tag_from_descendants.sql");
-    con.execute_batch(&query.replace("?1", &folder_id.to_string()).replace("?2", &tag_id.to_string()))?;
-    Ok(())
-}
-
-/// Re-establish inheritance for descendants that might inherit the tag from a higher ancestor.
-/// Called after removing a direct tag from a folder.
-pub fn reinherit_tag_for_descendants(
-    folder_id: u32,
-    tag_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/reinherit_tag_for_descendants.sql");
-    con.execute_batch(&query.replace("?1", &folder_id.to_string()).replace("?2", &tag_id.to_string()))?;
-    Ok(())
+/// Get all file IDs in descendant folders (including the folder itself)
+pub fn get_descendant_file_ids(folder_id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!("../assets/queries/tags/get_descendant_file_ids.sql"))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
+    rows.collect()
 }
 
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {

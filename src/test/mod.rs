@@ -9,7 +9,6 @@ pub use tests::*;
 mod tests {
     use crate::model::api::FileApi;
     use crate::model::repository::{FileRecord, Folder, Tag};
-    use crate::model::response::TagApi;
     use crate::previews;
     use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::{determine_file_type, file_dir};
@@ -91,8 +90,6 @@ mod tests {
         if let Some(id) = folder_id {
             folder_repository::link_folder_to_file(file_id, id, &connection).unwrap();
         }
-        // Inherit tags from parent folders
-        tag_repository::inherit_tags_for_file(file_id, &connection).unwrap();
         connection.close().unwrap();
     }
 
@@ -249,8 +246,6 @@ mod tests {
             if let Some(folder_id) = self.folder_id {
                 folder_repository::link_folder_to_file(file_id, folder_id, &con).unwrap();
             }
-            // Inherit tags from parent folders
-            tag_repository::inherit_tags_for_file(file_id, &con).unwrap();
             con.close().unwrap();
             Self {
                 id: file_id,
@@ -272,8 +267,6 @@ mod tests {
             if let Some(id) = self.parent_id {
                 folder_repository::link_folder_to_file(file_id, id, &con).unwrap();
             }
-            // Inherit tags from parent folders
-            tag_repository::inherit_tags_for_file(file_id, &con).unwrap();
             con.close().unwrap();
             Self {
                 id: Some(file_id),

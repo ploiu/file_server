@@ -753,3 +753,106 @@ mod download_folder_tests {
         cleanup();
     }
 }
+
+#[cfg(test)]
+mod tag_inheritance_tests {
+    use crate::{
+        test::{cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder, init_db_folder},
+        tags::service as tag_service,
+        repository::open_connection,
+        tags::repository as tag_repository,
+    };
+
+    #[test]
+    fn pass_tags_to_children_adds_tags_to_descendant_folders() {
+        init_db_folder();
+        // Create folder hierarchy: top -> middle -> bottom
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_folder_db_entry("bottom", Some(2)); // 3
+        
+        // Add tag to top folder
+        create_tag_folder("tag1", 1);
+        
+        // Pass tags to children
+        tag_service::pass_tags_to_children(1).unwrap();
+        
+        // Check that middle and bottom folders inherited the tag
+        let con = open_connection();
+        let middle_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
+        let bottom_tags = tag_repository::get_tags_on_folder(3, &con).unwrap();
+        con.close().unwrap();
+        
+        assert_eq!(1, middle_tags.len());
+        assert_eq!("tag1", middle_tags[0].title);
+        assert_eq!(1, bottom_tags.len());
+        assert_eq!("tag1", bottom_tags[0].title);
+        
+        cleanup();
+    }
+
+    #[test]
+    fn pass_tags_to_children_adds_tags_to_descendant_files() {
+        init_db_folder();
+        // Create folder hierarchy with files
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("middle", Some(1)); // 2
+        create_file_db_entry("file1", Some(1)); // file in top
+        create_file_db_entry("file2", Some(2)); // file in middle
+        
+        // Add tag to top folder
+        create_tag_folder("tag1", 1);
+        
+        // Pass tags to children
+        tag_service::pass_tags_to_children(1).unwrap();
+        
+        // Check that both files inherited the tag
+        let con = open_connection();
+        let file1_tags = tag_repository::get_tags_on_file(1, &con).unwrap();
+        let file2_tags = tag_repository::get_tags_on_file(2, &con).unwrap();
+        con.close().unwrap();
+        
+        assert_eq!(1, file1_tags.len());
+        assert_eq!("tag1", file1_tags[0].title);
+        assert_eq!(1, file2_tags.len());
+        assert_eq!("tag1", file2_tags[0].title);
+        
+        cleanup();
+    }
+
+    #[test]
+    fn pass_tags_to_children_removes_tags_not_on_parent() {
+        init_db_folder();
+        // Create folder hierarchy
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+        create_file_db_entry("file", Some(2)); // file in child
+        
+        // Add tag1 to top
+        create_tag_folder("tag1", 1);
+        tag_service::pass_tags_to_children(1).unwrap();
+        
+        // Verify child has tag1
+        let con = open_connection();
+        let child_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
+        assert_eq!(1, child_tags.len());
+        
+        // Now remove tag1 from top
+        tag_repository::remove_tag_from_folder(1, 1, &con).unwrap();
+        con.close().unwrap();
+        
+        // Pass tags again (should remove inherited tags since parent has no tags)
+        tag_service::pass_tags_to_children(1).unwrap();
+        
+        // Verify child no longer has tag1 (it was inherited and parent no longer has it)
+        let con2 = open_connection();
+        let child_tags2 = tag_repository::get_tags_on_folder(2, &con2).unwrap();
+        let file_tags = tag_repository::get_tags_on_file(1, &con2).unwrap();
+        con2.close().unwrap();
+        
+        assert_eq!(0, child_tags2.len());
+        assert_eq!(0, file_tags.len());
+        
+        cleanup();
+    }
+}
