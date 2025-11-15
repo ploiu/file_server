@@ -175,6 +175,43 @@ pub fn remove_tag_from_folder(
     Ok(())
 }
 
+/// Add inherited tags to all descendants of a folder
+/// This adds tags as inherited (isDirect=0) to all descendant folders and files
+pub fn add_inherited_tags_to_descendants(
+    folder_id: u32,
+    tag_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let query = include_str!("../assets/queries/tags/add_inherited_tags_to_descendants.sql");
+    con.execute_batch(query.replace("?1", &folder_id.to_string()).replace("?2", &tag_id.to_string()).as_str())?;
+    Ok(())
+}
+
+/// Remove inherited tags from all descendants of a folder
+/// Only removes tags that are marked as inherited (isDirect=0)
+pub fn remove_inherited_tags_from_descendants(
+    folder_id: u32,
+    tag_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let query = include_str!("../assets/queries/tags/remove_inherited_tags_from_descendants.sql");
+    con.execute_batch(query.replace("?1", &folder_id.to_string()).replace("?2", &tag_id.to_string()).as_str())?;
+    Ok(())
+}
+
+/// Re-inherit tags from ancestor folders after a direct tag has been removed
+/// This checks if the tag should still be inherited from a higher-up folder
+pub fn reinherit_tags_from_ancestors(
+    folder_id: u32,
+    tag_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let query = include_str!("../assets/queries/tags/reinherit_tags_from_ancestors.sql");
+    con.execute_batch(query.replace("?1", &folder_id.to_string()).replace("?2", &tag_id.to_string()).as_str())?;
+    Ok(())
+}
+
+
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let title: String = row.get(1)?;

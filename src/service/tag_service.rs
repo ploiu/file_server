@@ -262,9 +262,11 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
 /// Updates the tags on a folder by replacing all existing tags with the provided list.
 ///
 /// This function will:
-/// 1. Remove all existing tags from the folder
-/// 2. Add tags that already exist in the database (those with an `id`)
-/// 3. Create and add new tags (those without an `id`)
+/// 1. Determine which tags are being added and which are being removed
+/// 2. For added tags: Add them as direct tags and propagate to descendants as inherited
+/// 3. For removed tags: Remove from folder and descendants, then re-inherit from ancestors if applicable
+/// 4. Add tags that already exist in the database (those with an `id`)
+/// 5. Create and add new tags (those without an `id`)
 ///
 /// Duplicate tags in the input list will be automatically deduplicated to prevent
 /// database constraint violations.
@@ -286,37 +288,44 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     }
     let existing_tags = get_tags_on_folder(folder_id)?;
     let con: rusqlite::Connection = open_connection();
-    // Remove all existing tags from the folder
-    for tag in existing_tags.iter() {
-        // tags from the db will always have a non-None tag id
-        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con) {
-            log::error!(
-                "Failed to remove tags from folder with id {folder_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
-        }
-    }
+
+    // Build sets of existing and new tag IDs for comparison
+    let existing_tag_ids: HashSet<u32> = existing_tags
+        .iter()
+        .filter_map(|t| t.id)
+        .collect();
 
     // Track which tag IDs have been added to avoid duplicates
     let mut added_tag_ids: HashSet<u32> = HashSet::new();
 
     // First, add all existing tags (those with an id)
-    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
-    for tag in existing_tags {
+    let existing_tags_input: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    for tag in existing_tags_input {
         let tag_id = tag.id.unwrap();
         // Skip if we've already added this tag
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
-            log::error!(
-                "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
+        
+        // Only add if this tag wasn't already on the folder
+        if !existing_tag_ids.contains(&tag_id) {
+            if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+            // Propagate the new tag to all descendants as inherited
+            if let Err(e) = tag_repository::add_inherited_tags_to_descendants(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to add inherited tags to descendants for folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
         }
         added_tag_ids.insert(tag_id);
     }
@@ -340,15 +349,64 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
-            log::error!(
-                "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
+
+        // Only add if this tag wasn't already on the folder
+        if !existing_tag_ids.contains(&tag_id) {
+            if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+            // Propagate the new tag to all descendants as inherited
+            if let Err(e) = tag_repository::add_inherited_tags_to_descendants(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to add inherited tags to descendants for folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
         }
         added_tag_ids.insert(tag_id);
+    }
+
+    // Remove tags that are no longer in the new tag list
+    for existing_tag in existing_tags.iter() {
+        let tag_id = existing_tag.id.unwrap();
+        if !added_tag_ids.contains(&tag_id) {
+            // Remove the direct tag from this folder
+            if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to remove tags from folder with id {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+            
+            // Remove inherited tags from all descendants
+            if let Err(e) = tag_repository::remove_inherited_tags_from_descendants(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to remove inherited tags from descendants for folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+            
+            // Re-inherit the tag from ancestors if any ancestor has it as a direct tag
+            if let Err(e) = tag_repository::reinherit_tags_from_ancestors(folder_id, tag_id, &con) {
+                log::error!(
+                    "Failed to reinherit tags from ancestors for folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(TagRelationError::DbError);
+            }
+        }
     }
 
     con.close().unwrap();
@@ -948,3 +1006,274 @@ mod get_tags_on_folder_tests {
         cleanup();
     }
 }
+
+#[cfg(test)]
+mod folder_tag_inheritance_tests {
+    use crate::model::repository::Folder;
+    use crate::model::response::TagApi;
+    use crate::repository::{folder_repository, open_connection, tag_repository};
+    use crate::service::tag_service::{create_tag, get_tags_on_file, get_tags_on_folder, update_folder_tags};
+    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, init_db_folder};
+
+    #[test]
+    fn adding_tag_to_folder_propagates_to_descendant_folders() {
+        init_db_folder();
+        // Create folder hierarchy: parent -> child -> grandchild
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+        create_folder_db_entry("grandchild", Some(2)); // 3
+
+        // Add tag to parent folder
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "inherited_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify parent has the tag
+        let parent_tags = get_tags_on_folder(1).unwrap();
+        assert_eq!(parent_tags.len(), 1);
+        assert_eq!(parent_tags[0].title, "inherited_tag");
+
+        // Verify child inherited the tag
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].title, "inherited_tag");
+
+        // Verify grandchild inherited the tag
+        let grandchild_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(grandchild_tags.len(), 1);
+        assert_eq!(grandchild_tags[0].title, "inherited_tag");
+
+        cleanup();
+    }
+
+    #[test]
+    fn adding_tag_to_folder_propagates_to_descendant_files() {
+        init_db_folder();
+        // Create folder hierarchy with files
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+        create_file_db_entry("file_in_parent", Some(1)); // 1
+        create_file_db_entry("file_in_child", Some(2)); // 2
+
+        // Add tag to parent folder
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "inherited_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify file in parent inherited the tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].title, "inherited_tag");
+
+        // Verify file in child inherited the tag
+        let file2_tags = get_tags_on_file(2).unwrap();
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0].title, "inherited_tag");
+
+        cleanup();
+    }
+
+    #[test]
+    fn removing_tag_from_folder_removes_from_descendants() {
+        init_db_folder();
+        // Create folder hierarchy
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+        create_file_db_entry("file_in_child", Some(2)); // 1
+
+        // Add tag to parent
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "temp_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify tag was propagated
+        assert_eq!(get_tags_on_folder(2).unwrap().len(), 1);
+        assert_eq!(get_tags_on_file(1).unwrap().len(), 1);
+
+        // Remove tag from parent
+        update_folder_tags(1, vec![]).unwrap();
+
+        // Verify tag was removed from descendants
+        assert_eq!(get_tags_on_folder(1).unwrap().len(), 0);
+        assert_eq!(get_tags_on_folder(2).unwrap().len(), 0);
+        assert_eq!(get_tags_on_file(1).unwrap().len(), 0);
+
+        cleanup();
+    }
+
+    #[test]
+    fn removing_tag_reinherits_from_ancestor() {
+        init_db_folder();
+        // Create folder hierarchy: grandparent -> parent -> child
+        create_folder_db_entry("grandparent", None); // 1
+        create_folder_db_entry("parent", Some(1)); // 2
+        create_folder_db_entry("child", Some(2)); // 3
+        create_file_db_entry("file_in_child", Some(3)); // 1
+
+        // Add tag to grandparent
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: None,
+                title: "persistent_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Add same tag to parent (overriding inheritance)
+        update_folder_tags(
+            2,
+            vec![TagApi {
+                id: Some(1),
+                title: "persistent_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify all have the tag
+        assert_eq!(get_tags_on_folder(1).unwrap().len(), 1);
+        assert_eq!(get_tags_on_folder(2).unwrap().len(), 1);
+        assert_eq!(get_tags_on_folder(3).unwrap().len(), 1);
+        assert_eq!(get_tags_on_file(1).unwrap().len(), 1);
+
+        // Remove tag from parent (but grandparent still has it)
+        update_folder_tags(2, vec![]).unwrap();
+
+        // Verify grandparent still has it (direct)
+        assert_eq!(get_tags_on_folder(1).unwrap().len(), 1);
+        
+        // Verify parent and descendants still have it (re-inherited from grandparent)
+        assert_eq!(get_tags_on_folder(2).unwrap().len(), 1);
+        assert_eq!(get_tags_on_folder(3).unwrap().len(), 1);
+        assert_eq!(get_tags_on_file(1).unwrap().len(), 1);
+
+        cleanup();
+    }
+
+    #[test]
+    fn tag_not_added_if_already_exists_directly() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+
+        // Add tag directly to child first
+        let con = open_connection();
+        let tag_id = create_tag("shared_tag".to_string()).unwrap().id.unwrap();
+        tag_repository::add_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+
+        // Now add same tag to parent
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: Some(tag_id),
+                title: "shared_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify child still has only one instance of the tag
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].title, "shared_tag");
+
+        cleanup();
+    }
+
+    #[test]
+    fn multiple_tags_propagate_correctly() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+
+        // Add multiple tags to parent
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: None,
+                    title: "tag1".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "tag2".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "tag3".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        // Verify all tags propagated to child
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 3);
+        let titles: Vec<String> = child_tags.iter().map(|t| t.title.clone()).collect();
+        assert!(titles.contains(&"tag1".to_string()));
+        assert!(titles.contains(&"tag2".to_string()));
+        assert!(titles.contains(&"tag3".to_string()));
+
+        cleanup();
+    }
+
+    #[test]
+    fn partial_tag_removal_keeps_other_tags() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+
+        // Add multiple tags
+        update_folder_tags(
+            1,
+            vec![
+                TagApi {
+                    id: None,
+                    title: "keep_tag".to_string(),
+                },
+                TagApi {
+                    id: None,
+                    title: "remove_tag".to_string(),
+                },
+            ],
+        )
+        .unwrap();
+
+        // Remove one tag, keep the other
+        update_folder_tags(
+            1,
+            vec![TagApi {
+                id: Some(1),
+                title: "keep_tag".to_string(),
+            }],
+        )
+        .unwrap();
+
+        // Verify correct tag remained
+        let parent_tags = get_tags_on_folder(1).unwrap();
+        assert_eq!(parent_tags.len(), 1);
+        assert_eq!(parent_tags[0].title, "keep_tag");
+
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].title, "keep_tag");
+
+        cleanup();
+    }
+}
+
