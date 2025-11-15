@@ -1,6 +1,6 @@
 mod get_tag_tests {
     use crate::model::error::tag_errors::GetTagError;
-    use super::super::super::service::{create_tag, get_tag};
+    use crate::tags::service::{create_tag, get_tag};
     use crate::test::*;
 
     #[test]
@@ -24,7 +24,7 @@ mod get_tag_tests {
 mod update_tag_tests {
     use crate::model::error::tag_errors::UpdateTagError;
     use crate::model::response::TagApi;
-    use super::super::super::service::{create_tag, get_tag, update_tag};
+    use crate::tags::service::{create_tag, get_tag, update_tag};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -71,7 +71,7 @@ mod update_tag_tests {
 
 mod delete_tag_tests {
     use crate::model::error::tag_errors::GetTagError;
-    use super::super::super::service::{create_tag, delete_tag, get_tag};
+    use crate::tags::service::{create_tag, delete_tag, get_tag};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -91,7 +91,7 @@ mod update_file_tag_test {
     use crate::model::repository::FileRecord;
     use crate::model::response::TagApi;
 
-    use super::super::super::service::{create_tag, get_tags_on_file, update_file_tags};
+    use crate::tags::service::{create_tag, get_tags_on_file, update_file_tags};
     use crate::test::{cleanup, init_db_folder, now};
 
     #[test]
@@ -294,7 +294,7 @@ mod update_folder_tag_test {
     use crate::model::repository::Folder;
     use crate::model::response::TagApi;
     use crate::repository::{folder_repository, open_connection};
-    use super::super::super::service::{create_tag, get_tags_on_folder, update_folder_tags};
+    use crate::tags::service::{create_tag, get_tags_on_folder, update_folder_tags};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -504,7 +504,7 @@ mod update_folder_tag_test {
 
 mod get_tags_on_file_tests {
     use crate::model::error::tag_errors::TagRelationError;
-    use super::super::super::service::get_tags_on_file;
+    use crate::tags::service::get_tags_on_file;
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -518,7 +518,7 @@ mod get_tags_on_file_tests {
 
 mod get_tags_on_folder_tests {
     use crate::model::error::tag_errors::TagRelationError;
-    use super::super::super::service::get_tags_on_folder;
+    use crate::tags::service::get_tags_on_folder;
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
