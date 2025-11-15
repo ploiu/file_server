@@ -130,9 +130,6 @@ pub fn search_files(
         Err(SearchFileError::DbError) => SearchFileResponse::GenericError(BasicMessage::new(
             "Failed to search files. Check server logs for details",
         )),
-        Err(SearchFileError::TagError) => SearchFileResponse::GenericError(BasicMessage::new(
-            "Failed to retrieve file tags. Check server logs for details",
-        )),
     }
 }
 

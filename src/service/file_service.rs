@@ -23,7 +23,8 @@ use crate::model::request::file_requests::CreateFileRequest;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
 use crate::repository::{file_repository, folder_repository, open_connection};
-use crate::service::{folder_service, tag_service};
+use crate::service::folder_service;
+use crate::tags::service as tag_service;
 use crate::{queue, repository};
 
 /// mapping of file lowercase file extension => file type

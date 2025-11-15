@@ -9,7 +9,6 @@ use crate::db_migrations::migrate_db;
 pub mod file_repository;
 pub mod folder_repository;
 pub mod metadata_repository;
-pub mod tag_repository;
 
 /// creates a new connection and returns it, but panics if the connection could not be created
 #[cfg(not(test))]

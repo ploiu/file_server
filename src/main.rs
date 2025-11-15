@@ -8,7 +8,8 @@ use std::{fs, time::Instant};
 use rocket::{Build, Rocket};
 
 use db_migrations::generate_all_file_types_and_sizes;
-use handler::{api_handler::*, file_handler::*, folder_handler::*, tag_handler::*};
+use handler::{api_handler::*, file_handler::*, folder_handler::*};
+use tags::handler::*;
 
 use crate::exif::load_all_exif_data;
 use crate::handler::api_handler::update_password;
@@ -29,6 +30,7 @@ mod previews;
 mod queue;
 mod repository;
 mod service;
+mod tags;
 mod util;
 
 #[cfg(not(test))]

@@ -1,3 +1,7 @@
-delete from Files_Tags
-where fileRecordId = ?1
-and tagId = ?2
+-- removes a single non-inherited tag from a file
+delete from
+    TaggedItems
+where
+    fileId = ?1
+    and tagId = ?2
+    and inheritedFromId is null;

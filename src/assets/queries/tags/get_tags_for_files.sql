@@ -1,4 +1,9 @@
-select Files_Tags.fileRecordId, Tags.id, Tags.title
-from Tags
-         join Files_Tags on Tags.id = Files_Tags.tagId
-where Files_Tags.fileRecordId in ({});
+select
+    ti.fileId,
+    t.id,
+    t.title
+from
+    TaggedItems ti
+    join Tags t on ti.tagId = t.id
+where
+    ti.fileId in ({ })

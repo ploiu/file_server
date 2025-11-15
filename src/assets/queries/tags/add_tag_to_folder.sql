@@ -1,2 +1,4 @@
-insert into Folders_Tags(folderId, tagId)
-values (?1, ?2)
+insert
+    or ignore into TaggedItems (folderId, tagId)
+values
+    (?1, ?2)

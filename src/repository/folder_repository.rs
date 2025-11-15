@@ -1,5 +1,5 @@
 use std::backtrace::Backtrace;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashSet;
 
 use rusqlite::{Connection, Rows, params};
 
@@ -209,73 +209,6 @@ pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
     Ok(ids)
 }
 
-pub fn get_folders_by_any_tag(
-    tags: &HashSet<String>,
-    con: &Connection,
-) -> Result<HashSet<repository::Folder>, rusqlite::Error> {
-    // TODO look at rarray to pass a collection as a parameter (https://docs.rs/rusqlite/0.29.0/rusqlite/vtab/array/index.html)
-    let joined_tags = tags
-        .iter()
-        .map(|t| format!("'{}'", t.replace('\'', "''")))
-        .reduce(|combined, current| format!("{combined},{current}"))
-        .unwrap();
-    let query = include_str!("../assets/queries/folder/get_folders_by_any_tag.sql");
-    let replaced_query = query.replace("?1", joined_tags.as_str());
-    let mut pst = con.prepare(replaced_query.as_str()).unwrap();
-    let mut folders: HashSet<repository::Folder> = HashSet::new();
-    let rows = pst.query_map([], map_folder)?;
-    for row in rows {
-        folders.insert(row?);
-    }
-    Ok(folders)
-}
-
-pub fn get_parent_folders_by_tag<'a, T: IntoIterator<Item = &'a String> + Clone>(
-    folder_id: u32,
-    tags: &T,
-    con: &Connection,
-) -> Result<HashMap<u32, HashSet<String>>, rusqlite::Error> {
-    let query = include_str!("../assets/queries/folder/get_parent_folders_with_tags.sql");
-    // because I'm not using a rusqlite extension, I have to join the list of tags manually
-    let joined_tags = tags
-        .clone()
-        .into_iter()
-        .map(|t| format!("'{}'", t.replace('\'', "''")))
-        .reduce(|combined, current| format!("{combined},{current}"))
-        .unwrap();
-    let built_query = query.replace("?2", joined_tags.as_str());
-    let mut pst = con.prepare(built_query.as_str())?;
-    let mut pairs: HashMap<u32, HashSet<String>> = HashMap::new();
-    let mut rows = pst.query([folder_id])?;
-    while let Some(row) = rows.next()? {
-        let folder_id: u32 = row.get(0)?;
-        let tags: String = row.get(1)?;
-        let split_tags = tags
-            .split(',')
-            .map(|s| s.to_string())
-            .collect::<HashSet<String>>();
-        pairs.insert(folder_id, split_tags);
-    }
-    Ok(pairs)
-}
-
-/// returns a recursive list of ancestor (parent/grandparent/great grandparent/etc) folder IDs for the passed `folder_id`
-/// This does not include the root folder id of `None`/`0`
-pub fn get_ancestor_folder_ids(
-    folder_id: u32,
-    con: &Connection,
-) -> Result<Vec<u32>, rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/folder/get_parent_folders_with_id.sql"
-    ))?;
-    let mut rows = pst.query([folder_id])?;
-    let mut ids: Vec<u32> = Vec::new();
-    while let Some(row) = rows.next()? {
-        ids.push(row.get(0)?);
-    }
-    Ok(ids)
-}
-
 fn map_folder(row: &rusqlite::Row) -> Result<repository::Folder, rusqlite::Error> {
     let id: Option<u32> = row.get(0)?;
     let name: String = row.get(1)?;
@@ -318,76 +251,6 @@ fn get_child_files_non_root(
         files.push(file?);
     }
     Ok(files)
-}
-
-#[cfg(test)]
-mod get_folders_by_any_tag_tests {
-    use std::collections::HashSet;
-
-    use rusqlite::Connection;
-
-    use crate::model::repository::Folder;
-    use crate::repository::folder_repository::get_folders_by_any_tag;
-    use crate::repository::open_connection;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folders, init_db_folder};
-
-    #[test]
-    fn returns_folders_with_any_tag() {
-        init_db_folder();
-        create_folder_db_entry("all tags", None); // 1
-        create_folder_db_entry("some tags", Some(1)); // 2
-        create_folder_db_entry("no tags", None); // 3
-        create_folder_db_entry("no relevant tags", None); // 4
-        // tags on them folders
-        create_tag_folders("irrelevant", vec![2, 4]);
-        create_tag_folders("relevant 1", vec![1, 2]);
-        create_tag_folders("relevant 2", vec![1]);
-        let con: Connection = open_connection();
-
-        let res = get_folders_by_any_tag(
-            &HashSet::from(["relevant 1".to_string(), "relevant 2".to_string()]),
-            &con,
-        )
-        .unwrap()
-        .into_iter()
-        .collect::<Vec<Folder>>();
-        con.close().unwrap();
-        assert_eq!(2, res.len());
-        assert!(res.contains(&Folder {
-            id: Some(1),
-            parent_id: None,
-            name: "all tags".to_string(),
-        }));
-        assert!(res.contains(&Folder {
-            id: Some(2),
-            parent_id: Some(1),
-            name: "some tags".to_string(),
-        }));
-        cleanup();
-    }
-}
-
-#[cfg(test)]
-mod get_parent_folders_by_tag_tests {
-    use std::collections::HashSet;
-
-    use crate::repository::folder_repository::get_parent_folders_by_tag;
-    use crate::repository::open_connection;
-    use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, init_db_folder};
-
-    #[test]
-    fn retrieves_parent_folders() {
-        init_db_folder();
-        create_folder_db_entry("top", None);
-        create_folder_db_entry("middle", Some(1));
-        create_folder_db_entry("bottom", Some(2));
-        create_tag_folder("tag", 1);
-        let con = open_connection();
-        let res = get_parent_folders_by_tag(3, &[&"tag".to_string()], &con).unwrap();
-        con.close().unwrap();
-        assert_eq!(HashSet::from(["tag".to_string()]), *res.get(&1).unwrap());
-        cleanup();
-    }
 }
 
 #[cfg(test)]
@@ -438,57 +301,6 @@ mod get_child_files_tests {
             HashSet::from(["good".to_string(), "good2".to_string()]),
             res
         );
-        cleanup();
-    }
-}
-
-#[cfg(test)]
-mod get_ancestor_folder_ids_tests {
-    use super::get_ancestor_folder_ids;
-    use crate::{
-        repository::open_connection,
-        test::{cleanup, create_folder_db_entry, init_db_folder},
-    };
-
-    #[test]
-    fn returns_all_parents() {
-        init_db_folder();
-        create_folder_db_entry("1", None);
-        create_folder_db_entry("2", Some(1));
-        create_folder_db_entry("3", Some(2));
-        create_folder_db_entry("4", Some(3));
-        create_folder_db_entry("5", Some(4));
-        let expected = vec![1, 2, 3, 4];
-        let con = open_connection();
-        let actual = get_ancestor_folder_ids(5, &con).unwrap();
-        con.close().unwrap();
-        assert_eq!(actual, expected);
-        cleanup();
-    }
-
-    #[test]
-    fn does_not_return_non_parents() {
-        init_db_folder();
-        create_folder_db_entry("good", None); // 1
-        create_folder_db_entry("good", Some(1)); // 2
-        create_folder_db_entry("bad", Some(1)); // 3
-        create_folder_db_entry("good", Some(2)); // 4
-        create_folder_db_entry("base", Some(4)); // 5
-        let con = open_connection();
-        let expected = vec![1, 2, 4];
-        let actual = get_ancestor_folder_ids(5, &con).unwrap();
-        assert_eq!(actual, expected);
-        cleanup();
-    }
-
-    #[test]
-    fn does_not_panic_when_no_parents() {
-        init_db_folder();
-        let con = open_connection();
-        create_folder_db_entry("test", None);
-        let res = get_ancestor_folder_ids(1, &con);
-        con.close().unwrap();
-        res.expect("no error should be returned if the folder does not have a parent");
         cleanup();
     }
 }

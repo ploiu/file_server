@@ -1,4 +1,8 @@
-select Tags.id, Tags.title
-from Tags
-         join Files_Tags on Tags.id = Files_Tags.tagId
-where Files_Tags.fileRecordId = ?1;
+select
+    t.*,
+    ti.inheritedFromId
+from
+    Tags t
+    join TaggedItems ti on t.id = ti.tagId
+where
+    ti.fileId = ?1

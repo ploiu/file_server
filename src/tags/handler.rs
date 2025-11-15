@@ -11,8 +11,9 @@ use crate::model::response::tag_responses::{
     CreateTagResponse, DeleteTagResponse, GetTagResponse, UpdateTagResponse,
 };
 use crate::model::response::{BasicMessage, TagApi};
-use crate::service::tag_service;
 use crate::util::update_last_request_time;
+
+use super::service;
 
 #[get("/<id>")]
 pub fn get_tag(
@@ -26,7 +27,7 @@ pub fn get_tag(
         ValidateResult::Invalid => return GetTagResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match tag_service::get_tag(id) {
+    match service::get_tag(id) {
         Ok(tag) => GetTagResponse::Success(Json::from(tag)),
         Err(GetTagError::TagNotFound) => GetTagResponse::TagNotFound(BasicMessage::new(
             "The tag with the passed id could not be found.",
@@ -49,7 +50,7 @@ pub fn create_tag(
         ValidateResult::Invalid => return CreateTagResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match tag_service::create_tag(tag.title.clone()) {
+    match service::create_tag(tag.title.clone()) {
         Ok(tag) => CreateTagResponse::Success(Json::from(tag)),
         Err(_) => CreateTagResponse::TagDbError(BasicMessage::new(
             "Failed to create tag info in database. Check server logs for details",
@@ -69,7 +70,7 @@ pub fn update_tag(
         ValidateResult::Invalid => return UpdateTagResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match tag_service::update_tag(tag.into_inner()) {
+    match service::update_tag(tag.into_inner()) {
         Ok(tag) => UpdateTagResponse::Success(Json::from(tag)),
         Err(UpdateTagError::TagNotFound) => {
             UpdateTagResponse::TagNotFound(BasicMessage::new("No tag with that id was found."))
@@ -95,7 +96,7 @@ pub fn delete_tag(
         ValidateResult::Invalid => return DeleteTagResponse::Unauthorized("Bad Credentials".to_string())
     };
     update_last_request_time(last_request_time);
-    match tag_service::delete_tag(id) {
+    match service::delete_tag(id) {
         Ok(()) => DeleteTagResponse::Success(()),
         Err(_) => DeleteTagResponse::TagDbError(BasicMessage::new(
             "Failed to delete tag from database. Check server logs for details.",
