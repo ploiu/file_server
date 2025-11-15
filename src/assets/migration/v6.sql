@@ -94,5 +94,47 @@ where not exists (
     select 1 from TaggedItems ti where ti.tagId = n.tagId and ti.folderId = n.folderId
 );
 
+-- populate inherited tags for files: for each file, walk its containing folder(s)' ancestor chain
+-- and pick the nearest ancestor that provides a tag, then insert an inherited row for the file
+with recursive
+ancestors(fileId, directFolderId, ancestorId, depth) as (
+    -- base: each file's direct containing folder is the first ancestor (so tags on the folder itself are inherited)
+    select ff.fileId, ff.folderId, ff.folderId as ancestorId, 1 as depth
+    from Folder_Files ff
+
+    union all
+
+    -- climb up the folder parent chain
+    select fa.fileId, fa.directFolderId, f.parentId as ancestorId, fa.depth + 1
+    from ancestors fa
+    join Folders f on f.id = fa.ancestorId
+    where f.parentId is not null
+),
+-- join the discovered ancestors to tags present on those ancestor folders
+ancestorTags as (
+    select fa.fileId, ft.tagId, fa.ancestorId, fa.depth
+    from ancestors fa
+    join Folders_Tags ft on ft.folderId = fa.ancestorId
+),
+-- for each (file,tag) choose the nearest ancestor (smallest depth)
+nearestTags as (
+    select cft.fileId, cft.tagId, cft.ancestorId
+    from ancestorTags cft
+    where cft.ancestorId = (
+        select cft2.ancestorId
+        from ancestorTags cft2
+        where cft2.fileId = cft.fileId and cft2.tagId = cft.tagId
+        order by cft2.depth asc
+        limit 1
+    )
+)
+
+insert into TaggedItems(tagId, fileId, inheritedFromId)
+select n.tagId, n.fileId, n.ancestorId
+from nearestTags n
+where not exists (
+    select 1 from TaggedItems ti where ti.tagId = n.tagId and ti.fileId = n.fileId
+);
+
 update metadata set value = 6 where name = 'version';
 commit;
