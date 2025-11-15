@@ -757,25 +757,31 @@ mod download_folder_tests {
 #[cfg(test)]
 mod tag_inheritance_tests {
     use crate::{
-        test::{cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder, init_db_folder},
-        tags::service as tag_service,
+        test::{cleanup, create_file_db_entry, create_folder_db_entry, create_folder_disk, init_db_folder},
+        service::folder_service::update_folder,
+        model::request::folder_requests::UpdateFolderRequest,
+        model::response::TagApi,
         repository::open_connection,
         tags::repository as tag_repository,
     };
 
     #[test]
-    fn pass_tags_to_children_adds_tags_to_descendant_folders() {
+    fn update_folder_propagates_tags_to_descendant_folders() {
         init_db_folder();
         // Create folder hierarchy: top -> middle -> bottom
+        create_folder_disk("top/middle/bottom");
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("middle", Some(1)); // 2
         create_folder_db_entry("bottom", Some(2)); // 3
         
-        // Add tag to top folder
-        create_tag_folder("tag1", 1);
-        
-        // Pass tags to children
-        tag_service::pass_tags_to_children(1).unwrap();
+        // Update top folder with a tag
+        let update_req = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![TagApi { id: None, title: "tag1".to_string() }],
+        };
+        update_folder(&update_req).unwrap();
         
         // Check that middle and bottom folders inherited the tag
         let con = open_connection();
@@ -792,19 +798,23 @@ mod tag_inheritance_tests {
     }
 
     #[test]
-    fn pass_tags_to_children_adds_tags_to_descendant_files() {
+    fn update_folder_propagates_tags_to_descendant_files() {
         init_db_folder();
         // Create folder hierarchy with files
+        create_folder_disk("top/middle");
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("middle", Some(1)); // 2
         create_file_db_entry("file1", Some(1)); // file in top
         create_file_db_entry("file2", Some(2)); // file in middle
         
-        // Add tag to top folder
-        create_tag_folder("tag1", 1);
-        
-        // Pass tags to children
-        tag_service::pass_tags_to_children(1).unwrap();
+        // Update top folder with a tag
+        let update_req = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![TagApi { id: None, title: "tag1".to_string() }],
+        };
+        update_folder(&update_req).unwrap();
         
         // Check that both files inherited the tag
         let con = open_connection();
@@ -821,28 +831,37 @@ mod tag_inheritance_tests {
     }
 
     #[test]
-    fn pass_tags_to_children_removes_tags_not_on_parent() {
+    fn update_folder_removes_tags_not_on_parent() {
         init_db_folder();
         // Create folder hierarchy
+        create_folder_disk("top/child");
         create_folder_db_entry("top", None); // 1
         create_folder_db_entry("child", Some(1)); // 2
         create_file_db_entry("file", Some(2)); // file in child
         
-        // Add tag1 to top
-        create_tag_folder("tag1", 1);
-        tag_service::pass_tags_to_children(1).unwrap();
+        // Update top folder with tag1
+        let update_req = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![TagApi { id: None, title: "tag1".to_string() }],
+        };
+        update_folder(&update_req).unwrap();
         
         // Verify child has tag1
         let con = open_connection();
         let child_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
+        con.close().unwrap();
         assert_eq!(1, child_tags.len());
         
-        // Now remove tag1 from top
-        tag_repository::remove_tag_from_folder(1, 1, &con).unwrap();
-        con.close().unwrap();
-        
-        // Pass tags again (should remove inherited tags since parent has no tags)
-        tag_service::pass_tags_to_children(1).unwrap();
+        // Now update top folder to remove all tags
+        let update_req2 = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![],
+        };
+        update_folder(&update_req2).unwrap();
         
         // Verify child no longer has tag1 (it was inherited and parent no longer has it)
         let con2 = open_connection();

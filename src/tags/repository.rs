@@ -173,20 +173,6 @@ pub fn remove_tag_from_folder(
     Ok(())
 }
 
-/// Get all descendant folder IDs recursively
-pub fn get_descendant_folder_ids(folder_id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
-    let mut pst = con.prepare(include_str!("../assets/queries/tags/get_descendant_folder_ids.sql"))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
-    rows.collect()
-}
-
-/// Get all file IDs in descendant folders (including the folder itself)
-pub fn get_descendant_file_ids(folder_id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
-    let mut pst = con.prepare(include_str!("../assets/queries/tags/get_descendant_file_ids.sql"))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
-    rows.collect()
-}
-
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let title: String = row.get(1)?;

@@ -7,7 +7,7 @@ use crate::model::error::tag_errors::{
 };
 use crate::model::repository;
 use crate::model::response::TagApi;
-use crate::repository::open_connection;
+use crate::repository::{folder_repository, open_connection};
 use crate::service::{file_service, folder_service};
 use crate::tags::repository as tag_repository;
 
@@ -459,8 +459,8 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
         rows.filter_map(Result::ok).collect()
     };
     
-    // Get all descendant folder IDs
-    let descendant_folder_ids = tag_repository::get_descendant_folder_ids(folder_id, &con).map_err(|e| {
+    // Get all descendant folder IDs using existing folder_repository function
+    let descendant_folder_ids = folder_repository::get_all_child_folder_ids(&vec![folder_id], &con).map_err(|e| {
         log::error!(
             "Failed to retrieve descendant folders for folder {folder_id}! Error is {e:?}\n{}",
             Backtrace::force_capture()
@@ -469,13 +469,19 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     })?;
     
     // Get all descendant file IDs
-    let descendant_file_ids = tag_repository::get_descendant_file_ids(folder_id, &con).map_err(|e| {
+    // First get all folders (including the current one and all descendants)
+    let mut all_folder_ids = descendant_folder_ids.clone();
+    all_folder_ids.push(folder_id);
+    
+    let descendant_files = folder_repository::get_child_files(all_folder_ids, &con).map_err(|e| {
         log::error!(
             "Failed to retrieve descendant files for folder {folder_id}! Error is {e:?}\n{}",
             Backtrace::force_capture()
         );
         TagRelationError::DbError
     })?;
+    
+    let descendant_file_ids: Vec<u32> = descendant_files.into_iter().map(|f| f.id.unwrap()).collect();
     
     // Process descendant folders
     for desc_folder_id in descendant_folder_ids {
