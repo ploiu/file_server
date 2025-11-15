@@ -1,24 +1,8 @@
 use rocket::http::{Header, Status};
-use rocket::local::blocking::Client;
 
 use crate::model::response::TagApi;
 use crate::repository::initialize_db;
-use crate::rocket;
 use crate::test::*;
-
-fn client() -> Client {
-    Client::tracked(rocket()).unwrap()
-}
-
-fn set_password() {
-    init_db_folder();
-    let client = client();
-    let uri = uri!("/api/password");
-    client
-        .post(uri)
-        .body(r#"{"username":"username","password":"password"}"#)
-        .dispatch();
-}
 
 #[test]
 fn get_tag_without_creds() {

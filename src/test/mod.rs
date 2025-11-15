@@ -16,6 +16,7 @@ mod tests {
     use crate::service::file_service::{determine_file_type, file_dir};
     use crate::tags::repository as tag_repository;
     use crate::temp_dir;
+    use rocket::local::blocking::Client;
     use std::fs;
     use std::fs::{remove_dir_all, remove_file};
     use std::io::Write;
@@ -23,6 +24,22 @@ mod tests {
 
     /// username:password
     pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
+
+    /// Creates a Rocket test client for handler tests
+    pub fn client() -> Client {
+        Client::tracked(crate::rocket()).unwrap()
+    }
+
+    /// Sets up authentication by creating a password in the test database
+    pub fn set_password() {
+        init_db_folder();
+        let client = client();
+        let uri = uri!("/api/password");
+        client
+            .post(uri)
+            .body(r#"{"username":"username","password":"password"}"#)
+            .dispatch();
+    }
 
     pub fn init_db_folder() {
         // since this is just for testing, we don't need to unwrap the logging
