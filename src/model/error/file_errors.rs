@@ -62,15 +62,12 @@ pub enum UpdateFileError {
 #[derive(PartialEq, Debug)]
 pub enum SearchFileError {
     DbError,
-    /// an issue occurred retrieving tags
-    TagError,
 }
 
 impl Display for SearchFileError {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::DbError => write!(f, "SearchFileError::DbError"),
-            Self::TagError => write!(f, "SearchFileError::TagError"),
         }
     }
 }
