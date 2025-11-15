@@ -1,7 +1,7 @@
 mod create_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
-    use crate::tags::repository;
+    use super::super::super::repository;
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -24,7 +24,7 @@ mod create_tag_tests {
 mod get_tag_by_title_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
-    use crate::tags::repository::{create_tag, get_tag_by_title};
+    use super::super::super::repository::{create_tag, get_tag_by_title};
     use crate::test::*;
 
     #[test]
@@ -57,7 +57,7 @@ mod get_tag_by_title_tests {
 mod get_tag_by_id_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
-    use crate::tags::repository::{create_tag, get_tag};
+    use super::super::super::repository::{create_tag, get_tag};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -81,7 +81,7 @@ mod get_tag_by_id_tests {
 mod update_tag_tests {
     use crate::model::repository::Tag;
     use crate::repository::open_connection;
-    use crate::tags::repository::{create_tag, get_tag, update_tag};
+    use super::super::super::repository::{create_tag, get_tag, update_tag};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -112,7 +112,7 @@ mod update_tag_tests {
 
 mod delete_tag_tests {
     use crate::repository::open_connection;
-    use crate::tags::repository::{create_tag, delete_tag, get_tag};
+    use super::super::super::repository::{create_tag, delete_tag, get_tag};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -129,7 +129,7 @@ mod delete_tag_tests {
 }
 
 mod get_tag_on_file_tests {
-    use crate::tags::repository::*;
+    use super::super::super::repository::*;
     use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
@@ -197,7 +197,7 @@ mod get_tag_on_file_tests {
 }
 
 mod remove_tag_from_file_tests {
-    use crate::tags::repository::*;
+    use super::super::super::repository::*;
     use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
@@ -233,7 +233,7 @@ mod get_tag_on_folder_tests {
     use crate::model::repository::{Folder, Tag};
     use crate::repository::folder_repository::create_folder;
     use crate::repository::open_connection;
-    use crate::tags::repository::{add_tag_to_folder, create_tag, get_tags_on_folder};
+    use super::super::super::repository::{add_tag_to_folder, create_tag, get_tags_on_folder};
     use crate::test::*;
 
     #[test]
@@ -294,7 +294,7 @@ mod remove_tag_from_folder_tests {
     use crate::model::repository::{Folder, Tag};
     use crate::repository::folder_repository::create_folder;
     use crate::repository::open_connection;
-    use crate::tags::repository::{
+    use super::super::super::repository::{
         create_tag, get_tags_on_folder, remove_tag_from_folder,
     };
     use crate::test::{cleanup, init_db_folder};
@@ -325,7 +325,7 @@ mod get_tags_on_files_tests {
     use std::collections::HashMap;
 
     use crate::{model::repository::Tag, repository::open_connection, test::*};
-    use crate::tags::repository::get_tags_on_files;
+    use super::super::super::repository::get_tags_on_files;
 
     #[test]
     fn returns_proper_mapping_for_file_tags() {

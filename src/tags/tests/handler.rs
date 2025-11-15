@@ -1,1 +1,2 @@
-// Handler tests will be added here as needed
+// Tests for tag handlers
+// TODO: Add integration tests for tag HTTP endpoints

@@ -73,8 +73,6 @@ pub fn get_tags_on_file(
     let rows = pst.query_map(rusqlite::params![file_id], tag_mapper)?;
     let mut tags: Vec<repository::Tag> = Vec::new();
     for tag_res in rows {
-        // I know it's probably bad style, but I'm laughing too hard at the double question mark.
-        // no I don't know what my code is doing and I'm glad my code reflects that
         tags.push(tag_res?);
     }
     Ok(tags)

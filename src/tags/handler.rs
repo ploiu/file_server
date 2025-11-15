@@ -11,8 +11,9 @@ use crate::model::response::tag_responses::{
     CreateTagResponse, DeleteTagResponse, GetTagResponse, UpdateTagResponse,
 };
 use crate::model::response::{BasicMessage, TagApi};
-use crate::tags::service;
 use crate::util::update_last_request_time;
+
+use super::service;
 
 #[get("/<id>")]
 pub fn get_tag(
