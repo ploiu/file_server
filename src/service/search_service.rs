@@ -10,8 +10,9 @@ use crate::model::repository::FileRecord;
 use crate::model::request::attributes::AttributeSearch;
 use crate::model::response::TagApi;
 use crate::model::response::folder_responses::FolderResponse;
-use crate::repository::{file_repository, folder_repository, open_connection, tag_repository};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::folder_service;
+use crate::tags::repository as tag_repository;
 
 pub fn search_files(
     search_title: &str,
