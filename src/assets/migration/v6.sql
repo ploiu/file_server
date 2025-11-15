@@ -136,5 +136,8 @@ where not exists (
     select 1 from TaggedItems ti where ti.tagId = n.tagId and ti.fileId = n.fileId
 );
 
+drop table folders_tags;
+drop table files_tags;
+
 update metadata set value = 6 where name = 'version';
 commit;

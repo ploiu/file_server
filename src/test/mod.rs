@@ -10,9 +10,7 @@ mod tests {
     use crate::model::api::FileApi;
     use crate::model::repository::{FileRecord, Folder, Tag};
     use crate::previews;
-    use crate::repository::{
-        file_repository, folder_repository, initialize_db, open_connection,
-    };
+    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::{determine_file_type, file_dir};
     use crate::tags::repository as tag_repository;
     use crate::temp_dir;

@@ -1,4 +1,8 @@
-select Tags.id, Tags.title
-from Tags
-         join Folders_Tags on Tags.id = Folders_Tags.tagId
-where Folders_Tags.folderId = ?1;
+select
+    t.*,
+    ti.inheritedFromId
+from
+    Tags t
+    join TaggedItems ti on t.id = ti.tagId
+where
+    ti.folderId = ?1

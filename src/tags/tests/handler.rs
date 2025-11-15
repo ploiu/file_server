@@ -1,6 +1,5 @@
 use rocket::http::{Header, Status};
 
-use crate::model::response::TagApi;
 use crate::repository::initialize_db;
 use crate::test::*;
 

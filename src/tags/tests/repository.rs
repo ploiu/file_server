@@ -129,11 +129,11 @@ mod delete_tag_tests {
 }
 
 mod get_tag_on_file_tests {
-    use crate::tags::repository::*;
     use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
+    use crate::tags::repository::*;
     use crate::test::*;
 
     #[test]
@@ -197,11 +197,11 @@ mod get_tag_on_file_tests {
 }
 
 mod remove_tag_from_file_tests {
-    use crate::tags::repository::*;
     use crate::model::file_types::FileTypes;
     use crate::model::repository::{FileRecord, Tag};
     use crate::repository::file_repository::create_file;
     use crate::repository::open_connection;
+    use crate::tags::repository::*;
     use crate::test::{cleanup, init_db_folder, now};
 
     #[test]
@@ -294,9 +294,7 @@ mod remove_tag_from_folder_tests {
     use crate::model::repository::{Folder, Tag};
     use crate::repository::folder_repository::create_folder;
     use crate::repository::open_connection;
-    use crate::tags::repository::{
-        create_tag, get_tags_on_folder, remove_tag_from_folder,
-    };
+    use crate::tags::repository::{create_tag, get_tags_on_folder, remove_tag_from_folder};
     use crate::test::{cleanup, init_db_folder};
 
     #[test]
@@ -324,8 +322,8 @@ mod remove_tag_from_folder_tests {
 mod get_tags_on_files_tests {
     use std::collections::HashMap;
 
-    use crate::{model::repository::Tag, repository::open_connection, test::*};
     use crate::tags::repository::get_tags_on_files;
+    use crate::{model::repository::Tag, repository::open_connection, test::*};
 
     #[test]
     fn returns_proper_mapping_for_file_tags() {
