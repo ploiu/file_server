@@ -157,70 +157,124 @@ mod migration_tests {
     fn v6_migration_adds_inherited_from_columns() {
         init_db_folder();
         let con = open_connection();
-        
+
         // Create test data
-        let tag_id = con.execute("insert into Tags(title) values (?1)", params!["test_tag"]).unwrap();
-        let file_id = con.execute("insert into FileRecords(name) values (?1)", params!["test_file.txt"]).unwrap();
-        let folder_id = con.execute("insert into Folders(name) values (?1)", params!["test_folder"]).unwrap();
-        
+        let tag_id = con
+            .execute("insert into Tags(title) values (?1)", params!["test_tag"])
+            .unwrap();
+        let file_id = con
+            .execute(
+                "insert into FileRecords(name) values (?1)",
+                params!["test_file.txt"],
+            )
+            .unwrap();
+        let folder_id = con
+            .execute(
+                "insert into Folders(name) values (?1)",
+                params!["test_folder"],
+            )
+            .unwrap();
+
         // Add tag to file and folder
-        con.execute("insert into Files_Tags(fileRecordId, tagId) values (?1, ?2)", params![file_id, tag_id]).unwrap();
-        con.execute("insert into Folders_Tags(folderId, tagId) values (?1, ?2)", params![folder_id, tag_id]).unwrap();
-        
-        // Verify inherited_from column exists and is NULL by default
-        let file_inherited: Option<u32> = con.query_row(
-            "select inherited_from from Files_Tags where fileRecordId = ?1",
-            params![file_id],
-            |row| row.get(0)
-        ).unwrap();
+        con.execute(
+            "insert into Files_Tags(fileRecordId, tagId) values (?1, ?2)",
+            params![file_id, tag_id],
+        )
+        .unwrap();
+        con.execute(
+            "insert into Folders_Tags(folderId, tagId) values (?1, ?2)",
+            params![folder_id, tag_id],
+        )
+        .unwrap();
+
+        // Verify inheritedFrom column exists and is NULL by default
+        let file_inherited: Option<u32> = con
+            .query_row(
+                "select inheritedFrom from Files_Tags where fileRecordId = ?1",
+                params![file_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(None, file_inherited);
-        
-        let folder_inherited: Option<u32> = con.query_row(
-            "select inherited_from from Folders_Tags where folderId = ?1",
-            params![folder_id],
-            |row| row.get(0)
-        ).unwrap();
+
+        let folder_inherited: Option<u32> = con
+            .query_row(
+                "select inheritedFrom from Folders_Tags where folderId = ?1",
+                params![folder_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(None, folder_inherited);
-        
-        // Verify we can set inherited_from
-        let parent_folder_id = con.execute("insert into Folders(name) values (?1)", params!["parent_folder"]).unwrap();
-        con.execute("update Files_Tags set inherited_from = ?1 where fileRecordId = ?2", params![parent_folder_id, file_id]).unwrap();
-        con.execute("update Folders_Tags set inherited_from = ?1 where folderId = ?2", params![parent_folder_id, folder_id]).unwrap();
-        
-        let file_inherited: Option<u32> = con.query_row(
-            "select inherited_from from Files_Tags where fileRecordId = ?1",
-            params![file_id],
-            |row| row.get(0)
-        ).unwrap();
+
+        // Verify we can set inheritedFrom
+        let parent_folder_id = con
+            .execute(
+                "insert into Folders(name) values (?1)",
+                params!["parent_folder"],
+            )
+            .unwrap();
+        con.execute(
+            "update Files_Tags set inheritedFrom = ?1 where fileRecordId = ?2",
+            params![parent_folder_id, file_id],
+        )
+        .unwrap();
+        con.execute(
+            "update Folders_Tags set inheritedFrom = ?1 where folderId = ?2",
+            params![parent_folder_id, folder_id],
+        )
+        .unwrap();
+
+        let file_inherited: Option<u32> = con
+            .query_row(
+                "select inheritedFrom from Files_Tags where fileRecordId = ?1",
+                params![file_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(Some(parent_folder_id as u32), file_inherited);
-        
-        let folder_inherited: Option<u32> = con.query_row(
-            "select inherited_from from Folders_Tags where folderId = ?1",
-            params![folder_id],
-            |row| row.get(0)
-        ).unwrap();
+
+        let folder_inherited: Option<u32> = con
+            .query_row(
+                "select inheritedFrom from Folders_Tags where folderId = ?1",
+                params![folder_id],
+                |row| row.get(0),
+            )
+            .unwrap();
         assert_eq!(Some(parent_folder_id as u32), folder_inherited);
-        
+
         con.close().unwrap();
         cleanup();
     }
-    
+
     #[test]
     fn v6_migration_preserves_unique_constraint() {
         init_db_folder();
         let con = open_connection();
-        
+
         // Create test data
-        con.execute("insert into Tags(title) values (?1)", params!["test_tag"]).unwrap();
-        let file_id = con.execute("insert into FileRecords(name) values (?1)", params!["test_file.txt"]).unwrap();
-        
+        con.execute("insert into Tags(title) values (?1)", params!["test_tag"])
+            .unwrap();
+        let file_id = con
+            .execute(
+                "insert into FileRecords(name) values (?1)",
+                params!["test_file.txt"],
+            )
+            .unwrap();
+
         // Add tag to file
-        con.execute("insert into Files_Tags(fileRecordId, tagId) values (?1, 1)", params![file_id]).unwrap();
-        
+        con.execute(
+            "insert into Files_Tags(fileRecordId, tagId) values (?1, 1)",
+            params![file_id],
+        )
+        .unwrap();
+
         // Try to add the same tag again - should fail due to unique constraint
-        let result = con.execute("insert into Files_Tags(fileRecordId, tagId) values (?1, 1)", params![file_id]);
+        let result = con.execute(
+            "insert into Files_Tags(fileRecordId, tagId) values (?1, 1)",
+            params![file_id],
+        );
         assert!(result.is_err(), "Expected unique constraint violation");
-        
+
         con.close().unwrap();
         cleanup();
     }
