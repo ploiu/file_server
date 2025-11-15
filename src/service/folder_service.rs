@@ -21,9 +21,11 @@ use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRe
 use crate::model::response::TagApi;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
-use crate::repository::{folder_repository, open_connection, tag_repository};
+use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service::{check_root_dir, file_dir};
-use crate::service::{file_service, tag_service};
+use crate::service::file_service;
+use crate::tags::repository as tag_repository;
+use crate::tags::service as tag_service;
 use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
