@@ -3,19 +3,14 @@ use std::{
     time::Instant,
 };
 
-use rocket::{http::Status, State};
+use rocket::{State, http::Status};
 
 use crate::{
-    guard::HeaderAuth,
-    model::guard::auth::ValidateResult,
-    util::update_last_request_time,
+    guard::HeaderAuth, model::guard::auth::ValidateResult, util::update_last_request_time,
 };
 
 #[get("/regen")]
-pub fn regenerate_exif(
-    auth: HeaderAuth,
-    last_request_time: &State<Arc<Mutex<Instant>>>,
-) -> Status {
+pub fn regenerate_exif(auth: HeaderAuth, last_request_time: &State<Arc<Mutex<Instant>>>) -> Status {
     match auth.validate() {
         ValidateResult::Ok => { /*no op*/ }
         ValidateResult::NoPasswordSet => return Status::Unauthorized,

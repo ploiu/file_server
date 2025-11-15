@@ -39,7 +39,60 @@ select
 from
     Folders_Tags;
 
+/*
+ populating inherited tags for folders (needs to be done first so that files work):
+ 1. recursively get all parent folders along with how far needed to be traveled for that parent folder (depth)
+ 2. get all tags for all parent folders
+ 3. for any duplicate tags, take only the ancestor id with the lowest depth (lower depth = higher specificity)
+ 
+ if ai is helpful for anything, it's providing an example that I can adapt while I properly read how recursive sql queries work. 
+ Previously, I was flailing around. It helps me if I think of it as a do while loop and temporary named queries / functions 
+ */
+with recursive 
+-- traverse the ancestor tree and track depth
+ancestors(folderId, ancestorId, depth) as (
+    -- base case: select all folders that have a parent
+    select id as folderId, parentId as ancestorId, 1 as depth
+    from folders
+    where parentId is not null
 
--- inherit all 
+    union all
 
+    -- iteration: keep retrieving parents from base case until there are no more parents
+    select a.folderId, f.parentId as ancestorId, a.depth + 1
+    from ancestors a
+    join folders f on f.id = a.ancestorId
+    where f.parentId is not null
+),
+-- include all tags with fetched ancestors
+ancestorTags as (
+    select a.folderId, ft.tagId, a.ancestorId, a.depth
+    from ancestors a
+    join folders_tags ft on ft.folderId = a.ancestorId
+),
+-- iterate through all retrieved ancestors. For each entry, find the tag on the ancestor with the lowest depth
+nearestTags as (
+    select at.folderId, at.tagId, at.ancestorId
+    from ancestorTags at
+    where at.ancestorId = (
+        -- compare on the current row and find the nearest ancestor
+        select at2.ancestorId
+        from ancestorTags at2
+        where at2.folderId = at.folderId 
+            and at2.tagId = at.tagId
+        order by at2.depth asc
+        limit 1
+    )
+)
+
+-- now that we have our functions, we can invoke nearestTags to get all the inherited tags and insert them
+insert into TaggedItems(tagId, folderId, inheritedFromId)
+select n.tagId, n.folderId, n.ancestorId
+from nearestTags n
+-- important to not include tags that are directly on the folder
+where not exists (
+    select 1 from TaggedItems ti where ti.tagId = n.tagId and ti.folderId = n.folderId
+);
+
+update metadata set value = 6 where name = 'version';
 commit;
