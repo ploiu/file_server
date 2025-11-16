@@ -173,6 +173,68 @@ pub fn remove_tag_from_folder(
     Ok(())
 }
 
+/// Get all direct tag IDs on a folder (not inherited tags)
+pub fn get_direct_tags_on_folder(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/get_direct_tags_on_folder.sql"
+    ))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get::<_, u32>(0))?;
+    rows.collect()
+}
+
+/// Remove inherited tags from a folder that are not on the source folder
+pub fn remove_inherited_tags_not_on_folder(
+    descendant_folder_id: u32,
+    source_folder_id: u32,
+    con: &Connection,
+) -> Result<usize, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/remove_inherited_tags_not_on_folder.sql"
+    ))?;
+    pst.execute(rusqlite::params![descendant_folder_id, source_folder_id, source_folder_id])
+}
+
+/// Remove inherited tags from a file that are not on the source folder
+pub fn remove_inherited_tags_not_on_folder_from_file(
+    file_id: u32,
+    source_folder_id: u32,
+    con: &Connection,
+) -> Result<usize, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/remove_inherited_tags_not_on_folder_from_file.sql"
+    ))?;
+    pst.execute(rusqlite::params![file_id, source_folder_id, source_folder_id])
+}
+
+/// Add an inherited tag to a folder
+pub fn add_inherited_tag_to_folder(
+    folder_id: u32,
+    tag_id: u32,
+    inherited_from_id: u32,
+    con: &Connection,
+) -> Result<usize, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_inherited_tag_to_folder.sql"
+    ))?;
+    pst.execute(rusqlite::params![folder_id, tag_id, inherited_from_id])
+}
+
+/// Add an inherited tag to a file
+pub fn add_inherited_tag_to_file(
+    file_id: u32,
+    tag_id: u32,
+    inherited_from_id: u32,
+    con: &Connection,
+) -> Result<usize, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_inherited_tag_to_file.sql"
+    ))?;
+    pst.execute(rusqlite::params![file_id, tag_id, inherited_from_id])
+}
+
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let title: String = row.get(1)?;
