@@ -787,13 +787,28 @@ mod tag_inheritance_tests {
         let con = open_connection();
         let middle_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
         let bottom_tags = tag_repository::get_tags_on_folder(3, &con).unwrap();
-        con.close().unwrap();
         
         assert_eq!(1, middle_tags.len());
         assert_eq!("tag1", middle_tags[0].title);
         assert_eq!(1, bottom_tags.len());
         assert_eq!("tag1", bottom_tags[0].title);
         
+        // Assert that these tags are inherited, not direct
+        let middle_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE folderId = 2 AND tagId = 1",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        let bottom_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE folderId = 3 AND tagId = 1",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        
+        assert!(middle_inherited, "Middle folder should have inherited tag");
+        assert!(bottom_inherited, "Bottom folder should have inherited tag");
+        
+        con.close().unwrap();
         cleanup();
     }
 
@@ -820,13 +835,28 @@ mod tag_inheritance_tests {
         let con = open_connection();
         let file1_tags = tag_repository::get_tags_on_file(1, &con).unwrap();
         let file2_tags = tag_repository::get_tags_on_file(2, &con).unwrap();
-        con.close().unwrap();
         
         assert_eq!(1, file1_tags.len());
         assert_eq!("tag1", file1_tags[0].title);
         assert_eq!(1, file2_tags.len());
         assert_eq!("tag1", file2_tags[0].title);
         
+        // Assert that these tags are inherited, not direct
+        let file1_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE fileId = 1 AND tagId = 1",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        let file2_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE fileId = 2 AND tagId = 1",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        
+        assert!(file1_inherited, "File1 should have inherited tag");
+        assert!(file2_inherited, "File2 should have inherited tag");
+        
+        con.close().unwrap();
         cleanup();
     }
 
@@ -839,6 +869,8 @@ mod tag_inheritance_tests {
         create_folder_db_entry("child", Some(1)); // 2
         create_file_db_entry("file", Some(2)); // file in child
         
+        let con = open_connection();
+        
         // Update top folder with tag1
         let update_req = UpdateFolderRequest {
             id: 1,
@@ -849,9 +881,7 @@ mod tag_inheritance_tests {
         update_folder(&update_req).unwrap();
         
         // Verify child has tag1
-        let con = open_connection();
         let child_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
-        con.close().unwrap();
         assert_eq!(1, child_tags.len());
         
         // Now update top folder to remove all tags
@@ -864,14 +894,107 @@ mod tag_inheritance_tests {
         update_folder(&update_req2).unwrap();
         
         // Verify child no longer has tag1 (it was inherited and parent no longer has it)
-        let con2 = open_connection();
-        let child_tags2 = tag_repository::get_tags_on_folder(2, &con2).unwrap();
-        let file_tags = tag_repository::get_tags_on_file(1, &con2).unwrap();
-        con2.close().unwrap();
+        let child_tags2 = tag_repository::get_tags_on_folder(2, &con).unwrap();
+        let file_tags = tag_repository::get_tags_on_file(1, &con).unwrap();
         
         assert_eq!(0, child_tags2.len());
         assert_eq!(0, file_tags.len());
         
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_preserves_direct_tags_on_descendant_folders() {
+        init_db_folder();
+        // Create folder hierarchy
+        create_folder_disk("top/child");
+        create_folder_db_entry("top", None); // 1
+        create_folder_db_entry("child", Some(1)); // 2
+        
+        let con = open_connection();
+        
+        // Add a direct tag to child folder
+        let tag_id = tag_repository::create_tag("direct_tag", &con).unwrap().id;
+        tag_repository::add_tag_to_folder(2, tag_id, &con).unwrap();
+        
+        // Update top folder with a different tag
+        let update_req = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![TagApi { id: None, title: "parent_tag".to_string() }],
+        };
+        update_folder(&update_req).unwrap();
+        
+        // Verify child still has its direct tag AND the inherited tag
+        let child_tags = tag_repository::get_tags_on_folder(2, &con).unwrap();
+        assert_eq!(2, child_tags.len());
+        
+        // Check that direct_tag is still direct (not inherited)
+        let direct_tag_is_direct: bool = con.query_row(
+            "SELECT inheritedFromId IS NULL FROM TaggedItems WHERE folderId = 2 AND tagId = ?",
+            [tag_id],
+            |row| row.get(0)
+        ).unwrap();
+        assert!(direct_tag_is_direct, "Direct tag should remain direct");
+        
+        // Check that parent_tag is inherited
+        let parent_tag_is_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE folderId = 2 AND tagId = (SELECT id FROM Tags WHERE title = 'parent_tag')",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        assert!(parent_tag_is_inherited, "Parent tag should be inherited");
+        
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_preserves_direct_tags_on_descendant_files() {
+        init_db_folder();
+        // Create folder hierarchy with file
+        create_folder_disk("top");
+        create_folder_db_entry("top", None); // 1
+        create_file_db_entry("file", Some(1)); // file in top
+        
+        let con = open_connection();
+        
+        // Add a direct tag to file
+        let tag_id = tag_repository::create_tag("direct_tag", &con).unwrap().id;
+        tag_repository::add_tag_to_file(1, tag_id, &con).unwrap();
+        
+        // Update top folder with a different tag
+        let update_req = UpdateFolderRequest {
+            id: 1,
+            name: "top".to_string(),
+            parent_id: None,
+            tags: vec![TagApi { id: None, title: "parent_tag".to_string() }],
+        };
+        update_folder(&update_req).unwrap();
+        
+        // Verify file still has its direct tag AND the inherited tag
+        let file_tags = tag_repository::get_tags_on_file(1, &con).unwrap();
+        assert_eq!(2, file_tags.len());
+        
+        // Check that direct_tag is still direct (not inherited)
+        let direct_tag_is_direct: bool = con.query_row(
+            "SELECT inheritedFromId IS NULL FROM TaggedItems WHERE fileId = 1 AND tagId = ?",
+            [tag_id],
+            |row| row.get(0)
+        ).unwrap();
+        assert!(direct_tag_is_direct, "Direct tag should remain direct");
+        
+        // Check that parent_tag is inherited
+        let parent_tag_is_inherited: bool = con.query_row(
+            "SELECT inheritedFromId IS NOT NULL FROM TaggedItems WHERE fileId = 1 AND tagId = (SELECT id FROM Tags WHERE title = 'parent_tag')",
+            [],
+            |row| row.get(0)
+        ).unwrap();
+        assert!(parent_tag_is_inherited, "Parent tag should be inherited");
+        
+        con.close().unwrap();
         cleanup();
     }
 }

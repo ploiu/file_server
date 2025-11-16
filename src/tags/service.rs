@@ -444,20 +444,10 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     let con = open_connection();
     
     // Get folder tag IDs (only direct tags, not inherited)
-    let folder_tag_ids: HashSet<u32> = {
-        let query = "SELECT tagId FROM TaggedItems WHERE folderId = ? AND inheritedFromId IS NULL";
-        let mut pst = con.prepare(query).map_err(|e| {
-            log::error!("Failed to prepare query: {e:?}\n{}", Backtrace::force_capture());
-            TagRelationError::DbError
-        })?;
-        
-        let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get::<_, u32>(0)).map_err(|e| {
-            log::error!("Failed to query folder tags: {e:?}\n{}", Backtrace::force_capture());
-            TagRelationError::DbError
-        })?;
-        
-        rows.filter_map(Result::ok).collect()
-    };
+    let folder_tag_ids = tag_repository::get_direct_tags_on_folder(folder_id, &con).map_err(|e| {
+        log::error!("Failed to query folder tags: {e:?}\n{}", Backtrace::force_capture());
+        TagRelationError::DbError
+    })?;
     
     // Get all descendant folder IDs using existing folder_repository function
     let descendant_folder_ids = folder_repository::get_all_child_folder_ids(&vec![folder_id], &con).map_err(|e| {
@@ -486,16 +476,14 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     // Process descendant folders
     for desc_folder_id in descendant_folder_ids {
         // Remove inherited tags that are NOT on the parent folder
-        let remove_query = "DELETE FROM TaggedItems WHERE folderId = ? AND inheritedFromId = ? AND tagId NOT IN (SELECT tagId FROM TaggedItems WHERE folderId = ? AND inheritedFromId IS NULL)";
-        con.execute(remove_query, rusqlite::params![desc_folder_id, folder_id, folder_id]).map_err(|e| {
+        tag_repository::remove_inherited_tags_not_on_folder(desc_folder_id, folder_id, &con).map_err(|e| {
             log::error!("Failed to remove obsolete inherited tags from folder {desc_folder_id}: {e:?}\n{}", Backtrace::force_capture());
             TagRelationError::DbError
         })?;
         
         // Add inherited tags for tags on the parent folder that the descendant doesn't have
         for tag_id in &folder_tag_ids {
-            let insert_query = "INSERT OR IGNORE INTO TaggedItems (folderId, tagId, inheritedFromId) VALUES (?, ?, ?)";
-            con.execute(insert_query, rusqlite::params![desc_folder_id, tag_id, folder_id]).map_err(|e| {
+            tag_repository::add_inherited_tag_to_folder(desc_folder_id, *tag_id, folder_id, &con).map_err(|e| {
                 log::error!("Failed to add inherited tag {tag_id} to folder {desc_folder_id}: {e:?}\n{}", Backtrace::force_capture());
                 TagRelationError::DbError
             })?;
@@ -505,16 +493,14 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     // Process descendant files  
     for file_id in descendant_file_ids {
         // Remove inherited tags that are NOT on the parent folder
-        let remove_query = "DELETE FROM TaggedItems WHERE fileId = ? AND inheritedFromId = ? AND tagId NOT IN (SELECT tagId FROM TaggedItems WHERE folderId = ? AND inheritedFromId IS NULL)";
-        con.execute(remove_query, rusqlite::params![file_id, folder_id, folder_id]).map_err(|e| {
+        tag_repository::remove_inherited_tags_not_on_folder_from_file(file_id, folder_id, &con).map_err(|e| {
             log::error!("Failed to remove obsolete inherited tags from file {file_id}: {e:?}\n{}", Backtrace::force_capture());
             TagRelationError::DbError
         })?;
         
         // Add inherited tags for tags on the parent folder that the file doesn't have
         for tag_id in &folder_tag_ids {
-            let insert_query = "INSERT OR IGNORE INTO TaggedItems (fileId, tagId, inheritedFromId) VALUES (?, ?, ?)";
-            con.execute(insert_query, rusqlite::params![file_id, tag_id, folder_id]).map_err(|e| {
+            tag_repository::add_inherited_tag_to_file(file_id, *tag_id, folder_id, &con).map_err(|e| {
                 log::error!("Failed to add inherited tag {tag_id} to file {file_id}: {e:?}\n{}", Backtrace::force_capture());
                 TagRelationError::DbError
             })?;
