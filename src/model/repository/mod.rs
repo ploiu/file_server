@@ -40,6 +40,21 @@ pub struct Tag {
     pub title: String,
 }
 
+/// represents a tag on a file or a folder, with optional implication.
+/// These are not meant to ever be created outside of a database query retrieving it from the database
+///
+/// [`file_id`] _or_ [`folder_id`] will be [`None`], but never both. [`implied_from_id`] will be None if the tag is explicitly on the item
+pub struct TaggedItem {
+    /// the database id of this specific entry
+    pub id: u32,
+    /// if present, the id of the file this tag exists on. mutually exclusive with folder_id
+    pub file_id: Option<u32>,
+    /// if present, the id of the folder this tag exists on. mutually exclusive with file_id
+    pub folder_id: Option<u32>,
+    /// if present, the folder that implicates this tag on the file/folder this tag applies to
+    pub implied_from_id: Option<u32>,
+}
+
 impl From<&FileApi> for FileRecord {
     fn from(value: &FileApi) -> Self {
         let create_date = value

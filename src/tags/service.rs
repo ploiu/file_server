@@ -219,7 +219,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag_id, &con) {
+        if let Err(e) = tag_repository::add_explicit_tag_to_file(file_id, tag_id, &con) {
             log::error!(
                 "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -245,7 +245,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_file(file_id, tag_id, &con) {
+        if let Err(e) = tag_repository::add_explicit_tag_to_file(file_id, tag_id, &con) {
             log::error!(
                 "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -311,7 +311,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
+        if let Err(e) = tag_repository::add_explicit_tag_to_folder(folder_id, tag_id, &con) {
             log::error!(
                 "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -341,7 +341,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
         if added_tag_ids.contains(&tag_id) {
             continue;
         }
-        if let Err(e) = tag_repository::add_tag_to_folder(folder_id, tag_id, &con) {
+        if let Err(e) = tag_repository::add_explicit_tag_to_folder(folder_id, tag_id, &con) {
             log::error!(
                 "Failed to add tags to folder with id {folder_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()

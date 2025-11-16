@@ -40,6 +40,15 @@ pub fn get_tag_by_title(
     }
 }
 
+/// retrieves a tag from the database with the passed `id`
+///
+/// # Parameters
+/// - `id`: the unique identifier of the tag to retrieve
+/// - `con`: the database connection to use. Callers must handle closing the connection
+///
+/// # Returns
+/// - `Ok(repository::Tag)`: the tag with the specified ID if the tag exists
+/// - `Err(rusqlite::Error)`: if there was an error during the database operation, including if no tag with the specified ID exists
 pub fn get_tag(id: u32, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_id.sql"))?;
     pst.query_row(rusqlite::params![id], tag_mapper)
@@ -59,7 +68,11 @@ pub fn delete_tag(id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
 }
 
 /// the caller of this function will need to make sure the tag already exists and isn't already on the file
-pub fn add_tag_to_file(file_id: u32, tag_id: u32, con: &Connection) -> Result<(), rusqlite::Error> {
+pub fn add_explicit_tag_to_file(
+    file_id: u32,
+    tag_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/add_tag_to_file.sql"))?;
     pst.execute(rusqlite::params![file_id, tag_id])?;
     Ok(())
@@ -68,7 +81,7 @@ pub fn add_tag_to_file(file_id: u32, tag_id: u32, con: &Connection) -> Result<()
 pub fn get_tags_on_file(
     file_id: u32,
     con: &Connection,
-) -> Result<Vec<repository::Tag>, rusqlite::Error> {
+) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
     let rows = pst.query_map(rusqlite::params![file_id], tag_mapper)?;
     let mut tags: Vec<repository::Tag> = Vec::new();
@@ -81,7 +94,7 @@ pub fn get_tags_on_file(
 pub fn get_tags_on_files(
     file_ids: Vec<u32>,
     con: &Connection,
-) -> Result<HashMap<u32, Vec<repository::Tag>>, rusqlite::Error> {
+) -> Result<HashMap<u32, Vec<repository::TaggedItem>>, rusqlite::Error> {
     struct TagFile {
         file_id: u32,
         tag_id: u32,
@@ -134,7 +147,7 @@ pub fn remove_tag_from_file(
     Ok(())
 }
 
-pub fn add_tag_to_folder(
+pub fn add_explicit_tag_to_folder(
     folder_id: u32,
     tag_id: u32,
     con: &Connection,
@@ -147,7 +160,7 @@ pub fn add_tag_to_folder(
 pub fn get_tags_on_folder(
     folder_id: u32,
     con: &Connection,
-) -> Result<Vec<repository::Tag>, rusqlite::Error> {
+) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/get_tags_for_folder.sql"
     ))?;

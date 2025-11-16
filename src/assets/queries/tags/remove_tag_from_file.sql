@@ -4,4 +4,4 @@ delete from
 where
     fileId = ?1
     and tagId = ?2
-    and inheritedFromId is null;
+    and impliedFromId is null;

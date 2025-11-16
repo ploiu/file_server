@@ -1,6 +1,6 @@
 select
     t.*,
-    ti.inheritedFromId
+    ti.impliedFromId
 from
     Tags t
     join TaggedItems ti on t.id = ti.tagId

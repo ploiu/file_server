@@ -125,15 +125,19 @@ mod tests {
     pub fn create_tag_folder(name: &str, folder_id: u32) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
-        tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+        tag_repository::add_explicit_tag_to_folder(folder_id, id, &connection).unwrap();
         connection.close().unwrap();
+    }
+
+    pub fn inherit_tag_folder(name: &str, folder_id: u32, inherited_from: u32) {
+        let con = open_connection();
     }
 
     pub fn create_tag_folders(name: &str, folder_ids: Vec<u32>) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
         for folder_id in folder_ids {
-            tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+            tag_repository::add_explicit_tag_to_folder(folder_id, id, &connection).unwrap();
         }
         connection.close().unwrap();
     }
@@ -141,7 +145,7 @@ mod tests {
     pub fn create_tag_file(name: &str, file_id: u32) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
-        tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+        tag_repository::add_explicit_tag_to_file(file_id, id, &connection).unwrap();
         connection.close().unwrap();
     }
 
@@ -149,7 +153,7 @@ mod tests {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
         for file_id in file_ids {
-            tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+            tag_repository::add_explicit_tag_to_file(file_id, id, &connection).unwrap();
         }
         connection.close().unwrap();
     }
@@ -240,7 +244,7 @@ mod tests {
             let file_id = file_repository::create_file(&record, &con).unwrap();
             for tag in &mut self.tags {
                 let Tag { id, title: _ } = tag_repository::create_tag(&tag.title, &con).unwrap();
-                tag_repository::add_tag_to_file(file_id, id, &con).unwrap();
+                tag_repository::add_explicit_tag_to_file(file_id, id, &con).unwrap();
                 tag.id = Some(id);
             }
             if let Some(folder_id) = self.folder_id {

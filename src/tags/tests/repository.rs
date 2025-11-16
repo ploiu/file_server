@@ -154,8 +154,8 @@ mod get_tag_on_file_tests {
             &con,
         )
         .unwrap();
-        add_tag_to_file(1, 1, &con).unwrap();
-        add_tag_to_file(1, 2, &con).unwrap();
+        add_explicit_tag_to_file(1, 1, &con).unwrap();
+        add_explicit_tag_to_file(1, 2, &con).unwrap();
         let res = get_tags_on_file(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(
@@ -233,7 +233,7 @@ mod get_tag_on_folder_tests {
     use crate::model::repository::{Folder, Tag};
     use crate::repository::folder_repository::create_folder;
     use crate::repository::open_connection;
-    use crate::tags::repository::{add_tag_to_folder, create_tag, get_tags_on_folder};
+    use crate::tags::repository::{add_explicit_tag_to_folder, create_tag, get_tags_on_folder};
     use crate::test::*;
 
     #[test]
@@ -251,8 +251,8 @@ mod get_tag_on_folder_tests {
             &con,
         )
         .unwrap();
-        add_tag_to_folder(1, 1, &con).unwrap();
-        add_tag_to_folder(1, 2, &con).unwrap();
+        add_explicit_tag_to_folder(1, 1, &con).unwrap();
+        add_explicit_tag_to_folder(1, 2, &con).unwrap();
         let res = get_tags_on_folder(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(
