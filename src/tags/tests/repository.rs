@@ -221,7 +221,7 @@ mod remove_tag_from_file_tests {
             &con,
         )
         .unwrap();
-        remove_tag_from_file(1, 1, &con).unwrap();
+        remove_explicit_tag_from_file(1, 1, &con).unwrap();
         let tags = get_tags_on_file(1, &con).unwrap();
         con.close().unwrap();
         assert_eq!(Vec::<Tag>::new(), tags);

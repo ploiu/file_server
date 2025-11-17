@@ -25,6 +25,22 @@ pub struct TagApi {
     pub title: String,
 }
 
+/// represents a tag _on_ a file or folder, not just a standalone tag.
+///
+/// In order to maintain compatibility with existing clients, the [`id`] field matches the id of the [`Tag`], not the [`TaggedItem`].
+/// Since this will be on a file or a folder, that should be enough information to determine which record to modify or remove if needed
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Hash, Clone)]
+#[serde(crate = "rocket::serde")]
+pub struct TaggedItemApi {
+    /// the id of the tag itself, not the TaggedItemApi. Will be `None` if it's a new tag for that item coming from a client
+    pub id: Option<u32>,
+    /// the title of the tag
+    pub title: String,
+    /// the folder this tag is implicated by. Will be None if the tag is explicit
+    #[serde(rename = "implicitFrom")]
+    pub implicit_from: Option<u32>,
+}
+
 // ----------------------------------
 
 impl BasicMessage {
@@ -54,6 +70,16 @@ impl From<repository::Tag> for TagApi {
         TagApi {
             id: Some(value.id),
             title: value.title,
+        }
+    }
+}
+
+impl From<repository::TaggedItem> for TaggedItemApi {
+    fn from(value: repository::TaggedItem) -> Self {
+        Self {
+            id: Some(value.tag_id),
+            title: value.title,
+            implicit_from: value.implicit_from_id,
         }
     }
 }

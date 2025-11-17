@@ -83,8 +83,8 @@ pub fn get_tags_on_file(
     con: &Connection,
 ) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_tags_for_file.sql"))?;
-    let rows = pst.query_map(rusqlite::params![file_id], tag_mapper)?;
-    let mut tags: Vec<repository::Tag> = Vec::new();
+    let rows = pst.query_map(rusqlite::params![file_id], tagged_item_mapper)?;
+    let mut tags: Vec<repository::TaggedItem> = Vec::new();
     for tag_res in rows {
         tags.push(tag_res?);
     }
@@ -107,41 +107,31 @@ pub fn get_tags_on_files(
         in_clause
     );
     let mut pst = con.prepare(formatted_query.as_str())?;
-    let rows = pst.query_map([], |row| {
-        let file_id: u32 = row.get(0)?;
-        let tag_id: u32 = row.get(1)?;
-        let tag_title: String = row.get(2)?;
-        Ok(TagFile {
-            file_id,
-            tag_id,
-            tag_title,
-        })
-    })?;
-    let mut mapped: HashMap<u32, Vec<repository::Tag>> = HashMap::new();
-    for res in rows {
-        let res = res?;
-        if let std::collections::hash_map::Entry::Vacant(e) = mapped.entry(res.file_id) {
-            e.insert(vec![repository::Tag {
-                id: res.tag_id,
-                title: res.tag_title,
-            }]);
-        } else {
-            mapped.get_mut(&res.file_id).unwrap().push(repository::Tag {
-                id: res.tag_id,
-                title: res.tag_title,
-            });
-        }
+    let rows = pst.query_map([], tagged_item_mapper)?;
+    let mut mapped: HashMap<u32, Vec<repository::TaggedItem>> = HashMap::new();
+    for tag in rows {
+        let tag = tag?;
+        let id = tag
+            .file_id
+            .expect("query should eliminate all non-file tags");
+        mapped
+            .entry(id)
+            .and_modify(|tags| tags.push(tag.clone()))
+            .or_insert_with(|| vec![tag]);
     }
     Ok(mapped)
 }
 
-pub fn remove_tag_from_file(
+/// removes the tag from the file if that file explicitly has that tag.
+///
+/// implicit tags are not removed with this function
+pub fn remove_explicit_tag_from_file(
     file_id: u32,
     tag_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/remove_tag_from_file.sql"
+        "../assets/queries/tags/remove_explicit_tag_from_file.sql"
     ))?;
     pst.execute(rusqlite::params![file_id, tag_id])?;
     Ok(())
@@ -164,14 +154,8 @@ pub fn get_tags_on_folder(
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/get_tags_for_folder.sql"
     ))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| Ok(tag_mapper(row)))?;
-    let mut tags: Vec<repository::Tag> = Vec::new();
-    for tag_res in rows {
-        // I know it's probably bad style, but I'm laughing too hard at the double question mark.
-        // no I don't know what my code is doing and I'm glad my code reflects that
-        tags.push(tag_res??);
-    }
-    Ok(tags)
+    let rows = pst.query_map(rusqlite::params![folder_id], tagged_item_mapper)?;
+    rows.collect::<Result<Vec<repository::TaggedItem>, rusqlite::Error>>()
 }
 
 pub fn remove_tag_from_folder(
@@ -186,8 +170,33 @@ pub fn remove_tag_from_folder(
     Ok(())
 }
 
+/// maps a [`repository::Tag`] from a database row
 fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let title: String = row.get(1)?;
     Ok(repository::Tag { id, title })
+}
+
+/// 1. id
+/// 2. fileId
+/// 3. folderId
+/// 4. implicitFromId
+/// 5. tagId
+/// 6. title
+fn tagged_item_mapper(row: &rusqlite::Row) -> Result<repository::TaggedItem, rusqlite::Error> {
+    let id: u32 = row.get(0)?;
+    let file_id: Option<u32> = row.get(1)?;
+    let folder_id: Option<u32> = row.get(2)?;
+    let implicit_from_id: Option<u32> = row.get(3)?;
+    let tag_id: u32 = row.get(4)?;
+    let title: String = row.get(5)?;
+
+    Ok(repository::TaggedItem {
+        id,
+        file_id,
+        folder_id,
+        implicit_from_id,
+        tag_id,
+        title,
+    })
 }

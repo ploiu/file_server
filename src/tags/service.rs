@@ -1,12 +1,14 @@
 use std::backtrace::Backtrace;
 use std::collections::HashSet;
 
+use itertools::Itertools;
+
 use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
-use crate::model::repository;
-use crate::model::response::TagApi;
+use crate::model::repository::{self, TaggedItem};
+use crate::model::response::{TagApi, TaggedItemApi};
 use crate::repository::open_connection;
 use crate::service::{file_service, folder_service};
 use crate::tags::repository as tag_repository;
@@ -167,6 +169,8 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 
 /// Updates the tags on a file by replacing all existing tags with the provided list.
 ///
+/// Only explict tags can be managed this way.
+///
 /// This function will:
 /// 1. Remove all existing tags from the file
 /// 2. Add tags that already exist in the database (those with an `id`)
@@ -184,7 +188,7 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 /// - `Ok(())` if the tags were successfully updated
 /// - `Err(TagRelationError::FileNotFound)` if the file does not exist
 /// - `Err(TagRelationError::DbError)` if there was a database error
-pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
+pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), TagRelationError> {
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
         log::error!(
@@ -193,70 +197,49 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelati
         );
         return Err(TagRelationError::FileNotFound);
     }
-    let existing_tags = get_tags_on_file(file_id)?;
-    let con: rusqlite::Connection = open_connection();
-    // Remove all existing tags from the file
-    for tag in existing_tags.iter() {
+    let con = open_connection();
+    // instead of removing all the tags and then adding them back, we can use a HashSet or 2 to enforce a unique list in-memory without as much IO
+    let existing_tags: HashSet<TaggedItemApi> =
+        HashSet::from_iter(get_tags_on_file(file_id)?.into_iter());
+    let tags = HashSet::from_iter(tags.into_iter());
+    // we need to find 2 things: 1) tags to add 2) tags to remove
+    let tags_to_remove = existing_tags.difference(&tags);
+    let tags_to_add = tags.difference(&existing_tags);
+    for tag in tags_to_remove {
         // tags from the db will always have a non-None tag id
-        if let Err(e) = tag_repository::remove_tag_from_file(file_id, tag.id.unwrap(), &con) {
+        if let Err(e) =
+            tag_repository::remove_explicit_tag_from_file(file_id, tag.id.unwrap(), &con)
+        {
             log::error!(
-                "Failed to remove tag from file with id {file_id}! Error is {e:?}\n{}",
+                "Failed to remove tags from file with id {file_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
             );
             con.close().unwrap();
             return Err(TagRelationError::DbError);
         }
     }
-
-    // Track which tag IDs have been added to avoid duplicates
-    let mut added_tag_ids: HashSet<u32> = HashSet::new();
-
-    // First, add all existing tags (those with an id)
-    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
-    for tag in existing_tags {
-        let tag_id = tag.id.unwrap();
-        // Skip if we've already added this tag
-        if added_tag_ids.contains(&tag_id) {
-            continue;
-        }
-        if let Err(e) = tag_repository::add_explicit_tag_to_file(file_id, tag_id, &con) {
-            log::error!(
-                "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
-            con.close().unwrap();
-            return Err(TagRelationError::DbError);
-        }
-        added_tag_ids.insert(tag_id);
-    }
-
-    // Then, create and add new tags (those without an id)
-    let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
-    for tag in new_tags {
-        let created_tag = match create_tag(tag.title.clone()) {
+    for tag in tags_to_add {
+        let created = match create_tag(tag.title.clone()) {
             Ok(t) => t,
-            Err(_) => {
+            Err(e) => {
                 con.close().unwrap();
+                log::error!(
+                    "Failed to create tag! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
                 return Err(TagRelationError::DbError);
             }
         };
-        let tag_id = created_tag.id.unwrap();
-        // Skip if we've already added this tag (prevents duplicates)
-        if added_tag_ids.contains(&tag_id) {
-            continue;
-        }
-        if let Err(e) = tag_repository::add_explicit_tag_to_file(file_id, tag_id, &con) {
-            log::error!(
-                "Failed to add tag to file with id {file_id}! Error is {e:?}\n{}",
-                Backtrace::force_capture()
-            );
+        if let Err(e) = tag_repository::add_explicit_tag_to_file(file_id, created.id.unwrap(), &con)
+        {
             con.close().unwrap();
+            log::error!(
+                "Failed to add tag to file: {e:?}\n{}",
+                Backtrace::force_capture(),
+            );
             return Err(TagRelationError::DbError);
         }
-        added_tag_ids.insert(tag_id);
     }
-
-    con.close().unwrap();
     Ok(())
 }
 
@@ -357,7 +340,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
 }
 
 /// retrieves all the tags on the file with the passed id
-pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
+pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TaggedItemApi>, TagRelationError> {
     // make sure the file exists
     if !file_service::check_file_exists(file_id) {
         log::error!(
@@ -379,13 +362,12 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
         }
     };
     con.close().unwrap();
-    let api_tags: Vec<TagApi> = file_tags.into_iter().map(TagApi::from).collect();
-    Ok(api_tags)
+    Ok(file_tags.into_iter().map_into().collect())
 }
 
 /// retrieves all the tags on the folder with the passed id.
 /// This will always be empty if requesting with the root folder id (0 or None)
-pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationError> {
+pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelationError> {
     // make sure the folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
         log::error!(
@@ -407,6 +389,5 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TagApi>, TagRelationErro
         }
     };
     con.close().unwrap();
-    let api_tags: Vec<TagApi> = db_tags.into_iter().map(TagApi::from).collect();
-    Ok(api_tags)
+    Ok(db_tags.into_iter().map(TaggedItemApi::from).collect())
 }

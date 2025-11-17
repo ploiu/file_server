@@ -7,7 +7,7 @@ create table TaggedItems (
     fileId integer references FileRecords(id) on delete cascade,
     folderId integer references Folders(id) on delete cascade,
     -- items can only ever inherit tags from an ancestor folder. When this inherited folder is deleted, this tag should be removed too since it's no longer inherited
-    impliedFromId integer references Folders(id) on delete cascade default null,
+    implicitFromId integer references Folders(id) on delete cascade default null,
     -- make sure that either a file or a folder was tagged
     check ((fileId is not null) != (folderId is not null))
 );
@@ -107,7 +107,7 @@ nearestTags as (
         )
 ) -- now that we have our functions, we can invoke nearestTags to get all the inherited tags and insert them
 insert into
-    TaggedItems(tagId, folderId, impliedFromId)
+    TaggedItems(tagId, folderId, implicitFromId)
 select
     n.tagId,
     n.folderId,
@@ -184,7 +184,7 @@ nearestTags as (
         )
 )
 insert into
-    TaggedItems(tagId, fileId, impliedFromId)
+    TaggedItems(tagId, fileId, implicitFromId)
 select
     n.tagId,
     n.fileId,

@@ -4,4 +4,4 @@ delete from
 where
     folderId = ?1
     and tagId = ?2
-    and impliedFromId is null;
+    and implicitFromId is null;
