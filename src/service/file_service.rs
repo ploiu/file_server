@@ -687,7 +687,7 @@ mod update_file_tests {
     use crate::model::error::file_errors::UpdateFileError;
     use crate::model::file_types::FileTypes;
 
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
@@ -705,9 +705,10 @@ mod update_file_tests {
             id: 1,
             folder_id: Some(0),
             name: "test.txt".to_string(),
-            tags: vec![TagApi {
-                id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
             size: Some(0),
             date_created: Some(now()),
@@ -720,9 +721,10 @@ mod update_file_tests {
         assert_eq!(res.folder_id, None);
         assert_eq!(
             res.tags,
-            vec![TagApi {
-                id: Some(1),
+            vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag1".to_string(),
+                implicit_from: None,
             }]
         );
         assert_eq!(res.file_type, Some(FileTypes::Text));

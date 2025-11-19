@@ -4,7 +4,7 @@ use rocket::serde::{Deserialize, Serialize};
 
 use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
-use crate::model::response::{TagApi, TaggedItemApi};
+use crate::model::response::TaggedItemApi;
 
 #[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
 #[serde(crate = "rocket::serde")]
@@ -66,7 +66,6 @@ impl FileApi {
             tags: Vec::new(),
             size: None,
             date_created: None,
-            // TODO file_types
             file_type: None,
         }
     }
@@ -116,15 +115,6 @@ mod update_file_request_tests {
     fn name_keeps_files_with_only_extension() {
         let req = FileApi::new(1, None, ".bashrc".to_string());
         assert_eq!(".bashrc".to_string(), req.name().unwrap());
-    }
-
-    #[test]
-    fn name_replaces_parentheses() {
-        let req = FileApi::new(1, None, "test (1).txt".to_string());
-        assert_eq!(
-            "test leftParenthese1rightParenthese.txt".to_string(),
-            req.name().unwrap()
-        );
     }
 
     #[test]

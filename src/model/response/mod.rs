@@ -33,7 +33,8 @@ pub struct TagApi {
 #[serde(crate = "rocket::serde")]
 pub struct TaggedItemApi {
     /// the id of the tag itself, not the TaggedItemApi. Will be `None` if it's a new tag for that item coming from a client
-    pub id: Option<u32>,
+    #[serde(rename = "id")]
+    pub tag_id: Option<u32>,
     /// the title of the tag
     pub title: String,
     /// the folder this tag is implicated by. Will be None if the tag is explicit
@@ -77,7 +78,7 @@ impl From<repository::Tag> for TagApi {
 impl From<repository::TaggedItem> for TaggedItemApi {
     fn from(value: repository::TaggedItem) -> Self {
         Self {
-            id: Some(value.tag_id),
+            tag_id: Some(value.tag_id),
             title: value.title,
             implicit_from: value.implicit_from_id,
         }

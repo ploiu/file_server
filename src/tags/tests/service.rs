@@ -89,7 +89,7 @@ mod update_file_tag_test {
     use crate::model::error::tag_errors::TagRelationError;
     use crate::model::file_types::FileTypes;
     use crate::model::repository::FileRecord;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
 
     use crate::tags::service::{create_tag, get_tags_on_file, update_file_tags};
     use crate::test::{cleanup, init_db_folder, now};
@@ -110,25 +110,29 @@ mod update_file_tag_test {
         update_file_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "new tag".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
         .unwrap();
         let expected = vec![
-            TagApi {
-                id: Some(1),
+            TaggedItemApi {
+                tag_id: Some(1),
                 title: "test".to_string(),
+                implicit_from: None,
             },
-            TagApi {
-                id: Some(2),
+            TaggedItemApi {
+                tag_id: Some(2),
                 title: "new tag".to_string(),
+                implicit_from: None,
             },
         ];
         let actual = get_tags_on_file(1).unwrap();
@@ -150,9 +154,10 @@ mod update_file_tag_test {
         .save_to_db();
         update_file_tags(
             1,
-            vec![TagApi {
-                id: None,
+            vec![TaggedItemApi {
+                tag_id: None,
                 title: "test".to_string(),
+                implicit_from: None,
             }],
         )
         .unwrap();
@@ -187,13 +192,15 @@ mod update_file_tag_test {
         update_file_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -201,7 +208,7 @@ mod update_file_tag_test {
 
         let actual = get_tags_on_file(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }
@@ -223,13 +230,15 @@ mod update_file_tag_test {
         update_file_tags(
             1,
             vec![
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -237,7 +246,7 @@ mod update_file_tag_test {
 
         let actual = get_tags_on_file(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }
@@ -258,9 +267,10 @@ mod update_file_tag_test {
         // Mix of new tag by name and existing tag by id (same tag)
         update_file_tags(
             1,
-            vec![TagApi {
-                id: None,
+            vec![TaggedItemApi {
+                tag_id: None,
                 title: "test".to_string(),
+                implicit_from: None,
             }],
         )
         .unwrap();
@@ -269,13 +279,15 @@ mod update_file_tag_test {
         update_file_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -283,7 +295,7 @@ mod update_file_tag_test {
 
         let actual = get_tags_on_file(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }
@@ -292,7 +304,7 @@ mod update_file_tag_test {
 mod update_folder_tag_test {
     use crate::model::error::tag_errors::TagRelationError;
     use crate::model::repository::Folder;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::repository::{folder_repository, open_connection};
     use crate::tags::service::{create_tag, get_tags_on_folder, update_folder_tags};
     use crate::test::{cleanup, init_db_folder};
@@ -315,25 +327,29 @@ mod update_folder_tag_test {
         update_folder_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "new tag".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
         .unwrap();
         let expected = vec![
-            TagApi {
-                id: Some(1),
+            TaggedItemApi {
+                tag_id: Some(1),
                 title: "test".to_string(),
+                implicit_from: None,
             },
-            TagApi {
-                id: Some(2),
+            TaggedItemApi {
+                tag_id: Some(2),
                 title: "new tag".to_string(),
+                implicit_from: None,
             },
         ];
         let actual = get_tags_on_folder(1).unwrap();
@@ -357,9 +373,10 @@ mod update_folder_tag_test {
         con.close().unwrap();
         update_folder_tags(
             1,
-            vec![TagApi {
-                id: None,
+            vec![TaggedItemApi {
+                tag_id: None,
                 title: "test".to_string(),
+                implicit_from: None,
             }],
         )
         .unwrap();
@@ -396,13 +413,15 @@ mod update_folder_tag_test {
         update_folder_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -410,7 +429,7 @@ mod update_folder_tag_test {
 
         let actual = get_tags_on_folder(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }
@@ -434,13 +453,15 @@ mod update_folder_tag_test {
         update_folder_tags(
             1,
             vec![
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -448,7 +469,7 @@ mod update_folder_tag_test {
 
         let actual = get_tags_on_folder(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }
@@ -471,9 +492,10 @@ mod update_folder_tag_test {
         // Mix of new tag by name and existing tag by id (same tag)
         update_folder_tags(
             1,
-            vec![TagApi {
-                id: None,
+            vec![TaggedItemApi {
+                tag_id: None,
                 title: "test".to_string(),
+                implicit_from: None,
             }],
         )
         .unwrap();
@@ -482,13 +504,15 @@ mod update_folder_tag_test {
         update_folder_tags(
             1,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: None,
+                TaggedItemApi {
+                    tag_id: None,
                     title: "test".to_string(),
+                    implicit_from: None,
                 },
             ],
         )
@@ -496,7 +520,7 @@ mod update_folder_tag_test {
 
         let actual = get_tags_on_folder(1).unwrap();
         assert_eq!(actual.len(), 1);
-        assert_eq!(actual[0].id, Some(1));
+        assert_eq!(actual[0].tag_id, Some(1));
         assert_eq!(actual[0].title, "test");
         cleanup();
     }

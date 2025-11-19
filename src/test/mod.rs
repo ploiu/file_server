@@ -129,8 +129,17 @@ mod tests {
         connection.close().unwrap();
     }
 
-    pub fn inherit_tag_folder(name: &str, folder_id: u32, inherited_from: u32) {
+    pub fn imply_tag_on_file(tag_id: u32, file_id: u32, implicit_from_id: u32) {
         let con = open_connection();
+        let sql = format!(
+            "insert into TaggedItems(tagId, fileId, implicitFromId) values ({tag_id}, {file_id}, {implicit_from_id})"
+        );
+        // scoped here so that the prepared statement gets dropped, which is needed to close the connection
+        let mut pst = con.prepare(&sql).unwrap();
+        pst.raw_execute().unwrap();
+        // this is needed so that con isn't being shared anymore in this function's scope
+        drop(pst);
+        con.close().unwrap();
     }
 
     pub fn create_tag_folders(name: &str, folder_ids: Vec<u32>) {
@@ -245,7 +254,7 @@ mod tests {
             for tag in &mut self.tags {
                 let Tag { id, title: _ } = tag_repository::create_tag(&tag.title, &con).unwrap();
                 tag_repository::add_explicit_tag_to_file(file_id, id, &con).unwrap();
-                tag.id = Some(id);
+                tag.tag_id = Some(id);
             }
             if let Some(folder_id) = self.folder_id {
                 folder_repository::link_folder_to_file(file_id, folder_id, &con).unwrap();

@@ -128,6 +128,7 @@ pub fn search_files_by_tags(
         .to_string()
         .replace("?1", joined_tags.as_str())
         .replace("?2", tags.len().to_string().as_str());
+    log::debug!("built sql: {replaced_string}");
     let mut pst = con.prepare(replaced_string.as_str())?;
     let res = pst.query_map([], map_file_all_fields)?;
     res.into_iter().collect()

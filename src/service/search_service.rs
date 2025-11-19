@@ -125,7 +125,7 @@ fn search_files_by_tags(
     search_tags: &HashSet<String>,
     con: &Connection,
 ) -> Result<HashSet<FileApi>, SearchFileError> {
-    let retrieved = file_repository::search_files_by_tags(search_tags, &con);
+    let retrieved = file_repository::search_files_by_tags(search_tags, con);
     let matching_files = match retrieved {
         Ok(f) => f,
         Err(e) => {
@@ -168,10 +168,10 @@ mod search_files_tests {
         AttributeSearch, AttributeTypes, EqualityOperator, NamedAttributes,
         NamedComparisonAttribute,
     };
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_tag_file, create_tag_files,
-        create_tag_folder, create_tag_folders, init_db_folder,
+        create_tag_folder, create_tag_folders, imply_tag_on_file, init_db_folder,
     };
 
     #[test]
@@ -217,13 +217,15 @@ mod search_files_tests {
         assert_eq!(
             res.tags,
             vec![
-                TagApi {
-                    id: Some(1),
+                TaggedItemApi {
+                    tag_id: Some(1),
                     title: "tag1".to_string(),
+                    implicit_from: None,
                 },
-                TagApi {
-                    id: Some(2),
+                TaggedItemApi {
+                    tag_id: Some(2),
                     title: "tag".to_string(),
+                    implicit_from: None,
                 }
             ]
         );
@@ -249,9 +251,10 @@ mod search_files_tests {
         assert_eq!(res.folder_id, None);
         assert_eq!(
             res.tags,
-            vec![TagApi {
-                id: Some(1),
+            vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag".to_string(),
+                implicit_from: None,
             }]
         );
         assert_eq!(res.file_type, Some(FileTypes::Unknown));
@@ -269,16 +272,24 @@ mod search_files_tests {
         create_file_db_entry("bottom file", Some(3));
         create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
         create_tag_folder("tag2", 3); // tag2 only on bottom folder
+        imply_tag_on_file(1, 1, 1);
+        imply_tag_on_file(1, 2, 3);
+        imply_tag_on_file(2, 2, 3);
         // tag1 should retrieve all files
         let res = search_files("", vec!["tag1".to_string()], vec![].try_into().unwrap()).unwrap();
         // we have to convert res to a vec in order to not care about the create date, since hash set `contains` relies on hash
         let res: Vec<FileApi> = res.iter().cloned().collect();
+        log::debug!("first round: {res:?}");
         assert_eq!(2, res.len());
         assert!(res.contains(&FileApi {
             id: 1,
             name: "top file".to_string(),
             folder_id: Some(1),
-            tags: vec![],
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
+                title: "tag1".to_string(),
+                implicit_from: Some(1)
+            }],
             size: Some(0),
             date_created: None,
             file_type: Some(FileTypes::Unknown)
@@ -287,18 +298,41 @@ mod search_files_tests {
             id: 2,
             name: "bottom file".to_string(),
             folder_id: Some(3),
-            tags: vec![],
+            tags: vec![
+                TaggedItemApi {
+                    tag_id: Some(1),
+                    title: "tag1".to_string(),
+                    implicit_from: Some(3)
+                },
+                TaggedItemApi {
+                    tag_id: Some(2),
+                    title: "tag2".to_string(),
+                    implicit_from: Some(3)
+                }
+            ],
             size: Some(0),
             date_created: None,
             file_type: Some(FileTypes::Unknown)
         }));
         let res = search_files("", vec!["tag2".to_string()], vec![].try_into().unwrap()).unwrap();
         let res: Vec<FileApi> = res.iter().cloned().collect();
+        log::debug!("{res:?}");
         assert!(res.contains(&FileApi {
             id: 2,
             name: "bottom file".to_string(),
             folder_id: Some(3),
-            tags: vec![],
+            tags: vec![
+                TaggedItemApi {
+                    tag_id: Some(1),
+                    title: "tag1".to_string(),
+                    implicit_from: Some(3)
+                },
+                TaggedItemApi {
+                    tag_id: Some(2),
+                    title: "tag2".to_string(),
+                    implicit_from: Some(3)
+                }
+            ],
             size: Some(0),
             date_created: None,
             file_type: Some(FileTypes::Unknown)
@@ -314,6 +348,7 @@ mod search_files_tests {
         create_file_db_entry("bad", Some(1));
         create_tag_folders("tag1", vec![1]);
         create_tag_file("tag2", 1);
+        imply_tag_on_file(1, 1, 1);
         let res: HashSet<String> = search_files(
             "",
             vec!["tag1".to_string(), "tag2".to_string()],
@@ -337,35 +372,39 @@ mod search_files_tests {
             id: 1,
             folder_id: Some(2),
             name: "good".to_string(),
-            tags: vec![TagApi {
-                id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "file".to_string(),
+                implicit_from: Some(1),
             }],
             size: Some(0),
             date_created: Some(NaiveDateTime::default()),
             file_type: Some(FileTypes::Unknown),
         }
         .save_to_db();
+        imply_tag_on_file(1, 1, 1);
         FileApi {
             id: 2,
             folder_id: Some(2),
             name: "bad".to_string(),
-            tags: vec![TagApi {
-                id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
                 title: "something_else".to_string(),
+                implicit_from: None,
             }],
             size: None,
             date_created: None,
             file_type: None,
         }
         .save_to_db();
-        let res = search_files(
+        let res: HashSet<u32> = search_files(
             "",
             vec!["top".to_string(), "file".to_string()],
             vec![].try_into().unwrap(),
         )
+        .map(|it| it.iter().map(|i| i.id).collect())
         .unwrap();
-        let expected = HashSet::from_iter(vec![good_file]);
+        let expected: HashSet<u32> = HashSet::from_iter(vec![good_file.id]);
         assert_eq!(expected, res);
         cleanup();
     }

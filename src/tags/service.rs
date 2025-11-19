@@ -7,7 +7,7 @@ use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
-use crate::model::repository::{self, TaggedItem};
+use crate::model::repository::{self};
 use crate::model::response::{TagApi, TaggedItemApi};
 use crate::repository::open_connection;
 use crate::service::{file_service, folder_service};
@@ -200,15 +200,15 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
     let con = open_connection();
     // instead of removing all the tags and then adding them back, we can use a HashSet or 2 to enforce a unique list in-memory without as much IO
     let existing_tags: HashSet<TaggedItemApi> =
-        HashSet::from_iter(get_tags_on_file(file_id)?.into_iter());
-    let tags = HashSet::from_iter(tags.into_iter());
+        HashSet::from_iter(get_tags_on_file(file_id)?);
+    let tags = HashSet::from_iter(tags);
     // we need to find 2 things: 1) tags to add 2) tags to remove
     let tags_to_remove = existing_tags.difference(&tags);
     let tags_to_add = tags.difference(&existing_tags);
     for tag in tags_to_remove {
         // tags from the db will always have a non-None tag id
         if let Err(e) =
-            tag_repository::remove_explicit_tag_from_file(file_id, tag.id.unwrap(), &con)
+            tag_repository::remove_explicit_tag_from_file(file_id, tag.tag_id.unwrap(), &con)
         {
             log::error!(
                 "Failed to remove tags from file with id {file_id}! Error is {e:?}\n{}",
@@ -262,7 +262,10 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
 /// - `Ok(())` if the tags were successfully updated
 /// - `Err(TagRelationError::FolderNotFound)` if the folder does not exist
 /// - `Err(TagRelationError::DbError)` if there was a database error
-pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRelationError> {
+pub fn update_folder_tags(
+    folder_id: u32,
+    tags: Vec<TaggedItemApi>,
+) -> Result<(), TagRelationError> {
     // make sure the file exists
     if !folder_service::folder_exists(Some(folder_id)) {
         log::error!("Cannot update tags for a folder that does not exist (id {folder_id}!");
@@ -273,7 +276,8 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     // Remove all existing tags from the folder
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.id.unwrap(), &con) {
+        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.tag_id.unwrap(), &con)
+        {
             log::error!(
                 "Failed to remove tags from folder with id {folder_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -287,9 +291,9 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     let mut added_tag_ids: HashSet<u32> = HashSet::new();
 
     // First, add all existing tags (those with an id)
-    let existing_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_some()).collect();
+    let existing_tags: Vec<&TaggedItemApi> = tags.iter().filter(|t| t.tag_id.is_some()).collect();
     for tag in existing_tags {
-        let tag_id = tag.id.unwrap();
+        let tag_id = tag.tag_id.unwrap();
         // Skip if we've already added this tag
         if added_tag_ids.contains(&tag_id) {
             continue;
@@ -306,7 +310,7 @@ pub fn update_folder_tags(folder_id: u32, tags: Vec<TagApi>) -> Result<(), TagRe
     }
 
     // Then, create and add new tags (those without an id)
-    let new_tags: Vec<&TagApi> = tags.iter().filter(|t| t.id.is_none()).collect();
+    let new_tags: Vec<&TaggedItemApi> = tags.iter().filter(|t| t.tag_id.is_none()).collect();
     for tag in new_tags {
         let created_tag = match create_tag(tag.title.clone()) {
             Ok(t) => t,

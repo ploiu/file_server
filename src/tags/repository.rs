@@ -95,11 +95,6 @@ pub fn get_tags_on_files(
     file_ids: Vec<u32>,
     con: &Connection,
 ) -> Result<HashMap<u32, Vec<repository::TaggedItem>>, rusqlite::Error> {
-    struct TagFile {
-        file_id: u32,
-        tag_id: u32,
-        tag_title: String,
-    }
     let in_clause: Vec<String> = file_ids.iter().map(|it| format!("'{it}'")).collect();
     let in_clause = in_clause.join(",");
     let formatted_query = format!(

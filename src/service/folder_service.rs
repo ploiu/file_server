@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::path::Path;
 
+use itertools::Itertools;
 use regex::Regex;
 use rusqlite::Connection;
 
@@ -15,9 +16,8 @@ use crate::model::error::folder_errors::{
     UpdateFolderError,
 };
 
-use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::TagApi;
+use crate::model::response::TaggedItemApi;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
 use crate::repository::{folder_repository, open_connection};
@@ -49,9 +49,9 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     };
     let mut converted_folders: Vec<FolderResponse> = Vec::new();
     for child in child_folders {
-        let tags: Vec<TagApi> =
+        let tags: Vec<TaggedItemApi> =
             match tag_repository::get_tags_on_folder(child.id.unwrap_or(0), &con) {
-                Ok(t) => t.into_iter().map(|it| it.into()).collect(),
+                Ok(t) => t.into_iter().map_into().collect(),
                 Err(e) => {
                     log::error!(
                         "Failed to retrieve tags for folder. Exception is {e:?}\n{}",
@@ -538,12 +538,12 @@ fn get_files_for_folder(
     };
     let mut result: Vec<FileApi> = Vec::new();
     for file in child_files {
-        let tags: Vec<Tag> = if file_tags.contains_key(&file.id.unwrap()) {
+        let tags = if file_tags.contains_key(&file.id.unwrap()) {
             file_tags.get(&file.id.unwrap()).unwrap().clone()
         } else {
             Vec::new()
         };
-        let tags: Vec<TagApi> = tags.iter().map(|it| it.clone().into()).collect();
+        let tags: Vec<TaggedItemApi> = tags.iter().cloned().map_into().collect();
         result.push(FileApi::from_with_tags(file, tags));
     }
     Ok(result)
@@ -592,7 +592,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
 #[cfg(test)]
 mod get_folder_tests {
     use crate::model::error::folder_errors::GetFolderError;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, init_db_folder};
@@ -637,9 +637,10 @@ mod get_folder_tests {
             name: "test".to_string(),
             folders: vec![],
             files: vec![],
-            tags: vec![TagApi {
-                id: Some(1),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
@@ -651,7 +652,7 @@ mod get_folder_tests {
 mod update_folder_tests {
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::{get_folder, update_folder};
     use crate::test::{
@@ -667,9 +668,10 @@ mod update_folder_tests {
             id: 1,
             name: "test".to_string(),
             parent_id: None,
-            tags: vec![TagApi {
-                id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         })
         .unwrap();
@@ -680,9 +682,10 @@ mod update_folder_tests {
             name: "test".to_string(),
             folders: vec![],
             files: vec![],
-            tags: vec![TagApi {
-                id: Some(1),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
