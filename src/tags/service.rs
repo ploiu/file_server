@@ -199,8 +199,7 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
     }
     let con = open_connection();
     // instead of removing all the tags and then adding them back, we can use a HashSet or 2 to enforce a unique list in-memory without as much IO
-    let existing_tags: HashSet<TaggedItemApi> =
-        HashSet::from_iter(get_tags_on_file(file_id)?);
+    let existing_tags: HashSet<TaggedItemApi> = HashSet::from_iter(get_tags_on_file(file_id)?);
     let tags = HashSet::from_iter(tags);
     // we need to find 2 things: 1) tags to add 2) tags to remove
     let tags_to_remove = existing_tags.difference(&tags);
@@ -395,3 +394,11 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
     con.close().unwrap();
     Ok(db_tags.into_iter().map(TaggedItemApi::from).collect())
 }
+
+/// gets all explicit tags on the folder with the passed id, and implies it on all descendant files and folders.
+///
+/// In order for a tag to be implied, the target file/folder must not already have it (explicit or implicit).
+///
+/// ## Parameters
+/// - `folder_id`: the id of the folder to implicate children of
+pub fn implicate_children(folder_id: u32) -> Result<(), TagRelationError> {}
