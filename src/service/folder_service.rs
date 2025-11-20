@@ -735,6 +735,106 @@ mod update_folder_tests {
         assert_eq!(expected, get_folder(Some(1)).unwrap());
         cleanup();
     }
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_folders() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check child folder has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 1);
+        assert_eq!(child.tags[0].tag_id, Some(1));
+        assert_eq!(child.tags[0].title, "tag1");
+        assert_eq!(child.tags[0].implicit_from, Some(1));
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_files() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+
+        use crate::test::create_file_db_entry;
+        create_file_db_entry("file.txt", Some(1));
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check file has implicit tag
+        use crate::tags::service::get_tags_on_file;
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0].tag_id, Some(1));
+        assert_eq!(file_tags[0].title, "tag1");
+        assert_eq!(file_tags[0].implicit_from, Some(1));
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_implicit_tags_from_descendants() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        // Add tag and propagate
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify child has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 1);
+
+        // Remove tag from parent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify child no longer has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 0);
+        cleanup();
+    }
 }
 
 #[cfg(test)]

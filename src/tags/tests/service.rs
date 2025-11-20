@@ -553,3 +553,208 @@ mod get_tags_on_folder_tests {
         cleanup();
     }
 }
+
+mod pass_tags_to_children_tests {
+    use crate::model::response::TaggedItemApi;
+    use crate::tags::service::{get_tags_on_file, get_tags_on_folder, pass_tags_to_children};
+    use crate::test::{
+        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder, init_db_folder,
+    };
+
+    #[test]
+    fn should_imply_tag_to_descendant_folders() {
+        init_db_folder();
+        // Create folder hierarchy: parent -> child -> grandchild
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+        create_folder_db_entry("grandchild", Some(2)); // id 3
+
+        // Add tag to parent
+        create_tag_folder("test_tag", 1);
+
+        // Pass tags to children
+        pass_tags_to_children(1).unwrap();
+
+        // Check child has implicit tag
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].tag_id, Some(1));
+        assert_eq!(child_tags[0].title, "test_tag");
+        assert_eq!(child_tags[0].implicit_from, Some(1));
+
+        // Check grandchild has implicit tag
+        let grandchild_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(grandchild_tags.len(), 1);
+        assert_eq!(grandchild_tags[0].tag_id, Some(1));
+        assert_eq!(grandchild_tags[0].title, "test_tag");
+        assert_eq!(grandchild_tags[0].implicit_from, Some(1));
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_imply_tag_to_descendant_files() {
+        init_db_folder();
+        // Create folder hierarchy: parent -> child
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+
+        // Create files in folders
+        create_file_db_entry("file1.txt", Some(1)); // id 1
+        create_file_db_entry("file2.txt", Some(2)); // id 2
+
+        // Add tag to parent
+        create_tag_folder("test_tag", 1);
+
+        // Pass tags to children
+        pass_tags_to_children(1).unwrap();
+
+        // Check file in parent has implicit tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].tag_id, Some(1));
+        assert_eq!(file1_tags[0].title, "test_tag");
+        assert_eq!(file1_tags[0].implicit_from, Some(1));
+
+        // Check file in child has implicit tag
+        let file2_tags = get_tags_on_file(2).unwrap();
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0].tag_id, Some(1));
+        assert_eq!(file2_tags[0].title, "test_tag");
+        assert_eq!(file2_tags[0].implicit_from, Some(1));
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_not_override_explicit_tags_on_folders() {
+        init_db_folder();
+        // Create folder hierarchy: parent -> child
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+
+        // Create tag and add explicitly to both
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+
+        // Pass tags to children
+        pass_tags_to_children(1).unwrap();
+
+        // Check child still has explicit tag (not implicit)
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].tag_id, Some(tag_id));
+        assert_eq!(child_tags[0].title, "test_tag");
+        assert_eq!(child_tags[0].implicit_from, None); // Still explicit
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_not_override_explicit_tags_on_files() {
+        init_db_folder();
+        // Create folder with file
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+
+        // Create tag and add explicitly to both
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
+        tag_repository::add_explicit_tag_to_file(1, tag_id, &con).unwrap();
+        con.close().unwrap();
+
+        // Pass tags to children
+        pass_tags_to_children(1).unwrap();
+
+        // Check file still has explicit tag (not implicit)
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0].tag_id, Some(tag_id));
+        assert_eq!(file_tags[0].title, "test_tag");
+        assert_eq!(file_tags[0].implicit_from, None); // Still explicit
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_remove_implicit_tags_when_folder_tag_removed() {
+        init_db_folder();
+        // Create folder hierarchy: parent -> child
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+
+        // Add tag to parent and propagate
+        create_tag_folder("test_tag", 1);
+        pass_tags_to_children(1).unwrap();
+
+        // Verify child has implicit tag
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].implicit_from, Some(1));
+
+        // Remove the tag explicitly from parent
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let con = open_connection();
+        tag_repository::remove_tag_from_folder(1, 1, &con).unwrap();
+        con.close().unwrap();
+
+        // Propagate the change
+        pass_tags_to_children(1).unwrap();
+
+        // Check child no longer has the tag
+        let child_tags = get_tags_on_folder(2).unwrap();
+        assert_eq!(child_tags.len(), 0);
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_reinherit_from_higher_ancestor_when_tag_removed() {
+        init_db_folder();
+        // Create folder hierarchy: grandparent -> parent -> child
+        create_folder_db_entry("grandparent", None); // id 1
+        create_folder_db_entry("parent", Some(1)); // id 2
+        create_folder_db_entry("child", Some(2)); // id 3
+
+        // Create tag and add explicitly to both grandparent and parent
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+
+        pass_tags_to_children(1).unwrap();
+        pass_tags_to_children(2).unwrap();
+
+        // Child should inherit from parent (closer ancestor)
+        let child_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].implicit_from, Some(2));
+
+        // Remove tag from parent
+        use crate::tags::service::update_folder_tags;
+        update_folder_tags(2, vec![]).unwrap();
+
+        // Child should now inherit from grandparent
+        let child_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(child_tags.len(), 1);
+        assert_eq!(child_tags[0].tag_id, Some(tag_id));
+        assert_eq!(child_tags[0].implicit_from, Some(1));
+
+        cleanup();
+    }
+}

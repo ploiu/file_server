@@ -172,6 +172,178 @@ fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     Ok(repository::Tag { id, title })
 }
 
+/// Gets all descendant folder IDs recursively for a given folder
+pub fn get_descendant_folders(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/get_descendant_folders.sql"
+    ))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
+    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
+}
+
+/// Gets all descendant file IDs recursively for a given folder
+pub fn get_descendant_files(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/get_descendant_files.sql"
+    ))?;
+    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
+    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
+}
+
+/// Gets folder IDs from the provided list that don't have a specific tag (explicit or implicit)
+pub fn get_folders_without_tag(
+    folder_ids: &[u32],
+    tag_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    if folder_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let in_clause: String = folder_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+    let query = include_str!("../assets/queries/tags/get_folders_without_tag.sql")
+        .replace("{}", &in_clause);
+    let mut pst = con.prepare(&query)?;
+    let rows = pst.query_map(rusqlite::params![tag_id], |row| row.get(0))?;
+    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
+}
+
+/// Gets file IDs from the provided list that don't have a specific tag (explicit or implicit)
+pub fn get_files_without_tag(
+    file_ids: &[u32],
+    tag_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    if file_ids.is_empty() {
+        return Ok(vec![]);
+    }
+    let in_clause: String = file_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+    let query = include_str!("../assets/queries/tags/get_files_without_tag.sql")
+        .replace("{}", &in_clause);
+    let mut pst = con.prepare(&query)?;
+    let rows = pst.query_map(rusqlite::params![tag_id], |row| row.get(0))?;
+    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
+}
+
+/// Adds an implicit tag to a folder (won't add if already exists)
+pub fn add_implicit_tag_to_folder(
+    tag_id: u32,
+    folder_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
+    ))?;
+    pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
+    Ok(())
+}
+
+/// Updates or inserts an implicit tag on a folder, replacing any existing implicit tag from a different ancestor
+pub fn upsert_implicit_tag_to_folder(
+    tag_id: u32,
+    folder_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    // First delete any existing implicit tag
+    let delete_sql = "delete from TaggedItems where folderId = ?1 and tagId = ?2 and implicitFromId is not null";
+    con.execute(delete_sql, rusqlite::params![folder_id, tag_id])?;
+    
+    // Then insert the new one
+    let insert_sql = "insert into TaggedItems(tagId, folderId, implicitFromId) values (?1, ?2, ?3)";
+    con.execute(insert_sql, rusqlite::params![tag_id, folder_id, implicit_from_id])?;
+    Ok(())
+}
+
+/// Adds an implicit tag to a file (won't add if already exists)
+pub fn add_implicit_tag_to_file(
+    tag_id: u32,
+    file_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_file.sql"
+    ))?;
+    pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
+    Ok(())
+}
+
+/// Updates or inserts an implicit tag on a file, replacing any existing implicit tag from a different ancestor
+pub fn upsert_implicit_tag_to_file(
+    tag_id: u32,
+    file_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    // First delete any existing implicit tag
+    let delete_sql = "delete from TaggedItems where fileId = ?1 and tagId = ?2 and implicitFromId is not null";
+    con.execute(delete_sql, rusqlite::params![file_id, tag_id])?;
+    
+    // Then insert the new one
+    let insert_sql = "insert into TaggedItems(tagId, fileId, implicitFromId) values (?1, ?2, ?3)";
+    con.execute(insert_sql, rusqlite::params![tag_id, file_id, implicit_from_id])?;
+    Ok(())
+}
+
+/// Removes implicit tags from folders where inherited from a specific folder
+pub fn remove_implicit_tags_from_folders(
+    folder_ids: &[u32],
+    tag_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    if folder_ids.is_empty() {
+        return Ok(());
+    }
+    let in_clause: String = folder_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+    let query = include_str!("../assets/queries/tags/remove_implicit_tags_from_folders.sql")
+        .replace("(?1)", &format!("({})", in_clause));
+    let mut pst = con.prepare(&query)?;
+    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
+    Ok(())
+}
+
+/// Removes implicit tags from files where inherited from a specific folder
+pub fn remove_implicit_tags_from_files(
+    file_ids: &[u32],
+    tag_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    if file_ids.is_empty() {
+        return Ok(());
+    }
+    let in_clause: String = file_ids
+        .iter()
+        .map(|id| id.to_string())
+        .collect::<Vec<String>>()
+        .join(",");
+    let query = include_str!("../assets/queries/tags/remove_implicit_tags_from_files.sql")
+        .replace("(?1)", &format!("({})", in_clause));
+    let mut pst = con.prepare(&query)?;
+    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
+    Ok(())
+}
+
 /// 1. id
 /// 2. fileId
 /// 3. folderId
