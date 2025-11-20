@@ -442,7 +442,7 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     };
 
     // Get all descendant folders and files
-    let descendant_folders = match tag_repository::get_descendant_folders(folder_id, &con) {
+    let descendant_folders = match folder_repository::get_all_child_folder_ids(&vec![folder_id], &con) {
         Ok(folders) => folders,
         Err(e) => {
             log::error!(
@@ -454,8 +454,11 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
         }
     };
 
-    let descendant_files = match tag_repository::get_descendant_files(folder_id, &con) {
-        Ok(files) => files,
+    // Get files from the folder and all its descendants
+    let mut all_folder_ids = vec![folder_id];
+    all_folder_ids.extend(&descendant_folders);
+    let descendant_files: Vec<u32> = match folder_repository::get_child_files(all_folder_ids, &con) {
+        Ok(files) => files.into_iter().map(|f| f.id.unwrap()).collect(),
         Err(e) => {
             log::error!(
                 "Failed to retrieve descendant files for folder {folder_id}! Error is {e:?}\n{}",

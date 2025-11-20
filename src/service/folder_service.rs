@@ -758,10 +758,13 @@ mod update_folder_tests {
 
         // Check child folder has implicit tag
         let child = get_folder(Some(2)).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
         assert_eq!(child.tags.len(), 1);
-        assert_eq!(child.tags[0].tag_id, Some(1));
-        assert_eq!(child.tags[0].title, "tag1");
-        assert_eq!(child.tags[0].implicit_from, Some(1));
+        assert_eq!(child.tags[0], expected);
         cleanup();
     }
 
@@ -789,10 +792,13 @@ mod update_folder_tests {
         // Check file has implicit tag
         use crate::tags::service::get_tags_on_file;
         let file_tags = get_tags_on_file(1).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
         assert_eq!(file_tags.len(), 1);
-        assert_eq!(file_tags[0].tag_id, Some(1));
-        assert_eq!(file_tags[0].title, "tag1");
-        assert_eq!(file_tags[0].implicit_from, Some(1));
+        assert_eq!(file_tags[0], expected);
         cleanup();
     }
 

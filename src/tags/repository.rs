@@ -172,30 +172,6 @@ fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
     Ok(repository::Tag { id, title })
 }
 
-/// Gets all descendant folder IDs recursively for a given folder
-pub fn get_descendant_folders(
-    folder_id: u32,
-    con: &Connection,
-) -> Result<Vec<u32>, rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/get_descendant_folders.sql"
-    ))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
-    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
-}
-
-/// Gets all descendant file IDs recursively for a given folder
-pub fn get_descendant_files(
-    folder_id: u32,
-    con: &Connection,
-) -> Result<Vec<u32>, rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/get_descendant_files.sql"
-    ))?;
-    let rows = pst.query_map(rusqlite::params![folder_id], |row| row.get(0))?;
-    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
-}
-
 /// Adds an implicit tag to a folder (won't add if already exists)
 pub fn add_implicit_tag_to_folder(
     tag_id: u32,
@@ -218,12 +194,16 @@ pub fn upsert_implicit_tag_to_folder(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     // First delete any existing implicit tag
-    let delete_sql = "delete from TaggedItems where folderId = ?1 and tagId = ?2 and implicitFromId is not null";
-    con.execute(delete_sql, rusqlite::params![folder_id, tag_id])?;
+    let mut delete_pst = con.prepare(include_str!(
+        "../assets/queries/tags/delete_implicit_tag_from_folder.sql"
+    ))?;
+    delete_pst.execute(rusqlite::params![folder_id, tag_id])?;
     
     // Then insert the new one
-    let insert_sql = "insert into TaggedItems(tagId, folderId, implicitFromId) values (?1, ?2, ?3)";
-    con.execute(insert_sql, rusqlite::params![tag_id, folder_id, implicit_from_id])?;
+    let mut insert_pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
+    ))?;
+    insert_pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
     Ok(())
 }
 
@@ -249,12 +229,16 @@ pub fn upsert_implicit_tag_to_file(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     // First delete any existing implicit tag
-    let delete_sql = "delete from TaggedItems where fileId = ?1 and tagId = ?2 and implicitFromId is not null";
-    con.execute(delete_sql, rusqlite::params![file_id, tag_id])?;
+    let mut delete_pst = con.prepare(include_str!(
+        "../assets/queries/tags/delete_implicit_tag_from_file.sql"
+    ))?;
+    delete_pst.execute(rusqlite::params![file_id, tag_id])?;
     
     // Then insert the new one
-    let insert_sql = "insert into TaggedItems(tagId, fileId, implicitFromId) values (?1, ?2, ?3)";
-    con.execute(insert_sql, rusqlite::params![tag_id, file_id, implicit_from_id])?;
+    let mut insert_pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_file.sql"
+    ))?;
+    insert_pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
     Ok(())
 }
 

@@ -367,3 +367,135 @@ mod get_tags_on_files_tests {
         cleanup();
     }
 }
+
+mod implicit_tag_tests {
+    use crate::repository::open_connection;
+    use crate::tags::repository::{
+        add_implicit_tag_to_file, add_implicit_tag_to_folder, upsert_implicit_tag_to_file,
+        upsert_implicit_tag_to_folder, get_tags_on_file, get_tags_on_folder,
+    };
+    use crate::test::*;
+
+    #[test]
+    fn add_implicit_tag_to_folder_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        add_implicit_tag_to_folder(tag_id, 2, 1, &con).unwrap();
+        let tags = get_tags_on_folder(2, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].tag_id, tag_id);
+        assert_eq!(tags[0].implicit_from_id, Some(1));
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn add_implicit_tag_to_file_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1));
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
+        let tags = get_tags_on_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].tag_id, tag_id);
+        assert_eq!(tags[0].implicit_from_id, Some(1));
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn upsert_implicit_tag_to_folder_replaces_existing() {
+        init_db_folder();
+        create_folder_db_entry("grandparent", None); // id 1
+        create_folder_db_entry("parent", Some(1)); // id 2
+        create_folder_db_entry("child", Some(2)); // id 3
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        // Add implicit tag from folder 1
+        add_implicit_tag_to_folder(tag_id, 3, 1, &con).unwrap();
+        // Upsert to change it to folder 2
+        upsert_implicit_tag_to_folder(tag_id, 3, 2, &con).unwrap();
+        let tags = get_tags_on_folder(3, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].tag_id, tag_id);
+        assert_eq!(tags[0].implicit_from_id, Some(2));
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn upsert_implicit_tag_to_file_replaces_existing() {
+        init_db_folder();
+        create_folder_db_entry("grandparent", None); // id 1
+        create_folder_db_entry("parent", Some(1)); // id 2
+        create_file_db_entry("file.txt", Some(2));
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        // Add implicit tag from folder 1
+        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
+        // Upsert to change it to folder 2
+        upsert_implicit_tag_to_file(tag_id, 1, 2, &con).unwrap();
+        let tags = get_tags_on_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].tag_id, tag_id);
+        assert_eq!(tags[0].implicit_from_id, Some(2));
+        con.close().unwrap();
+        cleanup();
+    }
+}
+
+mod remove_implicit_tags_tests {
+    use crate::repository::open_connection;
+    use crate::tags::repository::{
+        add_implicit_tag_to_file, add_implicit_tag_to_folder, 
+        remove_implicit_tags_from_files, remove_implicit_tags_from_folders,
+        get_tags_on_file, get_tags_on_folder,
+    };
+    use crate::test::*;
+
+    #[test]
+    fn remove_implicit_tags_from_folders_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("folder1", Some(1)); // id 2
+        create_folder_db_entry("folder2", Some(1)); // id 3
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        add_implicit_tag_to_folder(tag_id, 2, 1, &con).unwrap();
+        add_implicit_tag_to_folder(tag_id, 3, 1, &con).unwrap();
+        // Remove tags inherited from folder 1
+        remove_implicit_tags_from_folders(&[2, 3], tag_id, 1, &con).unwrap();
+        let tags2 = get_tags_on_folder(2, &con).unwrap();
+        let tags3 = get_tags_on_folder(3, &con).unwrap();
+        assert_eq!(tags2.len(), 0);
+        assert_eq!(tags3.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn remove_implicit_tags_from_files_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file1.txt", Some(1));
+        create_file_db_entry("file2.txt", Some(1));
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
+        add_implicit_tag_to_file(tag_id, 2, 1, &con).unwrap();
+        // Remove tags inherited from folder 1
+        remove_implicit_tags_from_files(&[1, 2], tag_id, 1, &con).unwrap();
+        let tags1 = get_tags_on_file(1, &con).unwrap();
+        let tags2 = get_tags_on_file(2, &con).unwrap();
+        assert_eq!(tags1.len(), 0);
+        assert_eq!(tags2.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+}
+
