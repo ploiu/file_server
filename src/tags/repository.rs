@@ -196,48 +196,6 @@ pub fn get_descendant_files(
     rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
 }
 
-/// Gets folder IDs from the provided list that don't have a specific tag (explicit or implicit)
-pub fn get_folders_without_tag(
-    folder_ids: &[u32],
-    tag_id: u32,
-    con: &Connection,
-) -> Result<Vec<u32>, rusqlite::Error> {
-    if folder_ids.is_empty() {
-        return Ok(vec![]);
-    }
-    let in_clause: String = folder_ids
-        .iter()
-        .map(|id| id.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-    let query = include_str!("../assets/queries/tags/get_folders_without_tag.sql")
-        .replace("{}", &in_clause);
-    let mut pst = con.prepare(&query)?;
-    let rows = pst.query_map(rusqlite::params![tag_id], |row| row.get(0))?;
-    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
-}
-
-/// Gets file IDs from the provided list that don't have a specific tag (explicit or implicit)
-pub fn get_files_without_tag(
-    file_ids: &[u32],
-    tag_id: u32,
-    con: &Connection,
-) -> Result<Vec<u32>, rusqlite::Error> {
-    if file_ids.is_empty() {
-        return Ok(vec![]);
-    }
-    let in_clause: String = file_ids
-        .iter()
-        .map(|id| id.to_string())
-        .collect::<Vec<String>>()
-        .join(",");
-    let query = include_str!("../assets/queries/tags/get_files_without_tag.sql")
-        .replace("{}", &in_clause);
-    let mut pst = con.prepare(&query)?;
-    let rows = pst.query_map(rusqlite::params![tag_id], |row| row.get(0))?;
-    rows.collect::<Result<Vec<u32>, rusqlite::Error>>()
-}
-
 /// Adds an implicit tag to a folder (won't add if already exists)
 pub fn add_implicit_tag_to_folder(
     tag_id: u32,
