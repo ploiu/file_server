@@ -757,4 +757,124 @@ mod pass_tags_to_children_tests {
 
         cleanup();
     }
+
+    #[test]
+    fn should_inherit_from_closest_ancestor_folder() {
+        init_db_folder();
+        // Create folder hierarchy: top -> middle -> bottom
+        create_folder_db_entry("top", None); // id 1
+        create_folder_db_entry("middle", Some(1)); // id 2
+        create_folder_db_entry("bottom", Some(2)); // id 3
+
+        // Create tag once
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+        
+        // Add tag to bottom first
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
+        con.close().unwrap();
+        pass_tags_to_children(3).unwrap();
+
+        // Then add same tag to middle
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+        pass_tags_to_children(2).unwrap();
+
+        // Bottom should still have it as explicit
+        let bottom_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(bottom_tags.len(), 1);
+        assert_eq!(bottom_tags[0].implicit_from, None); // Explicit
+
+        cleanup();
+    }
+
+    #[test]
+    fn should_inherit_from_closest_ancestor_file() {
+        init_db_folder();
+        // Create folder hierarchy: top -> middle -> bottom (with file)
+        create_folder_db_entry("top", None); // id 1
+        create_folder_db_entry("middle", Some(1)); // id 2
+        create_folder_db_entry("bottom", Some(2)); // id 3
+        create_file_db_entry("file.png", Some(3));
+
+        // Create tag once
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+
+        // Add tag to bottom
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
+        con.close().unwrap();
+        pass_tags_to_children(3).unwrap();
+
+        // File should inherit from bottom
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0].implicit_from, Some(3));
+
+        // Add same tag to middle - file should still inherit from bottom (closer)
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+        pass_tags_to_children(2).unwrap();
+
+        // File should still inherit from bottom (id 3), not middle (id 2)
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0].implicit_from, Some(3));
+
+        cleanup();
+    }
+
+    #[test]
+    fn removing_tag_from_distant_ancestor_should_not_affect_closer_inheritance() {
+        init_db_folder();
+        // Create folder hierarchy: top -> middle -> bottom
+        create_folder_db_entry("top", None); // id 1
+        create_folder_db_entry("middle", Some(1)); // id 2
+        create_folder_db_entry("bottom", Some(2)); // id 3
+
+        // Add tag to all three levels
+        use crate::test::create_tag_db_entry;
+        use crate::repository::open_connection;
+        use crate::tags::repository as tag_repository;
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
+        con.close().unwrap();
+
+        pass_tags_to_children(1).unwrap();
+        pass_tags_to_children(2).unwrap();
+        pass_tags_to_children(3).unwrap();
+
+        // Bottom should have explicit tag
+        let bottom_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(bottom_tags.len(), 1);
+        assert_eq!(bottom_tags[0].implicit_from, None);
+
+        // Remove tag from top - bottom should still have it explicitly
+        use crate::tags::service::update_folder_tags;
+        update_folder_tags(1, vec![]).unwrap();
+
+        let bottom_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(bottom_tags.len(), 1);
+        assert_eq!(bottom_tags[0].implicit_from, None);
+
+        // Remove tag from middle - bottom should still have it explicitly
+        update_folder_tags(2, vec![]).unwrap();
+
+        let bottom_tags = get_tags_on_folder(3).unwrap();
+        assert_eq!(bottom_tags.len(), 1);
+        assert_eq!(bottom_tags[0].implicit_from, None);
+
+        cleanup();
+    }
 }

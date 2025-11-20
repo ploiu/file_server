@@ -784,7 +784,7 @@ fn find_ancestor_with_tag_for_file(
     Ok(None)
 }
 
-/// Adds a tag to all descendants that don't already have it explicitly
+/// Adds a tag to all descendants that don't already have it explicitly or from a closer ancestor
 fn add_tag_to_descendants(
     tag_id: u32,
     folder_id: u32,
@@ -812,6 +812,17 @@ fn add_tag_to_descendants(
         
         if has_explicit {
             continue;
+        }
+
+        // Check if folder has this tag implicitly from a closer ancestor (descendant of current folder)
+        // If the implicit_from_id is in descendant_folders, it means it's closer than folder_id
+        if let Some(existing_implicit) = tags.iter().find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some()) {
+            if let Some(implicit_from) = existing_implicit.implicit_from_id {
+                // If the folder already inherits from a descendant of current folder, keep it
+                if descendant_folders.contains(&implicit_from) {
+                    continue;
+                }
+            }
         }
 
         // Add or update the implicit tag
@@ -844,6 +855,18 @@ fn add_tag_to_descendants(
         
         if has_explicit {
             continue;
+        }
+
+        // Check if file has this tag implicitly from a closer ancestor (descendant folder of current folder)
+        // Get the file's parent folder and check if it's a descendant of folder_id
+        if let Some(existing_implicit) = tags.iter().find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some()) {
+            if let Some(implicit_from) = existing_implicit.implicit_from_id {
+                // If the file already inherits from a descendant of current folder, keep it
+                // This includes the direct parent and any ancestor folders that are descendants of folder_id
+                if descendant_folders.contains(&implicit_from) {
+                    continue;
+                }
+            }
         }
 
         // Add or update the implicit tag
