@@ -373,8 +373,9 @@ mod get_tags_on_files_tests {
 mod implicit_tag_tests {
     use crate::repository::open_connection;
     use crate::tags::repository::{
-        add_implicit_tag_to_file, add_implicit_tag_to_folder, get_all_tags_on_file,
-        get_all_tags_on_folder, upsert_implicit_tag_to_file, upsert_implicit_tag_to_folder,
+        add_implicit_tag_to_file, add_implicit_tag_to_folder, delete_implicit_tag_from_file,
+        delete_implicit_tag_from_folder, get_all_tags_on_file, get_all_tags_on_folder,
+        upsert_implicit_tag_to_file, upsert_implicit_tag_to_folder,
     };
     use crate::test::*;
 
@@ -446,6 +447,44 @@ mod implicit_tag_tests {
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].tag_id, tag_id);
         assert_eq!(tags[0].implicit_from_id, Some(2));
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn delete_implicit_tag_from_folder_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        // Add implicit tag
+        add_implicit_tag_to_folder(tag_id, 2, 1, &con).unwrap();
+        let tags = get_all_tags_on_folder(2, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        // Delete the implicit tag
+        delete_implicit_tag_from_folder(tag_id, 2, &con).unwrap();
+        let tags = get_all_tags_on_folder(2, &con).unwrap();
+        assert_eq!(tags.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn delete_implicit_tag_from_file_works() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1));
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        // Add implicit tag
+        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
+        let tags = get_all_tags_on_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1);
+        // Delete the implicit tag
+        delete_implicit_tag_from_file(tag_id, 1, &con).unwrap();
+        let tags = get_all_tags_on_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 0);
         con.close().unwrap();
         cleanup();
     }

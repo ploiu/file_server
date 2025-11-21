@@ -200,6 +200,19 @@ pub fn remove_implicit_tag_from_files(
     Ok(())
 }
 
+/// Deletes an implicit tag from a file if it exists
+pub fn delete_implicit_tag_from_file(
+    tag_id: u32,
+    file_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/delete_implicit_tag_from_file.sql"
+    ))?;
+    pst.execute(rusqlite::params![file_id, tag_id])?;
+    Ok(())
+}
+
 /// Updates or inserts an implicit tag on a file, replacing any existing implicit tag from a different ancestor
 pub fn upsert_implicit_tag_to_file(
     tag_id: u32,
@@ -208,10 +221,7 @@ pub fn upsert_implicit_tag_to_file(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     // First delete any existing implicit tag
-    let mut delete_pst = con.prepare(include_str!(
-        "../assets/queries/tags/delete_implicit_tag_from_file.sql"
-    ))?;
-    delete_pst.execute(rusqlite::params![file_id, tag_id])?;
+    delete_implicit_tag_from_file(tag_id, file_id, con)?;
 
     // Then insert the new one
     let mut insert_pst = con.prepare(include_str!(
@@ -279,6 +289,19 @@ pub fn add_implicit_tag_to_folder(
     Ok(())
 }
 
+/// Deletes an implicit tag from a folder if it exists
+pub fn delete_implicit_tag_from_folder(
+    tag_id: u32,
+    folder_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/delete_implicit_tag_from_folder.sql"
+    ))?;
+    pst.execute(rusqlite::params![folder_id, tag_id])?;
+    Ok(())
+}
+
 /// Updates or inserts an implicit tag on a folder, replacing any existing implicit tag from a different ancestor
 pub fn upsert_implicit_tag_to_folder(
     tag_id: u32,
@@ -287,10 +310,7 @@ pub fn upsert_implicit_tag_to_folder(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     // First delete any existing implicit tag
-    let mut delete_pst = con.prepare(include_str!(
-        "../assets/queries/tags/delete_implicit_tag_from_folder.sql"
-    ))?;
-    delete_pst.execute(rusqlite::params![folder_id, tag_id])?;
+    delete_implicit_tag_from_folder(tag_id, folder_id, con)?;
 
     // Then insert the new one
     let mut insert_pst = con.prepare(include_str!(
