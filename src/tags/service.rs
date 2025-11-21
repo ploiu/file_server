@@ -276,7 +276,8 @@ pub fn update_folder_tags(
     // Remove all existing tags from the folder
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.tag_id.unwrap(), &con)
+        if let Err(e) =
+            tag_repository::remove_explicit_tag_from_folder(folder_id, tag.tag_id.unwrap(), &con)
         {
             log::error!(
                 "Failed to remove tags from folder with id {folder_id}! Error is {e:?}\n{}",
@@ -340,10 +341,10 @@ pub fn update_folder_tags(
     }
 
     con.close().unwrap();
-    
+
     // Propagate tag changes to all descendants
     pass_tags_to_children(folder_id)?;
-    
+
     Ok(())
 }
 
@@ -358,7 +359,7 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TaggedItemApi>, TagRelationE
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let file_tags = match tag_repository::get_tags_on_file(file_id, &con) {
+    let file_tags = match tag_repository::get_all_tags_on_file(file_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -385,7 +386,7 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let db_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
+    let db_tags = match tag_repository::get_all_tags_on_folder(folder_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -426,7 +427,7 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     let con = open_connection();
 
     // Get all explicit tags on this folder
-    let folder_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
+    let folder_tags = match tag_repository::get_all_tags_on_folder(folder_id, &con) {
         Ok(tags) => tags
             .into_iter()
             .filter(|t| t.implicit_from_id.is_none())
@@ -442,7 +443,10 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     };
 
     // Get all descendant folders and files
-    let descendant_folders = match folder_repository::get_all_child_folder_ids(&vec![folder_id], &con) {
+    let descendant_folders = match folder_repository::get_all_child_folder_ids(
+        &vec![folder_id],
+        &con,
+    ) {
         Ok(folders) => folders,
         Err(e) => {
             log::error!(
@@ -457,7 +461,8 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     // Get files from the folder and all its descendants
     let mut all_folder_ids = vec![folder_id];
     all_folder_ids.extend(&descendant_folders);
-    let descendant_files: Vec<u32> = match folder_repository::get_child_files(all_folder_ids, &con) {
+    let descendant_files: Vec<u32> = match folder_repository::get_child_files(all_folder_ids, &con)
+    {
         Ok(files) => files.into_iter().map(|f| f.id.unwrap()).collect(),
         Err(e) => {
             log::error!(
@@ -487,9 +492,13 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
 
     // Add implications for all tags the folder has
     for tag in folder_tags {
-        if let Err(e) =
-            add_tag_to_descendants(tag.tag_id, folder_id, &descendant_folders, &descendant_files, &con)
-        {
+        if let Err(e) = add_tag_to_descendants(
+            tag.tag_id,
+            folder_id,
+            &descendant_folders,
+            &descendant_files,
+            &con,
+        ) {
             con.close().unwrap();
             return Err(e);
         }
@@ -512,7 +521,7 @@ fn remove_orphaned_implications(
 
     // Check folders
     for folder in descendant_folders {
-        let tags = match tag_repository::get_tags_on_folder(*folder, con) {
+        let tags = match tag_repository::get_all_tags_on_folder(*folder, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -531,7 +540,7 @@ fn remove_orphaned_implications(
 
     // Check files
     for file in descendant_files {
-        let tags = match tag_repository::get_tags_on_file(*file, con) {
+        let tags = match tag_repository::get_all_tags_on_file(*file, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -552,12 +561,9 @@ fn remove_orphaned_implications(
     for tag_id in implied_tags {
         if !current_tag_ids.contains(&tag_id) {
             // Remove from folders
-            if let Err(e) = tag_repository::remove_implicit_tags_from_folders(
-                descendant_folders,
-                tag_id,
-                folder_id,
-                con,
-            ) {
+            if let Err(e) =
+                tag_repository::remove_implicit_tags_from_folders(tag_id, folder_id, con)
+            {
                 log::error!(
                     "Failed to remove implicit tag {tag_id} from descendant folders! Error is {e:?}\n{}",
                     Backtrace::force_capture()
@@ -566,12 +572,7 @@ fn remove_orphaned_implications(
             }
 
             // Remove from files
-            if let Err(e) = tag_repository::remove_implicit_tags_from_files(
-                descendant_files,
-                tag_id,
-                folder_id,
-                con,
-            ) {
+            if let Err(e) = tag_repository::remove_implicit_tag_from_files(tag_id, folder_id, con) {
                 log::error!(
                     "Failed to remove implicit tag {tag_id} from descendant files! Error is {e:?}\n{}",
                     Backtrace::force_capture()
@@ -607,7 +608,7 @@ fn re_inherit_from_ancestors(
     for folder_id in descendant_folders {
         if let Some(new_implicit_from) = find_ancestor_with_tag(*folder_id, tag_id, con)? {
             // Only re-inherit if the folder doesn't have the tag explicitly
-            let tags = match tag_repository::get_tags_on_folder(*folder_id, con) {
+            let tags = match tag_repository::get_all_tags_on_folder(*folder_id, con) {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!(
@@ -621,9 +622,12 @@ fn re_inherit_from_ancestors(
                 .iter()
                 .any(|t| t.tag_id == tag_id && t.implicit_from_id.is_none());
             if !has_explicit {
-                if let Err(e) =
-                    tag_repository::add_implicit_tag_to_folder(tag_id, *folder_id, new_implicit_from, con)
-                {
+                if let Err(e) = tag_repository::add_implicit_tag_to_folder(
+                    tag_id,
+                    *folder_id,
+                    new_implicit_from,
+                    con,
+                ) {
                     log::error!(
                         "Failed to re-inherit tag {tag_id} to folder {folder_id}! Error is {e:?}\n{}",
                         Backtrace::force_capture()
@@ -638,7 +642,7 @@ fn re_inherit_from_ancestors(
     for file_id in descendant_files {
         if let Some(new_implicit_from) = find_ancestor_with_tag_for_file(*file_id, tag_id, con)? {
             // Only re-inherit if the file doesn't have the tag explicitly
-            let tags = match tag_repository::get_tags_on_file(*file_id, con) {
+            let tags = match tag_repository::get_all_tags_on_file(*file_id, con) {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!(
@@ -652,9 +656,12 @@ fn re_inherit_from_ancestors(
                 .iter()
                 .any(|t| t.tag_id == tag_id && t.implicit_from_id.is_none());
             if !has_explicit {
-                if let Err(e) =
-                    tag_repository::add_implicit_tag_to_file(tag_id, *file_id, new_implicit_from, con)
-                {
+                if let Err(e) = tag_repository::add_implicit_tag_to_file(
+                    tag_id,
+                    *file_id,
+                    new_implicit_from,
+                    con,
+                ) {
                     log::error!(
                         "Failed to re-inherit tag {tag_id} to file {file_id}! Error is {e:?}\n{}",
                         Backtrace::force_capture()
@@ -691,7 +698,7 @@ fn find_ancestor_with_tag(
     // Walk up the parent chain
     while let Some(parent_id) = current_parent {
         // Check if this parent has the tag explicitly
-        let tags = match tag_repository::get_tags_on_folder(parent_id, con) {
+        let tags = match tag_repository::get_all_tags_on_folder(parent_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -749,7 +756,7 @@ fn find_ancestor_with_tag_for_file(
     // Walk up the folder parent chain
     while let Some(parent_id) = current_parent {
         // Check if this folder has the tag explicitly
-        let tags = match tag_repository::get_tags_on_folder(parent_id, con) {
+        let tags = match tag_repository::get_all_tags_on_folder(parent_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -794,7 +801,7 @@ fn add_tag_to_descendants(
 ) -> Result<(), TagRelationError> {
     // For each descendant folder, check if it should have this implicit tag
     for descendant_folder_id in descendant_folders {
-        let tags = match tag_repository::get_tags_on_folder(*descendant_folder_id, con) {
+        let tags = match tag_repository::get_all_tags_on_folder(*descendant_folder_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -809,14 +816,17 @@ fn add_tag_to_descendants(
         let has_explicit = tags
             .iter()
             .any(|t| t.tag_id == tag_id && t.implicit_from_id.is_none());
-        
+
         if has_explicit {
             continue;
         }
 
         // Check if folder has this tag implicitly from a closer ancestor (descendant of current folder)
         // If the implicit_from_id is in descendant_folders, it means it's closer than folder_id
-        if let Some(existing_implicit) = tags.iter().find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some()) {
+        if let Some(existing_implicit) = tags
+            .iter()
+            .find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some())
+        {
             if let Some(implicit_from) = existing_implicit.implicit_from_id {
                 // If the folder already inherits from a descendant of current folder, keep it
                 if descendant_folders.contains(&implicit_from) {
@@ -826,7 +836,12 @@ fn add_tag_to_descendants(
         }
 
         // Add or update the implicit tag
-        if let Err(e) = tag_repository::upsert_implicit_tag_to_folder(tag_id, *descendant_folder_id, folder_id, con) {
+        if let Err(e) = tag_repository::upsert_implicit_tag_to_folder(
+            tag_id,
+            *descendant_folder_id,
+            folder_id,
+            con,
+        ) {
             log::error!(
                 "Failed to upsert implicit tag {tag_id} to folder {descendant_folder_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()
@@ -837,7 +852,7 @@ fn add_tag_to_descendants(
 
     // For each descendant file, check if it should have this implicit tag
     for descendant_file_id in descendant_files {
-        let tags = match tag_repository::get_tags_on_file(*descendant_file_id, con) {
+        let tags = match tag_repository::get_all_tags_on_file(*descendant_file_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -852,14 +867,17 @@ fn add_tag_to_descendants(
         let has_explicit = tags
             .iter()
             .any(|t| t.tag_id == tag_id && t.implicit_from_id.is_none());
-        
+
         if has_explicit {
             continue;
         }
 
         // Check if file has this tag implicitly from a closer ancestor (descendant folder of current folder)
         // Get the file's parent folder and check if it's a descendant of folder_id
-        if let Some(existing_implicit) = tags.iter().find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some()) {
+        if let Some(existing_implicit) = tags
+            .iter()
+            .find(|t| t.tag_id == tag_id && t.implicit_from_id.is_some())
+        {
             if let Some(implicit_from) = existing_implicit.implicit_from_id {
                 // If the file already inherits from a descendant of current folder, keep it
                 // This includes the direct parent and any ancestor folders that are descendants of folder_id
@@ -870,7 +888,9 @@ fn add_tag_to_descendants(
         }
 
         // Add or update the implicit tag
-        if let Err(e) = tag_repository::upsert_implicit_tag_to_file(tag_id, *descendant_file_id, folder_id, con) {
+        if let Err(e) =
+            tag_repository::upsert_implicit_tag_to_file(tag_id, *descendant_file_id, folder_id, con)
+        {
             log::error!(
                 "Failed to upsert implicit tag {tag_id} to file {descendant_file_id}! Error is {e:?}\n{}",
                 Backtrace::force_capture()

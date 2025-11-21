@@ -706,7 +706,7 @@ mod pass_tags_to_children_tests {
         use crate::repository::open_connection;
         use crate::tags::repository as tag_repository;
         let con = open_connection();
-        tag_repository::remove_tag_from_folder(1, 1, &con).unwrap();
+        tag_repository::remove_explicit_tag_from_folder(1, 1, &con).unwrap();
         con.close().unwrap();
 
         // Propagate the change
