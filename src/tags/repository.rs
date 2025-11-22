@@ -1,19 +1,17 @@
 use std::{backtrace::Backtrace, collections::HashMap};
 
-use itertools::Itertools;
 use rusqlite::Connection;
 
-use crate::{
-    model::{repository, response::TaggedItemApi},
-    tags::TagTypes,
-};
+use crate::tags::TagTypes;
+
+use super::models;
 
 /// creates a new tag in the database. This does not check if the tag already exists,
 /// so the caller must check that themselves
-pub fn create_tag(title: &str, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
+pub fn create_tag(title: &str, con: &Connection) -> Result<models::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/create_tag.sql"))?;
     let id = pst.insert(rusqlite::params![title])? as u32;
-    Ok(repository::Tag {
+    Ok(models::Tag {
         id,
         title: title.to_string(),
     })
@@ -25,7 +23,7 @@ pub fn create_tag(title: &str, con: &Connection) -> Result<repository::Tag, rusq
 pub fn get_tag_by_title(
     title: &str,
     con: &Connection,
-) -> Result<Option<repository::Tag>, rusqlite::Error> {
+) -> Result<Option<models::Tag>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_title.sql"))?;
     match pst.query_row(rusqlite::params![title], tag_mapper) {
         Ok(tag) => Ok(Some(tag)),
@@ -51,15 +49,15 @@ pub fn get_tag_by_title(
 /// - `con`: the database connection to use. Callers must handle closing the connection
 ///
 /// # Returns
-/// - `Ok(repository::Tag)`: the tag with the specified ID if the tag exists
+/// - `Ok(models::Tag)`: the tag with the specified ID if the tag exists
 /// - `Err(rusqlite::Error)`: if there was an error during the database operation, including if no tag with the specified ID exists
-pub fn get_tag(id: u32, con: &Connection) -> Result<repository::Tag, rusqlite::Error> {
+pub fn get_tag(id: u32, con: &Connection) -> Result<models::Tag, rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/get_by_id.sql"))?;
     pst.query_row(rusqlite::params![id], tag_mapper)
 }
 
 /// updates the past tag. Checking to make sure the tag exists needs to be done on the caller's end
-pub fn update_tag(tag: repository::Tag, con: &Connection) -> Result<(), rusqlite::Error> {
+pub fn update_tag(tag: models::Tag, con: &Connection) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/update_tag.sql"))?;
     pst.execute(rusqlite::params![tag.title, tag.id])?;
     Ok(())
@@ -112,19 +110,19 @@ pub fn add_implicit_tag_to_file(
 /// - `con` a reference to a database connection. This must be closed by the parent
 ///
 /// ## Returns:
-/// - `Ok(Vec<repository::TaggedItem>)`: a list of tags on the file
+/// - `Ok(Vec<models::TaggedItem>)`: a list of tags on the file
 /// - `Err(rusqlite::Error)`: if there was an error during the database operation
 ///
 /// If the file doesn't exist or has not tags, an empty vec is returned
 pub fn get_all_tags_for_file(
     file_id: u32,
     con: &Connection,
-) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
+) -> Result<Vec<models::TaggedItem>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/get_all_tags_for_file.sql"
     ))?;
     let rows = pst.query_map(rusqlite::params![file_id], tagged_item_mapper)?;
-    let mut tags: Vec<repository::TaggedItem> = Vec::new();
+    let mut tags: Vec<models::TaggedItem> = Vec::new();
     for tag_res in rows {
         tags.push(tag_res?);
     }
@@ -135,7 +133,7 @@ pub fn get_tags_for_file(
     file_id: u32,
     tag_type: TagTypes,
     con: &Connection,
-) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
+) -> Result<Vec<models::TaggedItem>, rusqlite::Error> {
     let query = match tag_type {
         TagTypes::Explicit => include_str!("../assets/queries/tags/get_explicit_tags_for_file.sql"),
         TagTypes::Implicit => include_str!("../assets/queries/tags/get_implicit_tags_for_file.sql"),
@@ -146,14 +144,14 @@ pub fn get_tags_for_file(
 }
 
 /// Retrieves all tags on all files passed, explicit or implied.
-/// The returned value is a Map of file id => Vec<[`repository::TaggedItem`]>. Files without _any_ tags will not have an entry in the map
+/// The returned value is a Map of file id => Vec<[`models::TaggedItem`]>. Files without _any_ tags will not have an entry in the map
 ///
 /// ## Parameters:
 /// - `file_ids` the ids to get tags for
 /// - `con` a reference to a database connection. The caller must manage closing the connection.
 ///
 /// ## Returns:
-/// - `Ok(HashMap<u32, Vec<repository::TaggedItem>>)` if the tags were successfully retrieved
+/// - `Ok(HashMap<u32, Vec<models::TaggedItem>>)` if the tags were successfully retrieved
 /// - `Err(rusqlite::Error)` if there was a database error
 ///
 /// ---
@@ -162,7 +160,7 @@ pub fn get_tags_for_file(
 pub fn get_all_tags_for_files(
     file_ids: Vec<u32>,
     con: &Connection,
-) -> Result<HashMap<u32, Vec<repository::TaggedItem>>, rusqlite::Error> {
+) -> Result<HashMap<u32, Vec<models::TaggedItem>>, rusqlite::Error> {
     let in_clause: Vec<String> = file_ids.iter().map(|it| format!("'{it}'")).collect();
     let in_clause = in_clause.join(",");
     let formatted_query = format!(
@@ -171,7 +169,7 @@ pub fn get_all_tags_for_files(
     );
     let mut pst = con.prepare(formatted_query.as_str())?;
     let rows = pst.query_map([], tagged_item_mapper)?;
-    let mut mapped: HashMap<u32, Vec<repository::TaggedItem>> = HashMap::new();
+    let mut mapped: HashMap<u32, Vec<models::TaggedItem>> = HashMap::new();
     for tag in rows {
         let tag = tag?;
         let id = tag
@@ -263,17 +261,17 @@ pub fn add_explicit_tag_to_folder(
 /// - `con` a reference to a database connection. The caller must manage closing the connection.
 ///
 /// ## Returns:
-/// - `Ok(Vec<repository::TaggedItem>)` if the tags were successfully retrieved
+/// - `Ok(Vec<models::TaggedItem>)` if the tags were successfully retrieved
 /// - `Err(rusqlite::Error)` if there was a database error
 pub fn get_all_tags_for_folder(
     folder_id: u32,
     con: &Connection,
-) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
+) -> Result<Vec<models::TaggedItem>, rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/get_all_tags_for_folder.sql"
     ))?;
     let rows = pst.query_map(rusqlite::params![folder_id], tagged_item_mapper)?;
-    rows.collect::<Result<Vec<repository::TaggedItem>, rusqlite::Error>>()
+    rows.collect::<Result<Vec<models::TaggedItem>, rusqlite::Error>>()
 }
 
 pub fn remove_explicit_tag_from_folder(
@@ -357,7 +355,7 @@ pub fn remove_implicit_tags_from_folders(
 /// 4. implicitFromId
 /// 5. tagId
 /// 6. title
-fn tagged_item_mapper(row: &rusqlite::Row) -> Result<repository::TaggedItem, rusqlite::Error> {
+fn tagged_item_mapper(row: &rusqlite::Row) -> Result<models::TaggedItem, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let file_id: Option<u32> = row.get(1)?;
     let folder_id: Option<u32> = row.get(2)?;
@@ -365,7 +363,7 @@ fn tagged_item_mapper(row: &rusqlite::Row) -> Result<repository::TaggedItem, rus
     let tag_id: u32 = row.get(4)?;
     let title: String = row.get(5)?;
 
-    Ok(repository::TaggedItem {
+    Ok(models::TaggedItem {
         id,
         file_id,
         folder_id,
@@ -375,9 +373,9 @@ fn tagged_item_mapper(row: &rusqlite::Row) -> Result<repository::TaggedItem, rus
     })
 }
 
-/// maps a [`repository::Tag`] from a database row
-fn tag_mapper(row: &rusqlite::Row) -> Result<repository::Tag, rusqlite::Error> {
+/// maps a [`models::Tag`] from a database row
+fn tag_mapper(row: &rusqlite::Row) -> Result<models::Tag, rusqlite::Error> {
     let id: u32 = row.get(0)?;
     let title: String = row.get(1)?;
-    Ok(repository::Tag { id, title })
+    Ok(models::Tag { id, title })
 }

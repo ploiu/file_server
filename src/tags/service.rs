@@ -8,18 +8,18 @@ use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
-use crate::model::repository::{self};
 use crate::model::response::{TagApi, TaggedItemApi};
 use crate::repository::{folder_repository, open_connection};
 use crate::service::{file_service, folder_service};
 use crate::tags::repository as tag_repository;
 
+use super::models;
+
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
 pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
     let con = open_connection();
-    let existing_tag: Option<repository::Tag> = match tag_repository::get_tag_by_title(&name, &con)
-    {
+    let existing_tag: Option<models::Tag> = match tag_repository::get_tag_by_title(&name, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -30,7 +30,7 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
             return Err(CreateTagError::DbError);
         }
     };
-    let tag: repository::Tag = if let Some(t) = existing_tag {
+    let tag: models::Tag = if let Some(t) = existing_tag {
         t
     } else {
         match tag_repository::create_tag(&name, &con) {
@@ -53,7 +53,7 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
 /// will return the tag with the passed id
 pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
     let con = open_connection();
-    let tag: repository::Tag = match tag_repository::get_tag(id, &con) {
+    let tag: models::Tag = match tag_repository::get_tag(id, &con) {
         Ok(t) => t,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             log::error!(
@@ -126,7 +126,7 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
         }
     };
     // no match, and tag already exists so we're good to go
-    let db_tag = repository::Tag {
+    let db_tag = models::Tag {
         id: request.id.unwrap(),
         title: new_title.clone(),
     };
