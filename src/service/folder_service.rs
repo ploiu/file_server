@@ -50,7 +50,7 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let mut converted_folders: Vec<FolderResponse> = Vec::new();
     for child in child_folders {
         let tags: Vec<TaggedItemApi> =
-            match tag_repository::get_all_tags_on_folder(child.id.unwrap_or(0), &con) {
+            match tag_repository::get_all_tags_for_folder(child.id.unwrap_or(0), &con) {
                 Ok(t) => t.into_iter().map_into().collect(),
                 Err(e) => {
                     log::error!(
@@ -524,7 +524,7 @@ fn get_files_for_folder(
         .iter()
         .map(|f| f.id.expect("files pulled from database didn't have ID!"))
         .collect();
-    let file_tags = match tag_repository::get_all_tags_on_files(file_ids, con) {
+    let file_tags = match tag_repository::get_all_tags_for_files(file_ids, con) {
         Ok(res) => res,
         Err(e) => {
             log::error!(

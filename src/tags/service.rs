@@ -359,7 +359,7 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TaggedItemApi>, TagRelationE
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let file_tags = match tag_repository::get_all_tags_on_file(file_id, &con) {
+    let file_tags = match tag_repository::get_all_tags_for_file(file_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -386,7 +386,7 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let db_tags = match tag_repository::get_all_tags_on_folder(folder_id, &con) {
+    let db_tags = match tag_repository::get_all_tags_for_folder(folder_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -427,7 +427,7 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     let con = open_connection();
 
     // Get all explicit tags on this folder
-    let folder_tags = match tag_repository::get_all_tags_on_folder(folder_id, &con) {
+    let folder_tags = match tag_repository::get_all_tags_for_folder(folder_id, &con) {
         Ok(tags) => tags
             .into_iter()
             .filter(|t| t.implicit_from_id.is_none())
@@ -521,7 +521,7 @@ fn remove_orphaned_implications(
 
     // Check folders
     for folder in descendant_folders {
-        let tags = match tag_repository::get_all_tags_on_folder(*folder, con) {
+        let tags = match tag_repository::get_all_tags_for_folder(*folder, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -540,7 +540,7 @@ fn remove_orphaned_implications(
 
     // Check files
     for file in descendant_files {
-        let tags = match tag_repository::get_all_tags_on_file(*file, con) {
+        let tags = match tag_repository::get_all_tags_for_file(*file, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -608,7 +608,7 @@ fn re_inherit_from_ancestors(
     for folder_id in descendant_folders {
         if let Some(new_implicit_from) = find_ancestor_with_tag(*folder_id, tag_id, con)? {
             // Only re-inherit if the folder doesn't have the tag explicitly
-            let tags = match tag_repository::get_all_tags_on_folder(*folder_id, con) {
+            let tags = match tag_repository::get_all_tags_for_folder(*folder_id, con) {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!(
@@ -642,7 +642,7 @@ fn re_inherit_from_ancestors(
     for file_id in descendant_files {
         if let Some(new_implicit_from) = find_ancestor_with_tag_for_file(*file_id, tag_id, con)? {
             // Only re-inherit if the file doesn't have the tag explicitly
-            let tags = match tag_repository::get_all_tags_on_file(*file_id, con) {
+            let tags = match tag_repository::get_all_tags_for_file(*file_id, con) {
                 Ok(t) => t,
                 Err(e) => {
                     log::error!(
@@ -698,7 +698,7 @@ fn find_ancestor_with_tag(
     // Walk up the parent chain
     while let Some(parent_id) = current_parent {
         // Check if this parent has the tag explicitly
-        let tags = match tag_repository::get_all_tags_on_folder(parent_id, con) {
+        let tags = match tag_repository::get_all_tags_for_folder(parent_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -756,7 +756,7 @@ fn find_ancestor_with_tag_for_file(
     // Walk up the folder parent chain
     while let Some(parent_id) = current_parent {
         // Check if this folder has the tag explicitly
-        let tags = match tag_repository::get_all_tags_on_folder(parent_id, con) {
+        let tags = match tag_repository::get_all_tags_for_folder(parent_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -801,7 +801,7 @@ fn add_tag_to_descendants(
 ) -> Result<(), TagRelationError> {
     // For each descendant folder, check if it should have this implicit tag
     for descendant_folder_id in descendant_folders {
-        let tags = match tag_repository::get_all_tags_on_folder(*descendant_folder_id, con) {
+        let tags = match tag_repository::get_all_tags_for_folder(*descendant_folder_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(
@@ -852,7 +852,7 @@ fn add_tag_to_descendants(
 
     // For each descendant file, check if it should have this implicit tag
     for descendant_file_id in descendant_files {
-        let tags = match tag_repository::get_all_tags_on_file(*descendant_file_id, con) {
+        let tags = match tag_repository::get_all_tags_for_file(*descendant_file_id, con) {
             Ok(t) => t,
             Err(e) => {
                 log::error!(

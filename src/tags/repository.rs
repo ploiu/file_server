@@ -3,7 +3,10 @@ use std::{backtrace::Backtrace, collections::HashMap};
 use itertools::Itertools;
 use rusqlite::Connection;
 
-use crate::model::repository;
+use crate::{
+    model::{repository, response::TaggedItemApi},
+    tags::TagTypes,
+};
 
 /// creates a new tag in the database. This does not check if the tag already exists,
 /// so the caller must check that themselves
@@ -113,7 +116,7 @@ pub fn add_implicit_tag_to_file(
 /// - `Err(rusqlite::Error)`: if there was an error during the database operation
 ///
 /// If the file doesn't exist or has not tags, an empty vec is returned
-pub fn get_all_tags_on_file(
+pub fn get_all_tags_for_file(
     file_id: u32,
     con: &Connection,
 ) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
@@ -126,6 +129,20 @@ pub fn get_all_tags_on_file(
         tags.push(tag_res?);
     }
     Ok(tags)
+}
+
+pub fn get_tags_for_file(
+    file_id: u32,
+    tag_type: TagTypes,
+    con: &Connection,
+) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
+    let query = match tag_type {
+        TagTypes::Explicit => include_str!("../assets/queries/tags/get_explicit_tags_for_file.sql"),
+        TagTypes::Implicit => include_str!("../assets/queries/tags/get_implicit_tags_for_file.sql"),
+    };
+    let mut pst = con.prepare(query)?;
+    let rows = pst.query_map(rusqlite::params![file_id], tagged_item_mapper)?;
+    rows.collect::<Result<Vec<_>, _>>()
 }
 
 /// Retrieves all tags on all files passed, explicit or implied.
@@ -142,7 +159,7 @@ pub fn get_all_tags_on_file(
 /// ---
 /// See also [get_all_tags_on_file]
 ///
-pub fn get_all_tags_on_files(
+pub fn get_all_tags_for_files(
     file_ids: Vec<u32>,
     con: &Connection,
 ) -> Result<HashMap<u32, Vec<repository::TaggedItem>>, rusqlite::Error> {
@@ -201,7 +218,7 @@ pub fn remove_implicit_tag_from_files(
 }
 
 /// Deletes an implicit tag from a file if it exists
-pub fn delete_implicit_tag_from_file(
+pub fn remove_implicit_tag_from_file(
     tag_id: u32,
     file_id: u32,
     con: &Connection,
@@ -221,14 +238,10 @@ pub fn upsert_implicit_tag_to_file(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     // First delete any existing implicit tag
-    delete_implicit_tag_from_file(tag_id, file_id, con)?;
+    remove_implicit_tag_from_file(tag_id, file_id, con)?;
 
     // Then insert the new one
-    let mut insert_pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_file.sql"
-    ))?;
-    insert_pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
-    Ok(())
+    add_implicit_tag_to_file(tag_id, file_id, implicit_from_id, con)
 }
 
 // ================= folder functions =================
@@ -252,7 +265,7 @@ pub fn add_explicit_tag_to_folder(
 /// ## Returns:
 /// - `Ok(Vec<repository::TaggedItem>)` if the tags were successfully retrieved
 /// - `Err(rusqlite::Error)` if there was a database error
-pub fn get_all_tags_on_folder(
+pub fn get_all_tags_for_folder(
     folder_id: u32,
     con: &Connection,
 ) -> Result<Vec<repository::TaggedItem>, rusqlite::Error> {
