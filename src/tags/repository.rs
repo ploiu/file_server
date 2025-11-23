@@ -301,7 +301,7 @@ pub fn add_implicit_tag_to_folder(
 /// ## Parameters:
 /// - `tag_id`: the id of the tag to add
 /// - `folder_ids`: the ids of the folders to add the tag to
-/// - `implicit_from_id`: the id of the folder that implicates the tag on the
+/// - `implicit_from_id`: the id of the folder that implicates the tag on the folders
 /// - `con`: a reference to a database connection. The caller must manage closing the connection.
 ///
 /// ## Returns:
