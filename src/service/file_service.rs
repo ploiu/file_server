@@ -627,7 +627,7 @@ fn check_file_in_dir(
     } else {
         vec![file_input.folder_id()]
     };
-    let child_files = folder_repository::get_child_files(db_parent_id, &con);
+    let child_files = folder_repository::get_child_files(&db_parent_id, &con);
     con.close().unwrap();
     if child_files.is_err() {
         return Err(CreateFileError::FailWriteDb);

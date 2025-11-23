@@ -555,10 +555,13 @@ mod get_tags_on_folder_tests {
 }
 
 mod pass_tags_to_children_tests {
-    
-    use crate::tags::service::{get_tags_on_file, get_tags_on_folder, pass_tags_to_children};
+
+    use crate::repository::open_connection;
+    use crate::tags::repository as tag_repository;
+    use crate::tags::service::*;
     use crate::test::{
-        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder, init_db_folder,
+        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_db_entry,
+        create_tag_folder, init_db_folder,
     };
 
     #[test]
@@ -633,10 +636,6 @@ mod pass_tags_to_children_tests {
         create_folder_db_entry("parent", None); // id 1
         create_folder_db_entry("child", Some(1)); // id 2
 
-        // Create tag and add explicitly to both
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
@@ -663,10 +662,6 @@ mod pass_tags_to_children_tests {
         create_folder_db_entry("parent", None); // id 1
         create_file_db_entry("file.txt", Some(1)); // id 1
 
-        // Create tag and add explicitly to both
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
@@ -702,9 +697,6 @@ mod pass_tags_to_children_tests {
         assert_eq!(child_tags.len(), 1);
         assert_eq!(child_tags[0].implicit_from, Some(1));
 
-        // Remove the tag explicitly from parent
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
         let con = open_connection();
         tag_repository::remove_explicit_tag_from_folder(1, 1, &con).unwrap();
         con.close().unwrap();
@@ -728,16 +720,12 @@ mod pass_tags_to_children_tests {
         create_folder_db_entry("child", Some(2)); // id 3
 
         // Create tag and add explicitly to both grandparent and parent
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
         con.close().unwrap();
-
-        pass_tags_to_children(1).unwrap();
+        // current state: grandparent+test_tag/parent+test_tag/child
         pass_tags_to_children(2).unwrap();
 
         // Child should inherit from parent (closer ancestor)
@@ -745,8 +733,6 @@ mod pass_tags_to_children_tests {
         assert_eq!(child_tags.len(), 1);
         assert_eq!(child_tags[0].implicit_from, Some(2));
 
-        // Remove tag from parent
-        use crate::tags::service::update_folder_tags;
         update_folder_tags(2, vec![]).unwrap();
 
         // Child should now inherit from grandparent
@@ -767,9 +753,6 @@ mod pass_tags_to_children_tests {
         create_folder_db_entry("bottom", Some(2)); // id 3
 
         // Create tag once
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
 
         // Add tag to bottom first
@@ -802,9 +785,6 @@ mod pass_tags_to_children_tests {
         create_file_db_entry("file.png", Some(3));
 
         // Create tag once
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
 
         // Add tag to bottom
@@ -841,9 +821,6 @@ mod pass_tags_to_children_tests {
         create_folder_db_entry("bottom", Some(2)); // id 3
 
         // Add tag to all three levels
-        use crate::repository::open_connection;
-        use crate::tags::repository as tag_repository;
-        use crate::test::create_tag_db_entry;
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap();
@@ -861,7 +838,6 @@ mod pass_tags_to_children_tests {
         assert_eq!(bottom_tags[0].implicit_from, None);
 
         // Remove tag from top - bottom should still have it explicitly
-        use crate::tags::service::update_folder_tags;
         update_folder_tags(1, vec![]).unwrap();
 
         let bottom_tags = get_tags_on_folder(3).unwrap();

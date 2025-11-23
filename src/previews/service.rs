@@ -243,7 +243,7 @@ pub fn get_previews_for_folder(
     } else {
         vec![folder_id]
     };
-    let folder_res = folder_repository::get_child_files(repo_folder_id, &con);
+    let folder_res = folder_repository::get_child_files(&repo_folder_id, &con);
     con.close().unwrap();
     let files = match folder_res {
         Ok(f) => f,

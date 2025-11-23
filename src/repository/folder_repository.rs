@@ -128,12 +128,12 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
 /// // get files in folders 1 and 2
 /// let files = get_child_files([1u32, 2u32], &con)?;
 /// ```
-pub fn get_child_files<T: IntoIterator<Item = u32>>(
-    ids: T,
+pub fn get_child_files(
+    ids: &[u32],
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
     // `is_empty` is not part of a trait, so we have to convert ids
-    let ids: HashSet<u32> = ids.into_iter().collect();
+    let ids: HashSet<u32> = ids.into_iter().copied().collect();
     if ids.is_empty() {
         get_child_files_root(con)
     } else {
@@ -293,7 +293,7 @@ mod get_child_files_tests {
         create_folder_db_entry("top", None);
         create_file_db_entry("bad", Some(1));
         let con = open_connection();
-        let res: HashSet<String> = get_child_files([], &con)
+        let res: HashSet<String> = get_child_files(&[], &con)
             .unwrap()
             .into_iter()
             .map(|f| f.name)
@@ -315,7 +315,7 @@ mod get_child_files_tests {
         create_file_db_entry("good", Some(1));
         create_file_db_entry("good2", Some(2));
         let con = open_connection();
-        let res: HashSet<String> = get_child_files([1, 2], &con)
+        let res: HashSet<String> = get_child_files(&[1, 2], &con)
             .unwrap()
             .into_iter()
             .map(|f| f.name)

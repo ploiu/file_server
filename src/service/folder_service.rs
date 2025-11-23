@@ -201,7 +201,7 @@ pub async fn get_file_previews_for_folder(
 ) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
-    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(&ids, &con) {
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
             con.close().unwrap();
@@ -478,7 +478,7 @@ fn does_file_exist(
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
     let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
-    let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
+    let matching_file = folder_repository::get_child_files(&unwrapped_id, con)?
         .iter()
         .find(|file| file.name == name.to_lowercase())
         .cloned();
@@ -510,7 +510,7 @@ fn get_files_for_folder(
 ) -> Result<Vec<FileApi>, GetChildFilesError> {
     // now we can retrieve all the file records in this folder
     let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
-    let child_files = match folder_repository::get_child_files(unwrapped_id, con) {
+    let child_files = match folder_repository::get_child_files(&unwrapped_id, con) {
         Ok(files) => files,
         Err(e) => {
             log::error!(
@@ -562,7 +562,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     })?;
     // now that we have the folder, we can delete all the files for that folder
     let files =
-        folder_repository::get_child_files([id], con).map_err(|_| DeleteFolderError::DbFailure)?;
+        folder_repository::get_child_files(&[id], con).map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(DeleteFileError::NotFound) => {}
