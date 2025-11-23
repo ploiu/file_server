@@ -145,7 +145,7 @@ pub fn add_implicit_tag_to_files(
 /// - `Ok(Vec<models::TaggedItem>)`: a list of tags on the file
 /// - `Err(rusqlite::Error)`: if there was an error during the database operation
 ///
-/// If the file doesn't exist or has not tags, an empty vec is returned
+/// If the file doesn't exist or has no tags, an empty vec is returned
 pub fn get_all_tags_for_file(
     file_id: u32,
     con: &Connection,
