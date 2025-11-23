@@ -196,7 +196,7 @@ pub fn get_tags_for_file(
 /// - `Err(rusqlite::Error)` if there was a database error
 ///
 /// ---
-/// See also [get_all_tags_on_file]
+/// See also [`get_all_tags_for_file`]
 ///
 pub fn get_all_tags_for_files(
     file_ids: Vec<u32>,
