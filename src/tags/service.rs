@@ -484,7 +484,6 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
     let mut all_ancestor_ids = Vec::with_capacity(1 + current_ancestor_ids.len());
     all_ancestor_ids.insert(0, folder_id);
     all_ancestor_ids.extend(current_ancestor_ids);
-    // TODO get all tags for ancestor IDs, get the explicit ones, and make all children inherit them (use insert or ignore)
     for ancestor in all_ancestor_ids {
         let ancestor_tags = match repository::get_tags_for_folder(
             ancestor,
