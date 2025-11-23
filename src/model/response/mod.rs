@@ -1,7 +1,7 @@
 use rocket::serde::json::Json;
 use rocket::serde::{Deserialize, Serialize};
 
-use crate::model::repository;
+use crate::tags::{Tag, TaggedItem};
 
 pub mod api_responses;
 pub mod file_responses;
@@ -66,8 +66,8 @@ impl From<String> for BasicMessage {
     }
 }
 
-impl From<repository::Tag> for TagApi {
-    fn from(value: repository::Tag) -> Self {
+impl From<Tag> for TagApi {
+    fn from(value: Tag) -> Self {
         TagApi {
             id: Some(value.id),
             title: value.title,
@@ -75,8 +75,8 @@ impl From<repository::Tag> for TagApi {
     }
 }
 
-impl From<repository::TaggedItem> for TaggedItemApi {
-    fn from(value: repository::TaggedItem) -> Self {
+impl From<TaggedItem> for TaggedItemApi {
+    fn from(value: TaggedItem) -> Self {
         Self {
             tag_id: Some(value.tag_id),
             title: value.title,

@@ -128,12 +128,12 @@ pub fn update_folder(folder: &repository::Folder, con: &Connection) -> Result<()
 /// // get files in folders 1 and 2
 /// let files = get_child_files([1u32, 2u32], &con)?;
 /// ```
-pub fn get_child_files<T: IntoIterator<Item = u32>>(
-    ids: T,
+pub fn get_child_files(
+    ids: &[u32],
     con: &Connection,
 ) -> Result<Vec<repository::FileRecord>, rusqlite::Error> {
     // `is_empty` is not part of a trait, so we have to convert ids
-    let ids: HashSet<u32> = ids.into_iter().collect();
+    let ids: HashSet<u32> = ids.into_iter().copied().collect();
     if ids.is_empty() {
         get_child_files_root(con)
     } else {
@@ -182,8 +182,8 @@ pub fn link_folder_to_file(
 }
 
 /// returns all the ids of all child folders recursively for the passed input_ids
-pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
-    input_ids: &T,
+pub fn get_all_child_folder_ids(
+    input_ids: &[u32],
     con: &Connection,
 ) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con
@@ -191,7 +191,7 @@ pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
             "../assets/queries/folder/get_child_folder_ids_recursive.sql"
         ))
         .unwrap();
-    let input_ids: HashSet<u32> = input_ids.clone().into_iter().collect();
+    let input_ids: HashSet<u32> = input_ids.iter().copied().collect();
     let mut ids: Vec<u32> = Vec::new();
     let joined_ids = if input_ids.is_empty() {
         String::new()
@@ -205,6 +205,30 @@ pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
     let res = pst.query_map([joined_ids], |row| row.get(0))?;
     for i in res.into_iter() {
         ids.push(i.unwrap());
+    }
+    Ok(ids)
+}
+
+/// Retrieves all ids of the ancestor folders of the folder with the passed `folder_id`.
+///
+/// Ancestor id order is guaranteed to be in order of closest parent to the folder first.
+/// For example, if called in folder D in A/B/C/D/E, it will return [C, B, A]
+///
+/// ## Parameters:
+/// - `folder_id`: the id of the folder whose ancestors need to be retrieved
+/// - `con`: a connection to the database. Must be closed by the caller
+pub fn get_ancestor_folders_with_id(
+    folder_id: u32,
+    con: &Connection,
+) -> Result<Vec<u32>, rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/folder/get_ancestor_folders_with_id.sql"
+    ))?;
+    // while it's possible for a folder to be nested more than 5 layers deep, 5 is a good starting tradeoff for most folders (at least for my use case)
+    let mut ids: Vec<u32> = Vec::with_capacity(5);
+    let mut retrieved = pst.query([folder_id])?;
+    while let Some(id) = retrieved.next()? {
+        ids.push(id.get(0)?);
     }
     Ok(ids)
 }
@@ -269,7 +293,7 @@ mod get_child_files_tests {
         create_folder_db_entry("top", None);
         create_file_db_entry("bad", Some(1));
         let con = open_connection();
-        let res: HashSet<String> = get_child_files([], &con)
+        let res: HashSet<String> = get_child_files(&[], &con)
             .unwrap()
             .into_iter()
             .map(|f| f.name)
@@ -291,7 +315,7 @@ mod get_child_files_tests {
         create_file_db_entry("good", Some(1));
         create_file_db_entry("good2", Some(2));
         let con = open_connection();
-        let res: HashSet<String> = get_child_files([1, 2], &con)
+        let res: HashSet<String> = get_child_files(&[1, 2], &con)
             .unwrap()
             .into_iter()
             .map(|f| f.name)
@@ -301,6 +325,48 @@ mod get_child_files_tests {
             HashSet::from(["good".to_string(), "good2".to_string()]),
             res
         );
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod get_ancestor_folders_with_id {
+    use crate::repository::folder_repository::get_ancestor_folders_with_id;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_folder_db_entry, init_db_folder};
+
+    #[test]
+    fn should_return_empty_vec_if_no_parents() {
+        init_db_folder();
+        create_folder_db_entry("top", None);
+        let con = open_connection();
+        let res = get_ancestor_folders_with_id(1, &con).unwrap();
+        con.close().unwrap();
+        assert!(res.is_empty());
+        cleanup();
+    }
+
+    #[test]
+    fn should_return_empty_vec_if_folder_does_not_exist() {
+        init_db_folder();
+        let con = open_connection();
+        let res = get_ancestor_folders_with_id(999, &con).unwrap();
+        con.close().unwrap();
+        assert!(res.is_empty());
+        cleanup();
+    }
+
+    #[test]
+    fn should_return_ancestors_in_depth_first_order() {
+        init_db_folder();
+        create_folder_db_entry("A", None);
+        create_folder_db_entry("B", Some(1));
+        create_folder_db_entry("C", Some(2));
+        create_folder_db_entry("D", Some(3));
+        let con = open_connection();
+        let res = get_ancestor_folders_with_id(4, &con).unwrap();
+        con.close().unwrap();
+        assert_eq!(vec![3, 2, 1], res);
         cleanup();
     }
 }

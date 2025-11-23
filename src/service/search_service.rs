@@ -69,7 +69,7 @@ pub fn search_files(
     }
     final_set = final_set.into_iter().unique_by(|f| f.id).collect();
     // now make sure all files have their tags or else we'll get inconsistent response bodies
-    let tag_mapping = match tag_repository::get_tags_on_files(
+    let tag_mapping = match tag_repository::get_all_tags_for_files(
         final_set.iter().map(|f| f.id).collect(),
         &con,
     ) {

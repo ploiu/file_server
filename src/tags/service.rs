@@ -3,22 +3,22 @@ use std::collections::HashSet;
 
 use itertools::Itertools;
 
+use super::{Tag, TagTypes};
 use crate::model::error::file_errors::GetFileError;
 use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
-use crate::model::repository::{self};
 use crate::model::response::{TagApi, TaggedItemApi};
-use crate::repository::open_connection;
+use crate::repository::{folder_repository, open_connection};
 use crate::service::{file_service, folder_service};
+use crate::tags::repository;
 use crate::tags::repository as tag_repository;
 
 /// will create a tag, or return the already-existing tag if one with the same name exists
 /// returns the created/existing tag
 pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
     let con = open_connection();
-    let existing_tag: Option<repository::Tag> = match tag_repository::get_tag_by_title(&name, &con)
-    {
+    let existing_tag: Option<Tag> = match tag_repository::get_tag_by_title(&name, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -29,7 +29,7 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
             return Err(CreateTagError::DbError);
         }
     };
-    let tag: repository::Tag = if let Some(t) = existing_tag {
+    let tag: Tag = if let Some(t) = existing_tag {
         t
     } else {
         match tag_repository::create_tag(&name, &con) {
@@ -52,7 +52,7 @@ pub fn create_tag(name: String) -> Result<TagApi, CreateTagError> {
 /// will return the tag with the passed id
 pub fn get_tag(id: u32) -> Result<TagApi, GetTagError> {
     let con = open_connection();
-    let tag: repository::Tag = match tag_repository::get_tag(id, &con) {
+    let tag: Tag = match tag_repository::get_tag(id, &con) {
         Ok(t) => t,
         Err(rusqlite::Error::QueryReturnedNoRows) => {
             log::error!(
@@ -125,7 +125,7 @@ pub fn update_tag(request: TagApi) -> Result<TagApi, UpdateTagError> {
         }
     };
     // no match, and tag already exists so we're good to go
-    let db_tag = repository::Tag {
+    let db_tag = Tag {
         id: request.id.unwrap(),
         title: new_title.clone(),
     };
@@ -275,7 +275,8 @@ pub fn update_folder_tags(
     // Remove all existing tags from the folder
     for tag in existing_tags.iter() {
         // tags from the db will always have a non-None tag id
-        if let Err(e) = tag_repository::remove_tag_from_folder(folder_id, tag.tag_id.unwrap(), &con)
+        if let Err(e) =
+            tag_repository::remove_explicit_tag_from_folder(folder_id, tag.tag_id.unwrap(), &con)
         {
             log::error!(
                 "Failed to remove tags from folder with id {folder_id}! Error is {e:?}\n{}",
@@ -339,6 +340,10 @@ pub fn update_folder_tags(
     }
 
     con.close().unwrap();
+
+    // Propagate tag changes to all descendants
+    pass_tags_to_children(folder_id)?;
+
     Ok(())
 }
 
@@ -353,7 +358,7 @@ pub fn get_tags_on_file(file_id: u32) -> Result<Vec<TaggedItemApi>, TagRelationE
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let file_tags = match tag_repository::get_tags_on_file(file_id, &con) {
+    let file_tags = match tag_repository::get_all_tags_for_file(file_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -380,7 +385,7 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
         return Err(TagRelationError::FileNotFound);
     }
     let con: rusqlite::Connection = open_connection();
-    let db_tags = match tag_repository::get_tags_on_folder(folder_id, &con) {
+    let db_tags = match tag_repository::get_all_tags_for_folder(folder_id, &con) {
         Ok(tags) => tags,
         Err(e) => {
             log::error!(
@@ -395,10 +400,137 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
     Ok(db_tags.into_iter().map(TaggedItemApi::from).collect())
 }
 
-/// gets all explicit tags on the folder with the passed id, and implies it on all descendant files and folders.
+/// Propagates tag changes from a folder to all its descendant files and folders.
 ///
-/// In order for a tag to be implied, the target file/folder must not already have it (explicit or implicit).
+/// This function ensures that:
+/// - All explicit tags on the folder are implied to descendants (if not already present)
+/// - All removed explicit tags have their implications removed from descendants
+/// - Explicit tags on descendants are never overridden
 ///
 /// ## Parameters
-/// - `folder_id`: the id of the folder to implicate children of
-pub fn implicate_children(folder_id: u32) -> Result<(), TagRelationError> {}
+/// - `folder_id`: the id of the folder whose tags should be propagated to descendants
+///
+/// ## Returns
+/// - `Ok(())` if tags were successfully propagated
+/// - `Err(TagRelationError)` if there was a database error or the folder doesn't exist
+pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
+    // Verify folder exists
+    if !folder_service::folder_exists(Some(folder_id)) {
+        log::error!(
+            "Cannot pass tags to children of folder {folder_id} because it does not exist!\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(TagRelationError::FolderNotFound);
+    }
+
+    let con = open_connection();
+
+    // Get all descendant folders, which doubles as a way to get all descendant files later
+    let mut all_folder_ids = match folder_repository::get_all_child_folder_ids(
+        &[folder_id],
+        &con,
+    ) {
+        Ok(folders) => folders,
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve descendant folders for folder {folder_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    };
+    // need to add the original folder id so that it's truly all folder ids involved
+    all_folder_ids.push(folder_id);
+    let descendant_files: Vec<u32> = match folder_repository::get_child_files(&all_folder_ids, &con)
+    {
+        Ok(files) => files.into_iter().map(|f| f.id.unwrap()).collect(),
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve descendant files for folder {folder_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    };
+
+    // now that we have all descendant folders and files, we need to remove all implicated tags that shouldn't be there
+    if let Err(e) = repository::remove_stale_implicit_tags_from_descendants(folder_id, &con) {
+        con.close().unwrap();
+        log::error!(
+            "Failed to remove implicit tags from descendants of folder {folder_id}! Error is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(TagRelationError::DbError);
+    }
+    /*  stale implied tags are removed, affected files and folders now need to be updated to re-inherit from folders that have that tag.
+    This is because a higher parent could have received that tag after `folder_id` got it. It shouldn't be that a child folder having its tags changed should cause this,
+    because adding a tag to a folder should be blocked if a parent has that tag.*/
+    let current_ancestor_ids = match folder_repository::get_ancestor_folders_with_id(
+        folder_id, &con,
+    ) {
+        Ok(ids) => ids,
+        Err(e) => {
+            con.close().unwrap();
+            log::error!(
+                "Failed to retrieve ancestor folders for folder {folder_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return Err(TagRelationError::DbError);
+        }
+    };
+    // current ancestor ids is in correct order, but we need to insert the current folder id in the beginning as it's the closest to the files and folders being altered
+    let mut all_ancestor_ids = Vec::with_capacity(1 + current_ancestor_ids.len());
+    all_ancestor_ids.insert(0, folder_id);
+    all_ancestor_ids.extend(current_ancestor_ids);
+    for ancestor in all_ancestor_ids {
+        let ancestor_tags = match repository::get_tags_for_folder(
+            ancestor,
+            TagTypes::Explicit,
+            &con,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to retrieve tags for ancestor folder {ancestor}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                return Err(TagRelationError::DbError);
+            }
+        };
+        // since we're in depth-first order, we can flatly call the imply tag function since it will ignore if a record already exists
+        for ancestor_tag in ancestor_tags {
+            if let Err(e) = repository::add_implicit_tag_to_files(
+                ancestor_tag.tag_id,
+                &descendant_files,
+                ancestor,
+                &con,
+            ) {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to add implicit tag {ancestor_tag:?} to descendant files of folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                return Err(TagRelationError::DbError);
+            }
+            // we use all_folder_ids here because the folder being updated needs to inherit from parents too if an explicit tag was removed
+            if let Err(e) = repository::add_implicit_tag_to_folders(
+                ancestor_tag.tag_id,
+                &all_folder_ids,
+                ancestor,
+                &con,
+            ) {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to add implicit tag {ancestor_tag:?} to descendant folders of folder {folder_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                return Err(TagRelationError::DbError);
+            }
+        }
+    }
+    con.close().unwrap();
+    Ok(())
+}

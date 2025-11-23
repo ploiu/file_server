@@ -50,7 +50,7 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     let mut converted_folders: Vec<FolderResponse> = Vec::new();
     for child in child_folders {
         let tags: Vec<TaggedItemApi> =
-            match tag_repository::get_tags_on_folder(child.id.unwrap_or(0), &con) {
+            match tag_repository::get_all_tags_for_folder(child.id.unwrap_or(0), &con) {
                 Ok(t) => t.into_iter().map_into().collect(),
                 Err(e) => {
                     log::error!(
@@ -167,11 +167,9 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
 
 pub fn folder_exists(id: Option<u32>) -> bool {
     let con: Connection = open_connection();
-    let db_id = if Some(0) == id || id.is_none() {
-        None
-    } else {
-        id
-    };
+    // no id in the database if it's 0. 0 || None -> None, else keep original value of id
+    // TODO change to is_none_or once it's no longer unstable (https://doc.rust-lang.org/stable/std/option/enum.Option.html#method.is_none_or)
+    let db_id = id.filter(|&it| it != 0);
     let res = folder_repository::get_by_id(db_id, &con);
     con.close().unwrap();
     res.is_ok()
@@ -203,7 +201,7 @@ pub async fn get_file_previews_for_folder(
 ) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
-    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(&ids, &con) {
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
             con.close().unwrap();
@@ -480,7 +478,7 @@ fn does_file_exist(
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
     let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
-    let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
+    let matching_file = folder_repository::get_child_files(&unwrapped_id, con)?
         .iter()
         .find(|file| file.name == name.to_lowercase())
         .cloned();
@@ -512,7 +510,7 @@ fn get_files_for_folder(
 ) -> Result<Vec<FileApi>, GetChildFilesError> {
     // now we can retrieve all the file records in this folder
     let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
-    let child_files = match folder_repository::get_child_files(unwrapped_id, con) {
+    let child_files = match folder_repository::get_child_files(&unwrapped_id, con) {
         Ok(files) => files,
         Err(e) => {
             log::error!(
@@ -526,7 +524,7 @@ fn get_files_for_folder(
         .iter()
         .map(|f| f.id.expect("files pulled from database didn't have ID!"))
         .collect();
-    let file_tags = match tag_repository::get_tags_on_files(file_ids, con) {
+    let file_tags = match tag_repository::get_all_tags_for_files(file_ids, con) {
         Ok(res) => res,
         Err(e) => {
             log::error!(
@@ -564,7 +562,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     })?;
     // now that we have the folder, we can delete all the files for that folder
     let files =
-        folder_repository::get_child_files([id], con).map_err(|_| DeleteFolderError::DbFailure)?;
+        folder_repository::get_child_files(&[id], con).map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(DeleteFileError::NotFound) => {}
@@ -733,6 +731,112 @@ mod update_folder_tests {
             tags: vec![],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_folders() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check child folder has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+        assert_eq!(child.tags.len(), 1);
+        assert_eq!(child.tags[0], expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_files() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+
+        use crate::test::create_file_db_entry;
+        create_file_db_entry("file.txt", Some(1));
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check file has implicit tag
+        use crate::tags::service::get_tags_on_file;
+        let file_tags = get_tags_on_file(1).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0], expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_implicit_tags_from_descendants() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        // Add tag and propagate
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify child has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 1);
+
+        // Remove tag from parent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify child no longer has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 0);
         cleanup();
     }
 }
