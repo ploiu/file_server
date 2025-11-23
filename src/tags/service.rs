@@ -427,7 +427,7 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
 
     // Get all descendant folders, which doubles as a way to get all descendant files later
     let mut all_folder_ids = match folder_repository::get_all_child_folder_ids(
-        &vec![folder_id],
+        &[folder_id],
         &con,
     ) {
         Ok(folders) => folders,

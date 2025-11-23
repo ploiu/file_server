@@ -182,8 +182,8 @@ pub fn link_folder_to_file(
 }
 
 /// returns all the ids of all child folders recursively for the passed input_ids
-pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
-    input_ids: &T,
+pub fn get_all_child_folder_ids(
+    input_ids: &[u32],
     con: &Connection,
 ) -> Result<Vec<u32>, rusqlite::Error> {
     let mut pst = con
@@ -191,7 +191,7 @@ pub fn get_all_child_folder_ids<T: IntoIterator<Item = u32> + Clone>(
             "../assets/queries/folder/get_child_folder_ids_recursive.sql"
         ))
         .unwrap();
-    let input_ids: HashSet<u32> = input_ids.clone().into_iter().collect();
+    let input_ids: HashSet<u32> = input_ids.iter().copied().collect();
     let mut ids: Vec<u32> = Vec::new();
     let joined_ids = if input_ids.is_empty() {
         String::new()
