@@ -1,3 +1,12 @@
+/// lists the different types of tags that can exist on a file or folder
+#[derive(Eq, PartialEq)]
+pub enum TagTypes {
+    /// The tag was individually set on the file or folder
+    Explicit,
+    /// the tag was individually set on an ancestor folder
+    Implicit,
+}
+
 /// represents a tag in the Tags table of the database. When referencing a tag _on_ a file / folder, use [`TaggedItem`] instead
 #[derive(Debug, PartialEq, Clone)]
 pub struct Tag {

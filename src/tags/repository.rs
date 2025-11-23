@@ -129,6 +129,15 @@ pub fn get_all_tags_for_file(
     Ok(tags)
 }
 
+/// Retrieves all tags for a file with the passed id and tag type
+///
+/// ## Parameters
+/// - `file_id`: the id of the file to get tags for
+/// - `tag_type`: the type of tags to retrieve. If [`TagTypes::Explicit`] is passed, only tags explicitly passed on the file are returned.
+///    If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
+/// - `con`: a database connection to the database. Must be closed by the caller
+///
+/// See Also: [`get_all_tags_for_file`] to get all tags regardless of type
 pub fn get_tags_for_file(
     file_id: u32,
     tag_type: TagTypes,
@@ -222,7 +231,7 @@ pub fn remove_implicit_tag_from_file(
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/delete_implicit_tag_from_file.sql"
+        "../assets/queries/tags/remove_implicit_tag_from_file.sql"
     ))?;
     pst.execute(rusqlite::params![file_id, tag_id])?;
     Ok(())
@@ -253,6 +262,20 @@ pub fn add_explicit_tag_to_folder(
     Ok(())
 }
 
+/// Adds an implicit tag to a folder (won't add if already exists)
+pub fn add_implicit_tag_to_folder(
+    tag_id: u32,
+    folder_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
+    ))?;
+    pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
+    Ok(())
+}
+
 /// Retrieves all tags on the folder with the passed id, explicit or implied.
 /// If no folder is found, an empty Vec is returned.
 ///
@@ -274,6 +297,33 @@ pub fn get_all_tags_for_folder(
     rows.collect::<Result<Vec<models::TaggedItem>, rusqlite::Error>>()
 }
 
+/// Retrieves all tags for a folder with the passed id and tag type
+///
+/// ## Parameters
+/// - `folder_id`: the id of the folder to get tags for
+/// - `tag_type`: the type of tags to retrieve. If [`TagTypes::Explicit`] is passed, only tags explicitly passed on the folder are returned.
+///    If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
+/// - `con`: a database connection to the database. Must be closed by the caller
+///
+/// See Also: [`get_all_tags_for_folder`] to get all tags regardless of type
+pub fn get_tags_for_folder(
+    folder_id: u32,
+    tag_type: TagTypes,
+    con: &Connection,
+) -> Result<Vec<models::TaggedItem>, rusqlite::Error> {
+    let query = match tag_type {
+        TagTypes::Explicit => {
+            include_str!("../assets/queries/tags/get_explicit_tags_for_folder.sql")
+        }
+        TagTypes::Implicit => {
+            include_str!("../assets/queries/tags/get_implicit_tags_for_folder.sql")
+        }
+    };
+    let mut pst = con.prepare(query)?;
+    let rows = pst.query_map(rusqlite::params![folder_id], tagged_item_mapper)?;
+    rows.collect::<Result<Vec<_>, _>>()
+}
+
 pub fn remove_explicit_tag_from_folder(
     folder_id: u32,
     tag_id: u32,
@@ -286,48 +336,16 @@ pub fn remove_explicit_tag_from_folder(
     Ok(())
 }
 
-/// Adds an implicit tag to a folder (won't add if already exists)
-pub fn add_implicit_tag_to_folder(
-    tag_id: u32,
-    folder_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
-    Ok(())
-}
-
 /// Deletes an implicit tag from a folder if it exists
-pub fn delete_implicit_tag_from_folder(
+pub fn remove_implicit_tag_from_folder(
     tag_id: u32,
     folder_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/delete_implicit_tag_from_folder.sql"
+        "../assets/queries/tags/remove_implicit_tag_from_folder.sql"
     ))?;
     pst.execute(rusqlite::params![folder_id, tag_id])?;
-    Ok(())
-}
-
-/// Updates or inserts an implicit tag on a folder, replacing any existing implicit tag from a different ancestor
-pub fn upsert_implicit_tag_to_folder(
-    tag_id: u32,
-    folder_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    // First delete any existing implicit tag
-    delete_implicit_tag_from_folder(tag_id, folder_id, con)?;
-
-    // Then insert the new one
-    let mut insert_pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
-    ))?;
-    insert_pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
     Ok(())
 }
 
@@ -346,6 +364,44 @@ pub fn remove_implicit_tags_from_folders(
     let mut pst = con.prepare(&query)?;
     pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
     Ok(())
+}
+
+/// Updates or inserts an implicit tag on a folder, replacing any existing implicit tag from a different ancestor
+pub fn upsert_implicit_tag_to_folder(
+    tag_id: u32,
+    folder_id: u32,
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    // First delete any existing implicit tag
+    remove_implicit_tag_from_folder(tag_id, folder_id, con)?;
+
+    // Then insert the new one
+    let mut insert_pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
+    ))?;
+    insert_pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
+    Ok(())
+}
+
+// ================= both =================
+
+/// for a given folder id, removes all implicit tags from descendants, so long as the tags being removed shouldn't be implied for the folder.
+///
+/// For example, if a folder has tags A, B, and C; all files and folders that have tags implicated by `implied_from_id` are removed _unless_ they are A, B, or C.
+/// This can be used to clean up tags that used to be implied by the folder, but no longer are.
+///
+/// ## Parameters:
+/// - `implied_from_id`: the id of the folder whose descendants need to have old implicated tags removed
+/// - `con`: a connection to the database. Must be closed by the caller
+pub fn remove_stale_implicit_tags_from_descendants(
+    implied_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/remove_stale_implicit_tags_from_descendants.sql"
+    ))?;
+    pst.execute([implied_from_id]).and(Ok(()))
 }
 
 // ================= misc =================
