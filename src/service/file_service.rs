@@ -739,11 +739,14 @@ mod update_file_tests {
 
     use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::repository::open_connection;
     use crate::service::file_service::{file_dir, get_file_metadata, update_file};
     use crate::service::folder_service;
+    use crate::tags::repository as tag_repository;
     use crate::test::{
         cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
-        create_folder_disk, create_tag_file, init_db_folder, now,
+        create_folder_disk, create_tag_db_entry, create_tag_file, create_tag_folder,
+        imply_tag_on_file, init_db_folder, now,
     };
 
     #[test]
@@ -1078,6 +1081,177 @@ mod update_file_tests {
         update_file(file).unwrap();
         let retrieved = get_file_metadata(1);
         assert_eq!(Some(FileTypes::Text), retrieved.unwrap().file_type);
+        cleanup();
+    }
+
+    #[test]
+    fn file_moved_loses_all_implied_tags_from_old_ancestors() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B and C
+        create_folder_db_entry("A", None);         // id 1
+        create_folder_db_entry("B", Some(1));      // id 2
+        create_folder_db_entry("C", None);         // id 3
+        create_folder_disk("A");
+        create_folder_disk("A/B");
+        create_folder_disk("C");
+        
+        // Add tags to A and B
+        create_tag_folder("tagA", 1);
+        create_tag_folder("tagB", 2);
+        
+        // Create file in B (should inherit tagA and tagB)
+        create_file_db_entry("test.txt", Some(2)); // id 1
+        create_file_disk("A/B/test.txt", "test");
+        
+        // Manually imply tags first (simulating initial state)
+        imply_tag_on_file(1, 1, 1); // tagA from A
+        imply_tag_on_file(2, 1, 2); // tagB from B
+        
+        // Move file to C (different branch)
+        update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(3),
+            tags: vec![],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
+        })
+        .unwrap();
+        
+        // File should have no tags now (all old implied tags removed)
+        let tags = get_file_metadata(1).unwrap().tags;
+        assert_eq!(tags.len(), 0);
+        
+        cleanup();
+    }
+
+    #[test]
+    fn file_moved_keeps_all_explicit_tags() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B and C
+        create_folder_db_entry("A", None);         // id 1
+        create_folder_db_entry("B", Some(1));      // id 2
+        create_folder_db_entry("C", None);         // id 3
+        create_folder_disk("A");
+        create_folder_disk("A/B");
+        create_folder_disk("C");
+        
+        // Create file in B with explicit tag
+        create_file_db_entry("test.txt", Some(2)); // id 1
+        create_file_disk("A/B/test.txt", "test");
+        create_tag_file("explicitTag", 1);
+        
+        // Move file to C
+        update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(3),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
+                title: "explicitTag".to_string(),
+                implicit_from: None,
+            }],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
+        })
+        .unwrap();
+        
+        // File should still have explicit tag
+        let tags = get_file_metadata(1).unwrap().tags;
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].title, "explicitTag");
+        assert_eq!(tags[0].implicit_from, None);
+        
+        cleanup();
+    }
+
+    #[test]
+    fn file_moved_new_ancestors_do_not_override_explicit_tags() {
+        init_db_folder();
+        // Create folders
+        create_folder_db_entry("A", None);         // id 1
+        create_folder_db_entry("B", None);         // id 2
+        create_folder_disk("A");
+        create_folder_disk("B");
+        
+        // Create a tag that will be on both the folder and the file
+        let tag_id = create_tag_db_entry("sharedTag");
+        
+        // Add tag to folder B
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
+        con.close().unwrap();
+        
+        // Create file in A with explicit sharedTag
+        create_file_db_entry("test.txt", Some(1)); // id 1
+        create_file_disk("A/test.txt", "test");
+        let con2 = open_connection();
+        tag_repository::add_explicit_tag_to_file(1, tag_id, &con2).unwrap();
+        con2.close().unwrap();
+        
+        // Move file to B (which also has sharedTag)
+        update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(2),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(tag_id),
+                title: "sharedTag".to_string(),
+                implicit_from: None,
+            }],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
+        })
+        .unwrap();
+        
+        // File should still have explicit tag (not overridden by implicit)
+        let tags = get_file_metadata(1).unwrap().tags;
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].title, "sharedTag");
+        assert_eq!(tags[0].implicit_from, None); // Still explicit
+        
+        cleanup();
+    }
+
+    #[test]
+    fn file_moved_implicates_all_explicit_tags_of_new_ancestors() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B and C
+        create_folder_db_entry("A", None);         // id 1
+        create_folder_db_entry("B", Some(1));      // id 2
+        create_folder_db_entry("C", None);         // id 3
+        create_folder_disk("A");
+        create_folder_disk("A/B");
+        create_folder_disk("C");
+        
+        // Add tags to C
+        create_tag_folder("tagC", 3);
+        
+        // Create file in A/B
+        create_file_db_entry("test.txt", Some(2)); // id 1
+        create_file_disk("A/B/test.txt", "test");
+        
+        // Move file to C
+        update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            folder_id: Some(3),
+            tags: vec![],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
+        })
+        .unwrap();
+        
+        // File should have tagC implied from C
+        let tags = get_file_metadata(1).unwrap().tags;
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].title, "tagC");
+        assert_eq!(tags[0].implicit_from, Some(3));
+        
         cleanup();
     }
 }
