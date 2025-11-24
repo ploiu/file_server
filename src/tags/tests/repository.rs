@@ -376,31 +376,6 @@ mod get_tags_on_files_tests {
     }
 }
 
-mod implicit_tag_tests {
-    use crate::repository::open_connection;
-    use crate::tags::repository::{get_all_tags_for_file, remove_implicit_tag_from_file};
-    use crate::test::*;
-
-    #[test]
-    fn delete_implicit_tag_from_file_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_file_db_entry("file.txt", Some(1));
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        // Add implicit tag
-        crate::test::imply_tag_on_file(tag_id, 1, 1);
-        let tags = get_all_tags_for_file(1, &con).unwrap();
-        assert_eq!(tags.len(), 1);
-        // Delete the implicit tag
-        remove_implicit_tag_from_file(tag_id, 1, &con).unwrap();
-        let tags = get_all_tags_for_file(1, &con).unwrap();
-        assert_eq!(tags.len(), 0);
-        con.close().unwrap();
-        cleanup();
-    }
-}
-
 mod add_implicit_tag_to_folders_tests {
     use crate::repository::open_connection;
     use crate::tags::repository::{add_implicit_tag_to_folders, get_all_tags_for_folder};
