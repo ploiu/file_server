@@ -126,42 +126,19 @@ pub fn add_implicit_tag_to_files(
 /// - `con`: a reference to a database connection. The caller must manage closing the connection.
 ///
 /// ## Returns:
-/// - `Ok(())` if the operation completed successfully _or_ if `file_ids` is empty _or_ if `tag_ids` is empty
-/// - `Err(rusqlite::Error)` if a database interaction fails
+/// will return a rusqlite error if a database interaction fails
 pub fn add_implicit_tags_to_files(
     file_ids: &[u32],
     tag_ids: &[u32],
     implicit_from_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    // to prevent unnecessary work
-    if file_ids.is_empty() || tag_ids.is_empty() {
-        return Ok(());
-    }
-
-    // chunk file_ids and tag_ids to prevent exceeding SQLite's limits
-    let file_chunks = file_ids.chunks(999);
-    
-    for file_chunk in file_chunks {
-        let tag_chunks = tag_ids.chunks(999);
-        for tag_chunk in tag_chunks {
-            // Build a batch insert statement with multiple VALUES
-            let values: Vec<String> = file_chunk
-                .iter()
-                .flat_map(|file_id| {
-                    tag_chunk.iter().map(move |tag_id| {
-                        format!("({tag_id}, {file_id}, {implicit_from_id})")
-                    })
-                })
-                .collect();
-            
-            let sql = format!(
-                "INSERT OR IGNORE INTO TaggedItems(tagId, fileId, implicitFromId) VALUES {}",
-                values.join(",")
-            );
-            
-            log::debug!("add_implicit_tags_to_files sql: {sql}");
-            con.execute(&sql, [])?;
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_file.sql"
+    ))?;
+    for file_id in file_ids {
+        for tag_id in tag_ids {
+            pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
         }
     }
     Ok(())
