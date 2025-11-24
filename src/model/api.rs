@@ -6,14 +6,6 @@ use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::response::TaggedItemApi;
 
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
-#[serde(crate = "rocket::serde")]
-pub struct FileMetadata {
-    pub size: u32,
-    pub date_created: u64,
-    pub file_type: FileTypes,
-}
-
 #[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
 #[cfg_attr(not(test), derive(PartialEq))]
 #[serde(crate = "rocket::serde")]

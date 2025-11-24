@@ -4,7 +4,7 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::fs::{self};
 use std::os::unix::fs::MetadataExt;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::string::ToString;
 
 use once_cell::sync::Lazy;
@@ -341,25 +341,29 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     let mut file = file;
     // first check if the file exists
-    let con: Connection = repository::open_connection();
+    let con = repository::open_connection();
     let repo_file = file_repository::get_file(file.id, &con);
-    if repo_file.is_err() {
+    let repo_file = if let Ok(f) = repo_file {
+        f
+    } else {
         con.close().unwrap();
         return Err(UpdateFileError::NotFound);
-    }
-    let repo_file = repo_file.unwrap();
-    // now check if the folder exists
-    let parent_folder =
-        folder_service::get_folder(file.folder_id).map_err(|_| UpdateFileError::FolderNotFound)?;
+    };
+    let new_parent_folder = if let Ok(f) = folder_service::get_folder(file.folder_id) {
+        f
+    } else {
+        con.close().unwrap();
+        return Err(UpdateFileError::FolderNotFound);
+    };
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
-    for f in parent_folder.files.iter() {
+    for f in new_parent_folder.files.iter() {
         // make sure to ignore name collision if the file with the same name is the exact same file
         if f.id != file.id && name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
-    for f in parent_folder.folders.iter() {
+    for f in new_parent_folder.folders.iter() {
         if name_regex.is_match(f.name.as_str()) {
             return Err(UpdateFileError::FolderAlreadyExistsWithSameName);
         }
@@ -371,11 +375,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         file_repository::get_file_path(file.id, &con).unwrap()
     );
     // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
-    let new_parent_id = if file.folder_id == Some(0) {
-        None
-    } else {
-        file.folder_id
-    };
+    let new_parent_id = file.folder_id.filter(|&it| it != 0);
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
     let converted_record = FileRecord::from(&file);
@@ -387,11 +387,12 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         );
         return Err(UpdateFileError::DbError);
     }
-    // now that we've updated the file in the database, it's time to update the file system
+    // now that we've updated the file in the database, it's time to update the file system.
+    // sanitization is handled in file.name()
     let new_path = format!(
         "{}/{}/{}",
         file_dir(),
-        parent_folder.path,
+        new_parent_folder.path,
         file.name().unwrap()
     );
     // update the file's tags in the db
