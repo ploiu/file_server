@@ -508,3 +508,151 @@ mod add_implicit_tag_to_files_tests {
         cleanup();
     }
 }
+
+mod batch_remove_implicit_tags_tests {
+    use crate::repository::open_connection;
+    use crate::tags::repository::{
+        batch_remove_implicit_tags, get_all_tags_for_file, get_all_tags_for_folder,
+    };
+    use crate::test::*;
+
+    #[test]
+    fn removes_all_specified_tags() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        let tag_id = create_tag_db_entry("test_tag");
+        imply_tag_on_file(tag_id, 1, 1);
+        let con = open_connection();
+        batch_remove_implicit_tags(&[1], &[], &[1], &con).unwrap();
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_not_touch_unspecified_entries() {
+        init_db_folder();
+        create_folder_db_entry("parent1", None); // id 1
+        create_folder_db_entry("parent2", None); // id 2
+        create_file_db_entry("file1.txt", Some(1)); // id 1
+        create_file_db_entry("file2.txt", Some(2)); // id 2
+        let tag_id = create_tag_db_entry("test_tag");
+        imply_tag_on_file(tag_id, 1, 1);
+        imply_tag_on_file(tag_id, 2, 2);
+        let con = open_connection();
+        // Remove only from file 1
+        batch_remove_implicit_tags(&[1], &[], &[1], &con).unwrap();
+        let tags1 = get_all_tags_for_file(1, &con).unwrap();
+        let tags2 = get_all_tags_for_file(2, &con).unwrap();
+        assert_eq!(tags1.len(), 0);
+        assert_eq!(tags2.len(), 1); // file 2 should still have its tag
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn handles_many_file_ids() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file1.txt", Some(1)); // id 1
+        create_file_db_entry("file2.txt", Some(1)); // id 2
+        let tag_id = create_tag_db_entry("test_tag");
+        // Add implicit tags to file 1 and file 2
+        imply_tag_on_file(tag_id, 1, 1);
+        imply_tag_on_file(tag_id, 2, 1);
+        let con = open_connection();
+        // Generate a large range of file ids including 1 and 2 (but many won't exist)
+        let file_ids: Vec<u32> = (1..=5000).collect();
+        batch_remove_implicit_tags(&file_ids, &[], &[1], &con).unwrap();
+        let tags1 = get_all_tags_for_file(1, &con).unwrap();
+        let tags2 = get_all_tags_for_file(2, &con).unwrap();
+        assert_eq!(tags1.len(), 0);
+        assert_eq!(tags2.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn handles_many_folder_ids() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_folder_db_entry("child1", Some(1)); // id 2
+        create_folder_db_entry("child2", Some(1)); // id 3
+        let tag_id = create_tag_db_entry("test_tag");
+        // Add implicit tags to folder 2 and folder 3
+        imply_tag_on_folder(tag_id, 2, 1);
+        imply_tag_on_folder(tag_id, 3, 1);
+        let con = open_connection();
+        // Generate a large range of folder ids including 2 and 3 (but many won't exist)
+        let folder_ids: Vec<u32> = (1..=5000).collect();
+        batch_remove_implicit_tags(&[], &folder_ids, &[1], &con).unwrap();
+        let tags2 = get_all_tags_for_folder(2, &con).unwrap();
+        let tags3 = get_all_tags_for_folder(3, &con).unwrap();
+        assert_eq!(tags2.len(), 0);
+        assert_eq!(tags3.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn handles_many_implicit_from_ids() {
+        init_db_folder();
+        create_folder_db_entry("parent1", None); // id 1
+        create_folder_db_entry("parent2", None); // id 2
+        create_file_db_entry("file.txt", None); // id 1
+        let tag_id1 = create_tag_db_entry("test_tag1");
+        let tag_id2 = create_tag_db_entry("test_tag2");
+        // Add implicit tags from folder 1 and folder 2 (different tags to avoid unique constraint)
+        imply_tag_on_file(tag_id1, 1, 1);
+        imply_tag_on_file(tag_id2, 1, 2);
+        let con = open_connection();
+        // Verify we have 2 tags now
+        let tags_before = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags_before.len(), 2);
+        // Generate a large range of implicit_from_ids including 1 and 2 (but many won't exist)
+        let implicit_from_ids: Vec<u32> = (1..=5000).collect();
+        batch_remove_implicit_tags(&[1], &[], &implicit_from_ids, &con).unwrap();
+        let tags_after = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags_after.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_nothing_when_implicit_from_ids_is_empty() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        let tag_id = create_tag_db_entry("test_tag");
+        imply_tag_on_file(tag_id, 1, 1);
+        let con = open_connection();
+        // Should not remove anything when implicit_from_ids is empty
+        let result = batch_remove_implicit_tags(&[1], &[1], &[], &con);
+        assert!(result.is_ok());
+        // Verify the tag still exists
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1, "Tag should not have been removed");
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_nothing_when_file_and_folder_ids_empty() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        let tag_id = create_tag_db_entry("test_tag");
+        imply_tag_on_file(tag_id, 1, 1);
+        let con = open_connection();
+        // Should not remove anything when both file_ids and folder_ids are empty
+        let result = batch_remove_implicit_tags(&[], &[], &[1], &con);
+        assert!(result.is_ok());
+        // Verify the tag still exists
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1, "Tag should not have been removed");
+        con.close().unwrap();
+        cleanup();
+    }
+}

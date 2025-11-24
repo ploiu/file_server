@@ -360,23 +360,56 @@ pub fn remove_stale_implicit_tags_from_descendants(
 /// - `folder_ids`: the ids of the folders to remove implicit tags from
 /// - `implicit_from_ids`: the ids of the folders that implicate the tags to be removed
 /// - `con`: a connection to the database. Must be closed by the caller
+///
+/// ## Returns:
+/// - `Ok(())` if the update completed successfully _or_ if `implicit_from_ids` is empty _or_ if both `file_ids` and `folder_ids` are empty
+/// - `Err(rusqlite::Error)` if the database operation errors
 pub fn batch_remove_implicit_tags(
     file_ids: &[u32],
     folder_ids: &[u32],
     implicit_from_ids: &[u32],
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    // rusqlite does not allow us to pass an array of values as a param, so we must create them manually
-    let sql_file_ids: String = file_ids.iter().map(|&it| it.to_string()).join(",");
-    let sql_folder_ids: String = folder_ids.iter().map(|&it| it.to_string()).join(",");
-    let sql_implicit_from_ids: String =
-        implicit_from_ids.iter().map(|&it| it.to_string()).join(",");
+    // to prevent the mass deletion of explicit tags or unnecessary work
+    if implicit_from_ids.is_empty() || (file_ids.is_empty() && folder_ids.is_empty()) {
+        return Ok(());
+    }
 
-    let formatted_sql = include_str!("../assets/queries/tags/batch_remove_implicit_tags.sql")
-        .replace(":fileIds", &sql_file_ids)
-        .replace(":folderIds", &sql_folder_ids)
-        .replace(":implicitFromIds", &sql_implicit_from_ids);
-    con.execute_batch(&formatted_sql)
+    // chunk implicit_from_ids to prevent exceeding SQLite's limits
+    let implicit_id_chunks = implicit_from_ids.iter().chunks(999);
+
+    for chunk in &implicit_id_chunks {
+        let implicit_clause = chunk.map(|id| id.to_string()).join(",");
+
+        // build WHERE clause with IN conditions for files and folders
+        let mut where_parts = Vec::new();
+
+        if !file_ids.is_empty() {
+            let file_chunks = file_ids.chunks(999);
+            for file_chunk in file_chunks {
+                let file_clause = file_chunk.iter().map(|id| id.to_string()).join(",");
+                where_parts.push(format!("fileId in ({file_clause})"));
+            }
+        }
+
+        if !folder_ids.is_empty() {
+            let folder_chunks = folder_ids.chunks(999);
+            for folder_chunk in folder_chunks {
+                let folder_clause = folder_chunk.iter().map(|id| id.to_string()).join(",");
+                where_parts.push(format!("folderId in ({folder_clause})"));
+            }
+        }
+
+        let where_clause = where_parts.join(" or ");
+        let sql = format!(
+            "delete from TaggedItems where ({where_clause}) and implicitFromId in ({implicit_clause})"
+        );
+
+        log::debug!("batch_remove_implicit_tags sql: {sql}");
+        con.execute(&sql, [])?;
+    }
+
+    Ok(())
 }
 
 // ================= misc =================
