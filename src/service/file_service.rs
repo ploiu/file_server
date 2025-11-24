@@ -24,6 +24,7 @@ use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
 use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::folder_service;
+use crate::tags::repository as tag_repository;
 use crate::tags::service as tag_service;
 use crate::{queue, repository};
 
@@ -338,6 +339,46 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
     Ok(())
 }
 
+/// Removes all implicit tags from a file that were implied by its old ancestor folders.
+///
+/// This function should be called when a file is moved to a new parent folder,
+/// before the file's parent is updated in the database.
+///
+/// ## Parameters
+/// - `file_id`: the ID of the file whose old ancestor tags should be removed
+/// - `con`: a database connection. Must be closed by the caller
+///
+/// ## Returns
+/// - `Ok(())` if tags were successfully removed
+/// - `Err(UpdateFileError::TagError)` if there was an error removing tags
+fn remove_all_stale_ancestor_tags(
+    file_id: u32,
+    con: &Connection,
+) -> Result<(), UpdateFileError> {
+    // Get all ancestors of the file at its current location
+    let old_ancestor_ids = match file_repository::get_all_ancestors(file_id, con) {
+        Ok(ids) => ids,
+        Err(e) => {
+            log::error!(
+                "Failed to get ancestors for file {file_id}! Nested exception is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return Err(UpdateFileError::TagError);
+        }
+    };
+
+    // Remove all implicit tags from old ancestors
+    if let Err(e) = tag_repository::batch_remove_implicit_tags(&[file_id], &[], &old_ancestor_ids, con) {
+        log::error!(
+            "Failed to remove implicit tags from file {file_id}! Nested exception is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(UpdateFileError::TagError);
+    }
+
+    Ok(())
+}
+
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     let mut file = file;
     // first check if the file exists
@@ -374,8 +415,16 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         file_dir(),
         file_repository::get_file_path(file.id, &con).unwrap()
     );
-    // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
+    
+    // Check if the parent folder has changed and remove old ancestor tags if so
     let new_parent_id = file.folder_id.filter(|&it| it != 0);
+    let old_parent_id = repo_file.parent_id;
+    if new_parent_id != old_parent_id {
+        // Remove all implicit tags from old ancestors before updating the file
+        remove_all_stale_ancestor_tags(file.id, &con)?;
+    }
+    
+    // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
     let converted_record = FileRecord::from(&file);

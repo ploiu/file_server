@@ -167,14 +167,16 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
     Ok(())
 }
 
-/// Updates the tags on a file by replacing all existing tags with the provided list.
+/// Updates the tags on a file by replacing all existing explicit tags with the provided list.
 ///
-/// Only explict tags can be managed this way.
+/// Only explicit tags can be managed this way. After updating explicit tags, this function
+/// will recalculate all implied tags from the file's ancestor folders.
 ///
 /// This function will:
-/// 1. Remove all existing tags from the file
+/// 1. Remove all existing explicit tags from the file
 /// 2. Add tags that already exist in the database (those with an `id`)
 /// 3. Create and add new tags (those without an `id`)
+/// 4. Recalculate and imply all ancestor tags to the file
 ///
 /// Duplicate tags in the input list will be automatically deduplicated to prevent
 /// database constraint violations.
@@ -239,6 +241,11 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
             return Err(TagRelationError::DbError);
         }
     }
+    con.close().unwrap();
+    
+    // Recalculate implied tags from ancestors
+    imply_all_ancestor_tags(file_id)?;
+    
     Ok(())
 }
 
@@ -528,6 +535,88 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
             }
         }
     }
+    con.close().unwrap();
+    Ok(())
+}
+
+/// Implies all explicit tags from a file's ancestor folders to the file.
+///
+/// This function retrieves all ancestor folders of a file and implies their
+/// explicit tags to the file. Tags are processed in depth-first order (closest
+/// ancestor first), ensuring that tags from closer ancestors take precedence.
+///
+/// The `insert or ignore` behavior ensures that:
+/// - Explicit tags on the file are never overridden
+/// - Tags from closer ancestors take precedence over tags from farther ancestors
+///
+/// ## Parameters
+/// - `file_id`: the ID of the file to imply ancestor tags to
+///
+/// ## Returns
+/// - `Ok(())` if tags were successfully implied
+/// - `Err(TagRelationError::FileNotFound)` if the file doesn't exist
+/// - `Err(TagRelationError::DbError)` if there was a database error
+pub fn imply_all_ancestor_tags(file_id: u32) -> Result<(), TagRelationError> {
+    // Verify file exists
+    if !file_service::check_file_exists(file_id) {
+        log::error!(
+            "Cannot imply ancestor tags to file {file_id} because it does not exist!\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(TagRelationError::FileNotFound);
+    }
+
+    let con = open_connection();
+
+    // Get all ancestors in depth-first order
+    let ancestor_ids = match crate::repository::file_repository::get_all_ancestors(file_id, &con) {
+        Ok(ids) => ids,
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve ancestors for file {file_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(TagRelationError::DbError);
+        }
+    };
+
+    // For each ancestor (in depth-first order), get explicit tags and imply them
+    for ancestor_id in ancestor_ids {
+        let ancestor_tags = match repository::get_tags_for_folder(
+            ancestor_id,
+            TagTypes::Explicit,
+            &con,
+        ) {
+            Ok(t) => t,
+            Err(e) => {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to retrieve tags for ancestor folder {ancestor_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                return Err(TagRelationError::DbError);
+            }
+        };
+
+        // Imply each ancestor's tags to the file
+        for ancestor_tag in ancestor_tags {
+            if let Err(e) = repository::add_implicit_tag_to_files(
+                ancestor_tag.tag_id,
+                &[file_id],
+                ancestor_id,
+                &con,
+            ) {
+                con.close().unwrap();
+                log::error!(
+                    "Failed to add implicit tag {ancestor_tag:?} to file {file_id}! Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                return Err(TagRelationError::DbError);
+            }
+        }
+    }
+
     con.close().unwrap();
     Ok(())
 }
