@@ -545,10 +545,6 @@ pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
 /// explicit tags to the file. Tags are processed in depth-first order (closest
 /// ancestor first), ensuring that tags from closer ancestors take precedence.
 ///
-/// The `insert or ignore` behavior ensures that:
-/// - Explicit tags on the file are never overridden
-/// - Tags from closer ancestors take precedence over tags from farther ancestors
-///
 /// ## Parameters
 /// - `file_id`: the ID of the file to imply ancestor tags to
 ///
@@ -599,21 +595,20 @@ pub fn imply_all_ancestor_tags(file_id: u32) -> Result<(), TagRelationError> {
             }
         };
 
-        // Imply each ancestor's tags to the file
-        for ancestor_tag in ancestor_tags {
-            if let Err(e) = repository::add_implicit_tag_to_files(
-                ancestor_tag.tag_id,
-                &[file_id],
-                ancestor_id,
-                &con,
-            ) {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to add implicit tag {ancestor_tag:?} to file {file_id}! Error is {e:?}\n{}",
-                    Backtrace::force_capture()
-                );
-                return Err(TagRelationError::DbError);
-            }
+        // Imply ancestor's tags to the file
+        let tag_ids: Vec<u32> = ancestor_tags.iter().map(|t| t.tag_id).collect();
+        if let Err(e) = repository::add_implicit_tags_to_files(
+            &[file_id],
+            &tag_ids,
+            ancestor_id,
+            &con,
+        ) {
+            con.close().unwrap();
+            log::error!(
+                "Failed to add implicit tags to file {file_id}! Error is {e:?}\n{}",
+                Backtrace::force_capture()
+            );
+            return Err(TagRelationError::DbError);
         }
     }
 

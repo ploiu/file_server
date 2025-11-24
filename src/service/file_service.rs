@@ -421,12 +421,10 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     let new_parent_id = file.folder_id.filter(|&it| it != 0);
     let old_parent_id = repo_file.parent_id;
     if new_parent_id != old_parent_id {
-        // Remove all implicit tags from old ancestors before updating the file
         remove_all_stale_ancestor_tags(file.id, &con)?;
     }
     
     // Update the file in the database with new parent
-    // Note: Tag re-evaluation happens in update_file_tags() after this update
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
     let converted_record = FileRecord::from(&file);
@@ -1181,17 +1179,15 @@ mod update_file_tests {
         // Create a tag that will be on both the folder and the file
         let tag_id = create_tag_db_entry("sharedTag");
         
-        // Add tag to folder B
+        // Add tag to folder B and file in A
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
-        con.close().unwrap();
         
         // Create file in A with explicit sharedTag
         create_file_db_entry("test.txt", Some(1)); // id 1
         create_file_disk("A/test.txt", "test");
-        let con2 = open_connection();
-        tag_repository::add_explicit_tag_to_file(1, tag_id, &con2).unwrap();
-        con2.close().unwrap();
+        tag_repository::add_explicit_tag_to_file(1, tag_id, &con).unwrap();
+        con.close().unwrap();
         
         // Move file to B (which also has sharedTag)
         update_file(FileApi {

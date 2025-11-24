@@ -112,6 +112,38 @@ pub fn add_implicit_tag_to_files(
     Ok(())
 }
 
+/// Adds multiple implicit tags to multiple files
+///
+/// For each file, each tag is added _only_ if that file doesn't already have that tag (explicit or implicit).
+/// The `insert or ignore` behavior ensures that:
+/// - Explicit tags on the file are never overridden
+/// - Tags from closer ancestors take precedence over tags from farther ancestors
+///
+/// ## Parameters:
+/// - `file_ids`: the ids of the files to add the tags to
+/// - `tag_ids`: the ids of the tags to add
+/// - `implicit_from_id`: the id of the folder that implicates the tags on the files
+/// - `con`: a reference to a database connection. The caller must manage closing the connection.
+///
+/// ## Returns:
+/// will return a rusqlite error if a database interaction fails
+pub fn add_implicit_tags_to_files(
+    file_ids: &[u32],
+    tag_ids: &[u32],
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    let mut pst = con.prepare(include_str!(
+        "../assets/queries/tags/add_implicit_tag_to_file.sql"
+    ))?;
+    for file_id in file_ids {
+        for tag_id in tag_ids {
+            pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
+        }
+    }
+    Ok(())
+}
+
 /// Retrieves all tags on a file, explicit or implied
 ///
 /// ## Parameters:

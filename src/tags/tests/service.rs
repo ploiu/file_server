@@ -862,7 +862,7 @@ mod imply_all_ancestor_tags_tests {
     use crate::test::*;
 
     #[test]
-    fn properly_implies_tags_in_depth_first_order() {
+    fn implies_tags_from_all_ancestors() {
         init_db_folder();
         // Create folder hierarchy: A -> B -> C
         create_folder_db_entry("A", None);         // id 1
