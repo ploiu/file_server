@@ -368,6 +368,7 @@ fn remove_all_stale_ancestor_tags(
     };
 
     // Remove all implicit tags from old ancestors
+    // Parameters: file_ids, folder_ids (empty because we only operate on files), implicit_from_ids
     if let Err(e) = tag_repository::batch_remove_implicit_tags(&[file_id], &[], &old_ancestor_ids, con) {
         log::error!(
             "Failed to remove implicit tags from file {file_id}! Nested exception is {e:?}\n{}",
@@ -424,7 +425,8 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         remove_all_stale_ancestor_tags(file.id, &con)?;
     }
     
-    // Update the file in the database
+    // Update the file in the database with new parent
+    // Note: Tag re-evaluation happens in update_file_tags() after this update
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
     let converted_record = FileRecord::from(&file);

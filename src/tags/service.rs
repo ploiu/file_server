@@ -9,7 +9,7 @@ use crate::model::error::tag_errors::{
     CreateTagError, DeleteTagError, GetTagError, TagRelationError, UpdateTagError,
 };
 use crate::model::response::{TagApi, TaggedItemApi};
-use crate::repository::{folder_repository, open_connection};
+use crate::repository::{file_repository, folder_repository, open_connection};
 use crate::service::{file_service, folder_service};
 use crate::tags::repository;
 use crate::tags::repository as tag_repository;
@@ -569,7 +569,7 @@ pub fn imply_all_ancestor_tags(file_id: u32) -> Result<(), TagRelationError> {
     let con = open_connection();
 
     // Get all ancestors in depth-first order
-    let ancestor_ids = match crate::repository::file_repository::get_all_ancestors(file_id, &con) {
+    let ancestor_ids = match file_repository::get_all_ancestors(file_id, &con) {
         Ok(ids) => ids,
         Err(e) => {
             log::error!(
