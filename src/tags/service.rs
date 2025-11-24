@@ -242,10 +242,10 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
         }
     }
     con.close().unwrap();
-    
+
     // Recalculate implied tags from ancestors
     imply_all_ancestor_tags(file_id)?;
-    
+
     Ok(())
 }
 
@@ -597,12 +597,9 @@ pub fn imply_all_ancestor_tags(file_id: u32) -> Result<(), TagRelationError> {
 
         // Imply ancestor's tags to the file
         let tag_ids: Vec<u32> = ancestor_tags.iter().map(|t| t.tag_id).collect();
-        if let Err(e) = repository::add_implicit_tags_to_files(
-            &[file_id],
-            &tag_ids,
-            ancestor_id,
-            &con,
-        ) {
+        if let Err(e) =
+            repository::add_implicit_tags_to_files(&[file_id], &tag_ids, ancestor_id, &con)
+        {
             con.close().unwrap();
             log::error!(
                 "Failed to add implicit tags to file {file_id}! Error is {e:?}\n{}",

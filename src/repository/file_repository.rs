@@ -180,7 +180,7 @@ pub fn get_all_ancestors(file_id: u32, con: &Connection) -> Result<Vec<u32>, rus
     if file_id == 0 {
         return Ok(Vec::new());
     }
-    
+
     let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_ancestors.sql"))?;
     let mut ids: Vec<u32> = Vec::with_capacity(5);
     let mut retrieved = pst.query([file_id])?;
@@ -853,17 +853,17 @@ mod get_all_ancestors_tests {
     fn should_return_ancestors_in_depth_first_order() {
         init_db_folder();
         // Create folder hierarchy: A -> B -> C -> D
-        create_folder_db_entry("A", None);         // id 1
-        create_folder_db_entry("B", Some(1));      // id 2
-        create_folder_db_entry("C", Some(2));      // id 3
-        create_folder_db_entry("D", Some(3));      // id 4
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+        create_folder_db_entry("D", Some(3)); // id 4
         // Create file in folder D
         create_file_db_entry("test.txt", Some(4)); // id 1
-        
+
         let con = open_connection();
         let res = get_all_ancestors(1, &con).unwrap();
         con.close().unwrap();
-        
+
         // Should return [D, C, B, A] = [4, 3, 2, 1]
         assert_eq!(vec![4, 3, 2, 1], res);
         cleanup();
@@ -874,11 +874,11 @@ mod get_all_ancestors_tests {
         init_db_folder();
         // Create file in root (no parent folder)
         create_file_db_entry("test.txt", None); // id 1
-        
+
         let con = open_connection();
         let res = get_all_ancestors(1, &con).unwrap();
         con.close().unwrap();
-        
+
         assert!(res.is_empty());
         cleanup();
     }
@@ -886,13 +886,13 @@ mod get_all_ancestors_tests {
     #[test]
     fn should_handle_single_parent() {
         init_db_folder();
-        create_folder_db_entry("A", None);         // id 1
+        create_folder_db_entry("A", None); // id 1
         create_file_db_entry("test.txt", Some(1)); // id 1
-        
+
         let con = open_connection();
         let res = get_all_ancestors(1, &con).unwrap();
         con.close().unwrap();
-        
+
         assert_eq!(vec![1], res);
         cleanup();
     }

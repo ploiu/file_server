@@ -351,10 +351,7 @@ pub fn delete_file_by_id_with_connection(id: u32, con: &Connection) -> Result<()
 /// ## Returns
 /// - `Ok(())` if tags were successfully removed
 /// - `Err(UpdateFileError::TagError)` if there was an error removing tags
-fn remove_all_stale_ancestor_tags(
-    file_id: u32,
-    con: &Connection,
-) -> Result<(), UpdateFileError> {
+fn remove_all_stale_ancestor_tags(file_id: u32, con: &Connection) -> Result<(), UpdateFileError> {
     // Get all ancestors of the file at its current location
     let old_ancestor_ids = match file_repository::get_all_ancestors(file_id, con) {
         Ok(ids) => ids,
@@ -369,7 +366,9 @@ fn remove_all_stale_ancestor_tags(
 
     // Remove all implicit tags from old ancestors
     // Parameters: file_ids, folder_ids (empty because we only operate on files), implicit_from_ids
-    if let Err(e) = tag_repository::batch_remove_implicit_tags(&[file_id], &[], &old_ancestor_ids, con) {
+    if let Err(e) =
+        tag_repository::batch_remove_implicit_tags(&[file_id], &[], &old_ancestor_ids, con)
+    {
         log::error!(
             "Failed to remove implicit tags from file {file_id}! Nested exception is {e:?}\n{}",
             Backtrace::force_capture()
@@ -416,14 +415,14 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         file_dir(),
         file_repository::get_file_path(file.id, &con).unwrap()
     );
-    
+
     // Check if the parent folder has changed and remove old ancestor tags if so
     let new_parent_id = file.folder_id.filter(|&it| it != 0);
     let old_parent_id = repo_file.parent_id;
     if new_parent_id != old_parent_id {
         remove_all_stale_ancestor_tags(file.id, &con)?;
     }
-    
+
     // Update the file in the database with new parent
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
@@ -1088,25 +1087,25 @@ mod update_file_tests {
     fn file_moved_loses_all_implied_tags_from_old_ancestors() {
         init_db_folder();
         // Create folder hierarchy: A -> B and C
-        create_folder_db_entry("A", None);         // id 1
-        create_folder_db_entry("B", Some(1));      // id 2
-        create_folder_db_entry("C", None);         // id 3
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", None); // id 3
         create_folder_disk("A");
         create_folder_disk("A/B");
         create_folder_disk("C");
-        
+
         // Add tags to A and B
         create_tag_folder("tagA", 1);
         create_tag_folder("tagB", 2);
-        
+
         // Create file in B (should inherit tagA and tagB)
         create_file_db_entry("test.txt", Some(2)); // id 1
         create_file_disk("A/B/test.txt", "test");
-        
+
         // Manually imply tags first (simulating initial state)
         imply_tag_on_file(1, 1, 1); // tagA from A
         imply_tag_on_file(2, 1, 2); // tagB from B
-        
+
         // Move file to C (different branch)
         update_file(FileApi {
             id: 1,
@@ -1118,11 +1117,11 @@ mod update_file_tests {
             file_type: None,
         })
         .unwrap();
-        
+
         // File should have no tags now (all old implied tags removed)
         let tags = get_file_metadata(1).unwrap().tags;
         assert_eq!(tags.len(), 0);
-        
+
         cleanup();
     }
 
@@ -1130,18 +1129,18 @@ mod update_file_tests {
     fn file_moved_keeps_all_explicit_tags() {
         init_db_folder();
         // Create folder hierarchy: A -> B and C
-        create_folder_db_entry("A", None);         // id 1
-        create_folder_db_entry("B", Some(1));      // id 2
-        create_folder_db_entry("C", None);         // id 3
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", None); // id 3
         create_folder_disk("A");
         create_folder_disk("A/B");
         create_folder_disk("C");
-        
+
         // Create file in B with explicit tag
         create_file_db_entry("test.txt", Some(2)); // id 1
         create_file_disk("A/B/test.txt", "test");
         create_tag_file("explicitTag", 1);
-        
+
         // Move file to C
         update_file(FileApi {
             id: 1,
@@ -1157,13 +1156,13 @@ mod update_file_tests {
             file_type: None,
         })
         .unwrap();
-        
+
         // File should still have explicit tag
         let tags = get_file_metadata(1).unwrap().tags;
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].title, "explicitTag");
         assert_eq!(tags[0].implicit_from, None);
-        
+
         cleanup();
     }
 
@@ -1171,24 +1170,24 @@ mod update_file_tests {
     fn file_moved_new_ancestors_do_not_override_explicit_tags() {
         init_db_folder();
         // Create folders
-        create_folder_db_entry("A", None);         // id 1
-        create_folder_db_entry("B", None);         // id 2
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", None); // id 2
         create_folder_disk("A");
         create_folder_disk("B");
-        
+
         // Create a tag that will be on both the folder and the file
         let tag_id = create_tag_db_entry("sharedTag");
-        
+
         // Add tag to folder B and file in A
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
-        
+
         // Create file in A with explicit sharedTag
         create_file_db_entry("test.txt", Some(1)); // id 1
         create_file_disk("A/test.txt", "test");
         tag_repository::add_explicit_tag_to_file(1, tag_id, &con).unwrap();
         con.close().unwrap();
-        
+
         // Move file to B (which also has sharedTag)
         update_file(FileApi {
             id: 1,
@@ -1204,13 +1203,13 @@ mod update_file_tests {
             file_type: None,
         })
         .unwrap();
-        
+
         // File should still have explicit tag (not overridden by implicit)
         let tags = get_file_metadata(1).unwrap().tags;
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].title, "sharedTag");
         assert_eq!(tags[0].implicit_from, None); // Still explicit
-        
+
         cleanup();
     }
 
@@ -1218,20 +1217,20 @@ mod update_file_tests {
     fn file_moved_implicates_all_explicit_tags_of_new_ancestors() {
         init_db_folder();
         // Create folder hierarchy: A -> B and C
-        create_folder_db_entry("A", None);         // id 1
-        create_folder_db_entry("B", Some(1));      // id 2
-        create_folder_db_entry("C", None);         // id 3
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", None); // id 3
         create_folder_disk("A");
         create_folder_disk("A/B");
         create_folder_disk("C");
-        
+
         // Add tags to C
         create_tag_folder("tagC", 3);
-        
+
         // Create file in A/B
         create_file_db_entry("test.txt", Some(2)); // id 1
         create_file_disk("A/B/test.txt", "test");
-        
+
         // Move file to C
         update_file(FileApi {
             id: 1,
@@ -1243,13 +1242,13 @@ mod update_file_tests {
             file_type: None,
         })
         .unwrap();
-        
+
         // File should have tagC implied from C
         let tags = get_file_metadata(1).unwrap().tags;
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].title, "tagC");
         assert_eq!(tags[0].implicit_from, Some(3));
-        
+
         cleanup();
     }
 }
