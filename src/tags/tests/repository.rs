@@ -533,25 +533,34 @@ mod add_implicit_tags_to_files_tests {
     }
 
     #[test]
-    fn works_with_empty_file_slice() {
+    fn does_nothing_when_file_ids_is_empty() {
         init_db_folder();
         create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
-        add_implicit_tags_to_files(&[], &[tag_id], 1, &con).unwrap();
+        // Should not add anything when file_ids is empty
+        let result = add_implicit_tags_to_files(&[], &[tag_id], 1, &con);
+        assert!(result.is_ok());
+        // Verify no tags were added to the file
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 0, "No tags should have been added");
         con.close().unwrap();
         cleanup();
     }
 
     #[test]
-    fn works_with_empty_tag_slice() {
+    fn does_nothing_when_tag_ids_is_empty() {
         init_db_folder();
         create_folder_db_entry("parent", None); // id 1
         create_file_db_entry("file.txt", Some(1)); // id 1
         let con = open_connection();
-        add_implicit_tags_to_files(&[1], &[], 1, &con).unwrap();
+        // Should not add anything when tag_ids is empty
+        let result = add_implicit_tags_to_files(&[1], &[], 1, &con);
+        assert!(result.is_ok());
+        // Verify no tags were added
         let tags = get_all_tags_for_file(1, &con).unwrap();
-        assert_eq!(tags.len(), 0);
+        assert_eq!(tags.len(), 0, "No tags should have been added");
         con.close().unwrap();
         cleanup();
     }
@@ -577,26 +586,41 @@ mod add_implicit_tags_to_files_tests {
     }
 
     #[test]
-    fn handles_large_numbers() {
+    fn handles_many_file_ids() {
         init_db_folder();
         create_folder_db_entry("parent", None); // id 1
-        // Create many files
-        for i in 1..=50 {
+        // Create 1001 files to cross the 999 chunk boundary
+        for i in 1..=1001 {
             create_file_db_entry(&format!("file{i}.txt"), Some(1));
         }
-        // Create many tags
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        let file_ids: Vec<u32> = (1..=1001).collect();
+        add_implicit_tags_to_files(&file_ids, &[tag_id], 1, &con).unwrap();
+        // Verify first and last files have the tag (ensuring both chunks processed)
+        let tags_first = get_all_tags_for_file(1, &con).unwrap();
+        let tags_last = get_all_tags_for_file(1001, &con).unwrap();
+        assert_eq!(tags_first.len(), 1);
+        assert_eq!(tags_last.len(), 1);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn handles_many_tag_ids() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        // Create 1001 tags to cross the 999 chunk boundary
         let mut tag_ids = Vec::new();
-        for i in 1..=20 {
+        for i in 1..=1001 {
             tag_ids.push(create_tag_db_entry(&format!("tag{i}")));
         }
-        let file_ids: Vec<u32> = (1..=50).collect();
         let con = open_connection();
-        add_implicit_tags_to_files(&file_ids, &tag_ids, 1, &con).unwrap();
-        // Verify all files have all tags
-        for file_id in &file_ids {
-            let tags = get_all_tags_for_file(*file_id, &con).unwrap();
-            assert_eq!(tags.len(), 20);
-        }
+        add_implicit_tags_to_files(&[1], &tag_ids, 1, &con).unwrap();
+        // Verify file has all tags
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 1001);
         con.close().unwrap();
         cleanup();
     }
