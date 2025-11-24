@@ -149,5 +149,8 @@ let x = 1;
 format!("x: {x}");
 ```
 
+## On the `use` statement
+it's heavily preferred that `use` be declared at the top of the module. Rarely should `use` be used in the top of a function. Under ***NO CIRCUMSTANCES*** should `use` be used in the middle of a function. 
+
 # Sql files
 each sql file needs to be associated with a repository-layer function with the same name

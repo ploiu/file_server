@@ -143,6 +143,19 @@ mod tests {
         con.close().unwrap();
     }
 
+    pub fn imply_tag_on_folder(tag_id: u32, folder_id: u32, implicit_from_id: u32) {
+        let con = open_connection();
+        let sql = format!(
+            "insert into TaggedItems(tagId, folderId, implicitFromId) values ({tag_id}, {folder_id}, {implicit_from_id})"
+        );
+        // scoped here so that the prepared statement gets dropped, which is needed to close the connection
+        let mut pst = con.prepare(&sql).unwrap();
+        pst.raw_execute().unwrap();
+        // this is needed so that con isn't being shared anymore in this function's scope
+        drop(pst);
+        con.close().unwrap();
+    }
+
     pub fn create_tag_folders(name: &str, folder_ids: Vec<u32>) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);

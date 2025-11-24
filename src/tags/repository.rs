@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, collections::HashMap};
 
+use itertools::Itertools;
 use rusqlite::Connection;
 
 use crate::tags::TagTypes;
@@ -78,30 +79,6 @@ pub fn add_explicit_tag_to_file(
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/add_tag_to_file.sql"))?;
     pst.execute(rusqlite::params![file_id, tag_id])?;
-    Ok(())
-}
-
-/// Adds an implicit tag to a file
-///
-/// This function will _only_ add a tag to a file if it doesn't already have that tag (explicit or implicit)
-///
-/// Parameters:
-/// - `tag_id`: the id of the tag to add
-/// - `file_id`: the id of the file to add the tag to
-/// - `implicit_from_id`: the id of the folder that implicates the tag on the file
-///
-/// ## Returns:
-/// will return a rusqlite error if a database interaction fails
-pub fn add_implicit_tag_to_file(
-    tag_id: u32,
-    file_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_file.sql"
-    ))?;
-    pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
     Ok(())
 }
 
@@ -239,23 +216,6 @@ pub fn remove_explicit_tag_from_file(
     Ok(())
 }
 
-/// Removes a single implied tag from all files that the passed `implicit_from_id` implicates the tag on
-///
-/// ## Parameters:
-/// - `tag_id`: the tag to remove from those files
-/// - `implicit_from_id`: the folder that was implicating the tag on the files
-/// - `con`: a connection to the database. Must be closed by the caller
-pub fn remove_implicit_tag_from_files(
-    tag_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/remove_implicit_tag_from_files.sql");
-    let mut pst = con.prepare(&query)?;
-    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
-    Ok(())
-}
-
 /// Deletes an implicit tag from a file if it exists
 pub fn remove_implicit_tag_from_file(
     tag_id: u32,
@@ -277,20 +237,6 @@ pub fn add_explicit_tag_to_folder(
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!("../assets/queries/tags/add_tag_to_folder.sql"))?;
     pst.execute(rusqlite::params![folder_id, tag_id])?;
-    Ok(())
-}
-
-/// Adds an implicit tag to a folder (won't add if already exists)
-pub fn add_implicit_tag_to_folder(
-    tag_id: u32,
-    folder_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
     Ok(())
 }
 
@@ -384,36 +330,6 @@ pub fn remove_explicit_tag_from_folder(
     Ok(())
 }
 
-/// Deletes an implicit tag from a folder if it exists
-pub fn remove_implicit_tag_from_folder(
-    tag_id: u32,
-    folder_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/remove_implicit_tag_from_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![folder_id, tag_id])?;
-    Ok(())
-}
-
-/// Removes a single implicit tag from all folders that the passed `implicit_from_id` implicates the tag on
-///
-/// ## Parameters:
-/// - `tag_id`: the tag to remove
-/// - `implicit_from_id`: the folder that implicates the tag that should be removed
-/// - `con`: a connection to the database. Must be closed by the caller
-pub fn remove_implicit_tags_from_folders(
-    tag_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/remove_implicit_tags_from_folders.sql");
-    let mut pst = con.prepare(&query)?;
-    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
-    Ok(())
-}
-
 // ================= both =================
 
 /// for a given folder id, removes all implicit tags from descendants, so long as the tags being removed shouldn't be implied for the folder.
@@ -432,6 +348,68 @@ pub fn remove_stale_implicit_tags_from_descendants(
         "../assets/queries/tags/remove_stale_implicit_tags_from_descendants.sql"
     ))?;
     pst.execute([implied_from_id]).and(Ok(()))
+}
+
+/// Batch removes all tags implicated on the passed files and folders via the passed `implicit_from_ids`
+///
+/// This should be used when there are many files and folders being updated at once, such as when a folder is moved, and allows us to make 1 call to the
+/// database engine instead of multiple
+///
+/// ## Parameters:
+/// - `file_ids`: the ids of the files to remove implicit tags from
+/// - `folder_ids`: the ids of the folders to remove implicit tags from
+/// - `implicit_from_ids`: the ids of the folders that implicate the tags to be removed
+/// - `con`: a connection to the database. Must be closed by the caller
+///
+/// ## Returns:
+/// - `Ok(())` if the update completed successfully _or_ if `implicit_from_ids` is empty _or_ if both `file_ids` and `folder_ids` are empty
+/// - `Err(rusqlite::Error)` if the database operation errors
+pub fn batch_remove_implicit_tags(
+    file_ids: &[u32],
+    folder_ids: &[u32],
+    implicit_from_ids: &[u32],
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    // to prevent the mass deletion of explicit tags or unnecessary work
+    if implicit_from_ids.is_empty() || (file_ids.is_empty() && folder_ids.is_empty()) {
+        return Ok(());
+    }
+
+    // chunk implicit_from_ids to prevent exceeding SQLite's limits
+    let implicit_id_chunks = implicit_from_ids.iter().chunks(999);
+
+    for chunk in &implicit_id_chunks {
+        let implicit_clause = chunk.map(|id| id.to_string()).join(",");
+
+        // build WHERE clause with IN conditions for files and folders
+        let mut where_parts = Vec::new();
+
+        if !file_ids.is_empty() {
+            let file_chunks = file_ids.chunks(999);
+            for file_chunk in file_chunks {
+                let file_clause = file_chunk.iter().map(|id| id.to_string()).join(",");
+                where_parts.push(format!("fileId in ({file_clause})"));
+            }
+        }
+
+        if !folder_ids.is_empty() {
+            let folder_chunks = folder_ids.chunks(999);
+            for folder_chunk in folder_chunks {
+                let folder_clause = folder_chunk.iter().map(|id| id.to_string()).join(",");
+                where_parts.push(format!("folderId in ({folder_clause})"));
+            }
+        }
+
+        let where_clause = where_parts.join(" or ");
+        let sql = format!(
+            "delete from TaggedItems where ({where_clause}) and implicitFromId in ({implicit_clause})"
+        );
+
+        log::debug!("batch_remove_implicit_tags sql: {sql}");
+        con.execute(&sql, [])?;
+    }
+
+    Ok(())
 }
 
 // ================= misc =================
