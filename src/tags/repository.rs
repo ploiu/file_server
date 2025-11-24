@@ -82,30 +82,6 @@ pub fn add_explicit_tag_to_file(
     Ok(())
 }
 
-/// Adds an implicit tag to a file
-///
-/// This function will _only_ add a tag to a file if it doesn't already have that tag (explicit or implicit)
-///
-/// Parameters:
-/// - `tag_id`: the id of the tag to add
-/// - `file_id`: the id of the file to add the tag to
-/// - `implicit_from_id`: the id of the folder that implicates the tag on the file
-///
-/// ## Returns:
-/// will return a rusqlite error if a database interaction fails
-pub fn add_implicit_tag_to_file(
-    tag_id: u32,
-    file_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_file.sql"
-    ))?;
-    pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
-    Ok(())
-}
-
 /// Adds an implicit tag to multiple files
 ///
 /// For each file, a tag is added _only_ if that file doesn't already have that tag (explicit or implicit)
@@ -264,20 +240,6 @@ pub fn add_explicit_tag_to_folder(
     Ok(())
 }
 
-/// Adds an implicit tag to a folder (won't add if already exists)
-pub fn add_implicit_tag_to_folder(
-    tag_id: u32,
-    folder_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![tag_id, folder_id, implicit_from_id])?;
-    Ok(())
-}
-
 /// Adds an implicit tag to multiple folders
 ///
 /// For each folder, a tag is added _only_ if that folder doesn't already have that tag (explicit or implicit)
@@ -365,36 +327,6 @@ pub fn remove_explicit_tag_from_folder(
         "../assets/queries/tags/remove_explicit_tag_from_folder.sql"
     ))?;
     pst.execute(rusqlite::params![folder_id, tag_id])?;
-    Ok(())
-}
-
-/// Deletes an implicit tag from a folder if it exists
-pub fn remove_implicit_tag_from_folder(
-    tag_id: u32,
-    folder_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/remove_implicit_tag_from_folder.sql"
-    ))?;
-    pst.execute(rusqlite::params![folder_id, tag_id])?;
-    Ok(())
-}
-
-/// Removes a single implicit tag from all folders that the passed `implicit_from_id` implicates the tag on
-///
-/// ## Parameters:
-/// - `tag_id`: the tag to remove
-/// - `implicit_from_id`: the folder that implicates the tag that should be removed
-/// - `con`: a connection to the database. Must be closed by the caller
-pub fn remove_implicit_tags_from_folders(
-    tag_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/remove_implicit_tags_from_folders.sql");
-    let mut pst = con.prepare(&query)?;
-    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
     Ok(())
 }
 

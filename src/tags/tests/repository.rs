@@ -378,62 +378,8 @@ mod get_tags_on_files_tests {
 
 mod implicit_tag_tests {
     use crate::repository::open_connection;
-    use crate::tags::repository::{
-        add_implicit_tag_to_file, add_implicit_tag_to_folder, get_all_tags_for_file,
-        get_all_tags_for_folder, remove_implicit_tag_from_file, remove_implicit_tag_from_folder,
-    };
+    use crate::tags::repository::{get_all_tags_for_file, remove_implicit_tag_from_file};
     use crate::test::*;
-
-    #[test]
-    fn add_implicit_tag_to_folder_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_folder_db_entry("child", Some(1)); // id 2
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        add_implicit_tag_to_folder(tag_id, 2, 1, &con).unwrap();
-        let tags = get_all_tags_for_folder(2, &con).unwrap();
-        assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].tag_id, tag_id);
-        assert_eq!(tags[0].implicit_from_id, Some(1));
-        con.close().unwrap();
-        cleanup();
-    }
-
-    #[test]
-    fn add_implicit_tag_to_file_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_file_db_entry("file.txt", Some(1));
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
-        let tags = get_all_tags_for_file(1, &con).unwrap();
-        assert_eq!(tags.len(), 1);
-        assert_eq!(tags[0].tag_id, tag_id);
-        assert_eq!(tags[0].implicit_from_id, Some(1));
-        con.close().unwrap();
-        cleanup();
-    }
-
-    #[test]
-    fn delete_implicit_tag_from_folder_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_folder_db_entry("child", Some(1)); // id 2
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        // Add implicit tag
-        add_implicit_tag_to_folder(tag_id, 2, 1, &con).unwrap();
-        let tags = get_all_tags_for_folder(2, &con).unwrap();
-        assert_eq!(tags.len(), 1);
-        // Delete the implicit tag
-        remove_implicit_tag_from_folder(tag_id, 2, &con).unwrap();
-        let tags = get_all_tags_for_folder(2, &con).unwrap();
-        assert_eq!(tags.len(), 0);
-        con.close().unwrap();
-        cleanup();
-    }
 
     #[test]
     fn delete_implicit_tag_from_file_works() {
@@ -443,7 +389,7 @@ mod implicit_tag_tests {
         let tag_id = create_tag_db_entry("test_tag");
         let con = open_connection();
         // Add implicit tag
-        add_implicit_tag_to_file(tag_id, 1, 1, &con).unwrap();
+        crate::test::imply_tag_on_file(tag_id, 1, 1);
         let tags = get_all_tags_for_file(1, &con).unwrap();
         assert_eq!(tags.len(), 1);
         // Delete the implicit tag
@@ -558,34 +504,6 @@ mod add_implicit_tag_to_files_tests {
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].tag_id, tag_id);
         assert_eq!(tags[0].implicit_from_id, Some(1));
-        con.close().unwrap();
-        cleanup();
-    }
-}
-
-mod remove_implicit_tags_tests {
-    use crate::repository::open_connection;
-    use crate::tags::repository::{
-        add_implicit_tag_to_folders,
-        get_all_tags_for_folder, remove_implicit_tags_from_folders,
-    };
-    use crate::test::*;
-
-    #[test]
-    fn remove_implicit_tags_from_folders_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_folder_db_entry("folder1", Some(1)); // id 2
-        create_folder_db_entry("folder2", Some(1)); // id 3
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        add_implicit_tag_to_folders(tag_id, &[2, 3], 1, &con).unwrap();
-        // Remove tags inherited from folder 1
-        remove_implicit_tags_from_folders(tag_id, 1, &con).unwrap();
-        let tags2 = get_all_tags_for_folder(2, &con).unwrap();
-        let tags3 = get_all_tags_for_folder(3, &con).unwrap();
-        assert_eq!(tags2.len(), 0);
-        assert_eq!(tags3.len(), 0);
         con.close().unwrap();
         cleanup();
     }
