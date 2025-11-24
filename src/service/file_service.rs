@@ -424,7 +424,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         remove_all_stale_ancestor_tags(file.id, &con)?;
     }
     
-    // now that we've verified that the file & folder exist and we're not gonna collide names, perform the move
+    // Update the file in the database
     // ensure file type gets updated if the name is changed
     file.file_type = Some(determine_file_type(&file.name));
     let converted_record = FileRecord::from(&file);
