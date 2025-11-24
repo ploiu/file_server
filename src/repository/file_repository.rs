@@ -162,6 +162,34 @@ pub fn get_all_file_ids(con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
     res.into_iter().collect()
 }
 
+/// Retrieves all ids of the ancestor folders of the file with the passed `file_id`.
+///
+/// Ancestor id order is guaranteed to be in order of closest parent to the file first.
+/// For example, if a file is in folder D in A/B/C/D, it will return [D, C, B, A]
+///
+/// ## Parameters:
+/// - `file_id`: the id of the file whose ancestors need to be retrieved
+/// - `con`: a connection to the database. Must be closed by the caller
+///
+/// ## Returns:
+/// - An empty vec if `file_id` is 0
+/// - An empty vec if the file does not exist
+/// - The ancestor folder IDs in depth-first order (closest first)
+pub fn get_all_ancestors(file_id: u32, con: &Connection) -> Result<Vec<u32>, rusqlite::Error> {
+    // Return empty vec for file_id = 0 as per spec
+    if file_id == 0 {
+        return Ok(Vec::new());
+    }
+
+    let mut pst = con.prepare(include_str!("../assets/queries/file/get_all_ancestors.sql"))?;
+    let mut ids: Vec<u32> = Vec::with_capacity(5);
+    let mut retrieved = pst.query([file_id])?;
+    while let Some(row) = retrieved.next()? {
+        ids.push(row.get(0)?);
+    }
+    Ok(ids)
+}
+
 pub fn map_file_all_fields(row: &rusqlite::Row) -> Result<FileRecord, rusqlite::Error> {
     let id = row.get(0)?;
     let name = row.get(1)?;
@@ -792,5 +820,80 @@ mod convert_aliased_file_size_to_where_clause {
         let expected = "(fileSize < 10485760 OR fileSize >= 104857600)";
         let (actual, _) = convert_aliased_file_size_to_where_clause(attr);
         assert_eq!(expected, actual);
+    }
+}
+
+#[cfg(test)]
+mod get_all_ancestors_tests {
+    use super::*;
+    use crate::repository::open_connection;
+    use crate::test::{cleanup, create_file_db_entry, create_folder_db_entry, init_db_folder};
+
+    #[test]
+    fn should_return_empty_vec_if_zero_passed() {
+        init_db_folder();
+        let con = open_connection();
+        let res = get_all_ancestors(0, &con).unwrap();
+        con.close().unwrap();
+        assert!(res.is_empty());
+        cleanup();
+    }
+
+    #[test]
+    fn should_return_empty_vec_if_file_does_not_exist() {
+        init_db_folder();
+        let con = open_connection();
+        let res = get_all_ancestors(999, &con).unwrap();
+        con.close().unwrap();
+        assert!(res.is_empty());
+        cleanup();
+    }
+
+    #[test]
+    fn should_return_ancestors_in_depth_first_order() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B -> C -> D
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+        create_folder_db_entry("D", Some(3)); // id 4
+        // Create file in folder D
+        create_file_db_entry("test.txt", Some(4)); // id 1
+
+        let con = open_connection();
+        let res = get_all_ancestors(1, &con).unwrap();
+        con.close().unwrap();
+
+        // Should return [D, C, B, A] = [4, 3, 2, 1]
+        assert_eq!(vec![4, 3, 2, 1], res);
+        cleanup();
+    }
+
+    #[test]
+    fn should_return_empty_vec_if_file_in_root() {
+        init_db_folder();
+        // Create file in root (no parent folder)
+        create_file_db_entry("test.txt", None); // id 1
+
+        let con = open_connection();
+        let res = get_all_ancestors(1, &con).unwrap();
+        con.close().unwrap();
+
+        assert!(res.is_empty());
+        cleanup();
+    }
+
+    #[test]
+    fn should_handle_single_parent() {
+        init_db_folder();
+        create_folder_db_entry("A", None); // id 1
+        create_file_db_entry("test.txt", Some(1)); // id 1
+
+        let con = open_connection();
+        let res = get_all_ancestors(1, &con).unwrap();
+        con.close().unwrap();
+
+        assert_eq!(vec![1], res);
+        cleanup();
     }
 }

@@ -509,6 +509,108 @@ mod add_implicit_tag_to_files_tests {
     }
 }
 
+mod add_implicit_tags_to_files_tests {
+    use crate::repository::open_connection;
+    use crate::tags::repository::{add_implicit_tags_to_files, get_all_tags_for_file};
+    use crate::test::*;
+
+    #[test]
+    fn adds_multiple_tags_to_multiple_files() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file1.txt", Some(1)); // id 1
+        create_file_db_entry("file2.txt", Some(1)); // id 2
+        let tag_id1 = create_tag_db_entry("test_tag1");
+        let tag_id2 = create_tag_db_entry("test_tag2");
+        let con = open_connection();
+        add_implicit_tags_to_files(&[1, 2], &[tag_id1, tag_id2], 1, &con).unwrap();
+        let tags1 = get_all_tags_for_file(1, &con).unwrap();
+        let tags2 = get_all_tags_for_file(2, &con).unwrap();
+        assert_eq!(tags1.len(), 2);
+        assert_eq!(tags2.len(), 2);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_nothing_when_file_ids_is_empty() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        let tag_id = create_tag_db_entry("test_tag");
+        let con = open_connection();
+        // Should not add anything when file_ids is empty
+        let result = add_implicit_tags_to_files(&[], &[tag_id], 1, &con);
+        assert!(result.is_ok());
+        // Verify no tags were added to the file
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 0, "No tags should have been added");
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_nothing_when_tag_ids_is_empty() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file.txt", Some(1)); // id 1
+        let con = open_connection();
+        // Should not add anything when tag_ids is empty
+        let result = add_implicit_tags_to_files(&[1], &[], 1, &con);
+        assert!(result.is_ok());
+        // Verify no tags were added
+        let tags = get_all_tags_for_file(1, &con).unwrap();
+        assert_eq!(tags.len(), 0);
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn does_not_add_unspecified_tags() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        create_file_db_entry("file1.txt", Some(1)); // id 1
+        create_file_db_entry("file2.txt", Some(1)); // id 2
+        let tag_id1 = create_tag_db_entry("test_tag1");
+        let _tag_id2 = create_tag_db_entry("test_tag2");
+        let con = open_connection();
+        // Only add tag1 to file1
+        add_implicit_tags_to_files(&[1], &[tag_id1], 1, &con).unwrap();
+        let tags1 = get_all_tags_for_file(1, &con).unwrap();
+        let tags2 = get_all_tags_for_file(2, &con).unwrap();
+        assert_eq!(tags1.len(), 1);
+        assert_eq!(tags1[0].tag_id, tag_id1);
+        assert_eq!(tags2.len(), 0); // file2 should have no tags
+        con.close().unwrap();
+        cleanup();
+    }
+
+    #[test]
+    fn handles_large_numbers() {
+        init_db_folder();
+        create_folder_db_entry("parent", None); // id 1
+        // Create many files
+        for i in 1..=50 {
+            create_file_db_entry(&format!("file{i}.txt"), Some(1));
+        }
+        // Create many tags
+        let mut tag_ids = Vec::new();
+        for i in 1..=20 {
+            tag_ids.push(create_tag_db_entry(&format!("tag{i}")));
+        }
+        let file_ids: Vec<u32> = (1..=50).collect();
+        let con = open_connection();
+        add_implicit_tags_to_files(&file_ids, &tag_ids, 1, &con).unwrap();
+        // Verify all files have all tags
+        for file_id in &file_ids {
+            let tags = get_all_tags_for_file(*file_id, &con).unwrap();
+            assert_eq!(tags.len(), 20);
+        }
+        con.close().unwrap();
+        cleanup();
+    }
+}
+
 mod batch_remove_implicit_tags_tests {
     use crate::repository::open_connection;
     use crate::tags::repository::{

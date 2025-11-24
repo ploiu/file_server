@@ -2,6 +2,7 @@ use std::{backtrace::Backtrace, collections::HashMap};
 
 use itertools::Itertools;
 use rusqlite::Connection;
+use std::fmt::Write;
 
 use crate::tags::TagTypes;
 
@@ -103,13 +104,62 @@ pub fn add_implicit_tag_to_files(
     implicit_from_id: u32,
     con: &Connection,
 ) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/add_implicit_tag_to_file.sql"
-    ))?;
-    for file_id in file_ids {
-        pst.execute(rusqlite::params![tag_id, file_id, implicit_from_id])?;
+    add_implicit_tags_to_files(file_ids, &[tag_id], implicit_from_id, con)
+}
+
+/// Adds multiple implicit tags to multiple files
+///
+/// For each file, each tag is added _only_ if that file doesn't already have that tag (explicit or implicit).
+/// The `insert or ignore` behavior ensures that:
+/// - Explicit tags on the file are never overridden
+/// - Tags from closer ancestors take precedence over tags from farther ancestors
+///
+/// ## Parameters:
+/// - `file_ids`: the ids of the files to add the tags to
+/// - `tag_ids`: the ids of the tags to add
+/// - `implicit_from_id`: the id of the folder that implicates the tags on the files
+/// - `con`: a reference to a database connection. The caller must manage closing the connection.
+///
+/// ## Returns:
+/// will return a rusqlite error if a database interaction fails
+pub fn add_implicit_tags_to_files(
+    file_ids: &[u32],
+    tag_ids: &[u32],
+    implicit_from_id: u32,
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    if file_ids.is_empty() || tag_ids.is_empty() {
+        return Ok(());
     }
-    Ok(())
+    // the server is meant to run on low-powered hardware. I believe optimizations like this can help immensely
+    let initial_statement_length = 73; // based on manually checking the initial insert length
+    let file_id_len_estimate = 5; // reasonable after a long time to have gone through 6-digit ids for files, but 5 for now is fine
+    let tag_id_len_estimate = 4; // reasonable after a long time to reach 4-digit ids for tags
+    let folder_id_len_estimate = 4; // generally, more files than folders will be created;
+    let estimate_each_line_length =
+        file_id_len_estimate + tag_id_len_estimate + folder_id_len_estimate + 5; // extra 5 for commas etc
+    // the capacity is approximate and certainly will help with having to avoid excessive reallocations
+    let mut sql = String::with_capacity(
+        initial_statement_length + estimate_each_line_length * (tag_ids.len() * file_ids.len()),
+    );
+    write!(
+        &mut sql,
+        "insert or ignore into TaggedItems(tagId, fileId, implicitFromId)\nvalues "
+    )
+    .expect("String should never return an error on write! Something is wrong with rust or you heavily misunderstand what's going on");
+    let mut past_first = false;
+    for file_id in file_ids {
+        for tag_id in tag_ids {
+            // need to add a comma to the beginning of each line that isn't the first
+            if past_first {
+                sql.push(',');
+            }
+            write!(&mut sql, "({tag_id}, {file_id}, {implicit_from_id})\n")
+                .expect("writing to a string should never fail! You should never see this");
+            past_first = true;
+        }
+    }
+    con.execute_batch(&sql).and(Ok(()))
 }
 
 /// Retrieves all tags on a file, explicit or implied
@@ -211,19 +261,6 @@ pub fn remove_explicit_tag_from_file(
 ) -> Result<(), rusqlite::Error> {
     let mut pst = con.prepare(include_str!(
         "../assets/queries/tags/remove_explicit_tag_from_file.sql"
-    ))?;
-    pst.execute(rusqlite::params![file_id, tag_id])?;
-    Ok(())
-}
-
-/// Deletes an implicit tag from a file if it exists
-pub fn remove_implicit_tag_from_file(
-    tag_id: u32,
-    file_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let mut pst = con.prepare(include_str!(
-        "../assets/queries/tags/remove_implicit_tag_from_file.sql"
     ))?;
     pst.execute(rusqlite::params![file_id, tag_id])?;
     Ok(())

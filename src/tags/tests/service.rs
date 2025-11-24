@@ -854,3 +854,135 @@ mod pass_tags_to_children_tests {
         cleanup();
     }
 }
+
+mod imply_all_ancestor_tags_tests {
+    use crate::repository::open_connection;
+    use crate::tags::repository as tag_repository;
+    use crate::tags::service::{get_tags_on_file, imply_all_ancestor_tags};
+    use crate::test::*;
+
+    #[test]
+    fn implies_tags_from_all_ancestors() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B -> C
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+
+        // Add explicit tags to each folder
+        create_tag_folder("tagA", 1); // A has tagA, creates tag id 1
+        create_tag_folder("tagB", 2); // B has tagB, creates tag id 2
+        create_tag_folder("tagC", 3); // C has tagC, creates tag id 3
+
+        // Create file in folder C
+        create_file_db_entry("test.txt", Some(3)); // id 1
+
+        // Imply ancestor tags
+        imply_all_ancestor_tags(1).unwrap();
+
+        let tags = get_tags_on_file(1).unwrap();
+
+        // File should have all three tags implied
+        assert_eq!(tags.len(), 3);
+
+        // Find each tag and verify it's implicated from the correct folder
+        let tag_a_item = tags.iter().find(|t| t.tag_id == Some(1)).unwrap();
+        let tag_b_item = tags.iter().find(|t| t.tag_id == Some(2)).unwrap();
+        let tag_c_item = tags.iter().find(|t| t.tag_id == Some(3)).unwrap();
+
+        assert_eq!(tag_c_item.implicit_from, Some(3)); // C is closest
+        assert_eq!(tag_b_item.implicit_from, Some(2)); // B is middle
+        assert_eq!(tag_a_item.implicit_from, Some(1)); // A is furthest
+
+        cleanup();
+    }
+
+    #[test]
+    fn does_not_override_explicit_tags() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+
+        // Add same tag explicitly to both folders
+        let tag_id = create_tag_db_entry("sharedTag"); // Creates tag id 1
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap(); // A has sharedTag
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap(); // B has sharedTag
+        con.close().unwrap();
+
+        // Create file in folder B with explicit sharedTag
+        create_file_db_entry("test.txt", Some(2)); // id 1
+        let con2 = open_connection();
+        tag_repository::add_explicit_tag_to_file(1, tag_id, &con2).unwrap(); // File explicitly has sharedTag
+        con2.close().unwrap();
+
+        // Imply ancestor tags
+        imply_all_ancestor_tags(1).unwrap();
+
+        let tags = get_tags_on_file(1).unwrap();
+
+        // File should still have only 1 tag (explicit version)
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].title, "sharedTag");
+        assert_eq!(tags[0].implicit_from, None); // Should remain explicit
+
+        cleanup();
+    }
+
+    #[test]
+    fn handles_file_in_root() {
+        init_db_folder();
+        // Create file in root (no parent folder)
+        create_file_db_entry("test.txt", None); // id 1
+
+        // Should not error and should result in no implied tags
+        imply_all_ancestor_tags(1).unwrap();
+
+        let tags = get_tags_on_file(1).unwrap();
+        assert_eq!(tags.len(), 0);
+
+        cleanup();
+    }
+
+    #[test]
+    fn returns_error_if_file_not_found() {
+        init_db_folder();
+
+        let result = imply_all_ancestor_tags(999);
+
+        assert!(result.is_err());
+
+        cleanup();
+    }
+
+    #[test]
+    fn closest_ancestor_takes_precedence() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+
+        // Both folders have the same tag
+        let tag_id = create_tag_db_entry("duplicateTag"); // Creates tag id 1
+        let con = open_connection();
+        tag_repository::add_explicit_tag_to_folder(1, tag_id, &con).unwrap(); // A has duplicateTag
+        tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap(); // B has duplicateTag
+        con.close().unwrap();
+
+        // Create file in folder B
+        create_file_db_entry("test.txt", Some(2)); // id 1
+
+        // Imply ancestor tags
+        imply_all_ancestor_tags(1).unwrap();
+
+        let tags = get_tags_on_file(1).unwrap();
+
+        // File should have only 1 tag, implicated from B (closest ancestor)
+        assert_eq!(tags.len(), 1);
+        assert_eq!(tags[0].title, "duplicateTag");
+        assert_eq!(tags[0].implicit_from, Some(2)); // From B, not A
+
+        cleanup();
+    }
+}
