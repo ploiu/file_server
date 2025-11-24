@@ -169,81 +169,10 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .next_back()
             .unwrap_or(updated_folder.name.as_str()),
     );
+    
     // If the parent changed, remove implicit tags from descendants that came from old ancestors
     if parent_id_changed {
-        let con = repository::open_connection();
-        
-        // Get all descendant folders
-        let descendant_folders = match folder_repository::get_all_child_folder_ids(&[folder.id], &con) {
-            Ok(folders) => folders,
-            Err(e) => {
-                log::error!(
-                    "Failed to retrieve descendant folders for folder {}. Error is {e:?}\n{}",
-                    folder.id,
-                    Backtrace::force_capture()
-                );
-                con.close().unwrap();
-                return Err(UpdateFolderError::DbFailure);
-            }
-        };
-        
-        // Get all descendant files from the folder and its descendants
-        let mut all_folder_ids = descendant_folders.clone();
-        all_folder_ids.push(folder.id);
-        match folder_repository::get_child_files(&all_folder_ids, &con) {
-            Ok(_files) => { /* retrieved successfully, we just needed to check */ }
-            Err(e) => {
-                log::error!(
-                    "Failed to retrieve descendant files for folder {}. Error is {e:?}\n{}",
-                    folder.id,
-                    Backtrace::force_capture()
-                );
-                con.close().unwrap();
-                return Err(UpdateFolderError::DbFailure);
-            }
-        };
-        
-        // For each old ancestor, get its tags and remove them from descendants
-        for ancestor_id in original_ancestors {
-            let ancestor_tags = match tag_repository::get_tags_for_folder(ancestor_id, TagTypes::Explicit, &con) {
-                Ok(tags) => tags,
-                Err(e) => {
-                    log::error!(
-                        "Failed to retrieve tags for ancestor folder {}. Error is {e:?}\n{}",
-                        ancestor_id,
-                        Backtrace::force_capture()
-                    );
-                    con.close().unwrap();
-                    return Err(UpdateFolderError::TagError);
-                }
-            };
-            
-            // Remove implicit tags from descendant files
-            for tag in &ancestor_tags {
-                if let Err(e) = tag_repository::remove_implicit_tag_from_files(tag.tag_id, ancestor_id, &con) {
-                    log::error!(
-                        "Failed to remove implicit tag from files. Error is {e:?}\n{}",
-                        Backtrace::force_capture()
-                    );
-                    con.close().unwrap();
-                    return Err(UpdateFolderError::TagError);
-                }
-            }
-            
-            // Remove implicit tags from descendant folders
-            for tag in &ancestor_tags {
-                if let Err(e) = tag_repository::remove_implicit_tags_from_folders(tag.tag_id, ancestor_id, &con) {
-                    log::error!(
-                        "Failed to remove implicit tag from folders. Error is {e:?}\n{}",
-                        Backtrace::force_capture()
-                    );
-                    con.close().unwrap();
-                    return Err(UpdateFolderError::TagError);
-                }
-            }
-        }
-        
-        con.close().unwrap();
+        handle_folder_move_for_tags(folder.id, original_ancestors)?;
     }
     
     match tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone()) {
@@ -602,6 +531,66 @@ fn is_attempt_move_to_sub_child(
         }
         _ => Err(UpdateFolderError::DbFailure),
     }
+}
+
+/// Handles the removal of implicit tags from descendants when a folder is moved.
+///
+/// When a folder's parent changes, this function removes implicit tags from all
+/// descendant files and folders that originated from the old ancestor chain.
+///
+/// ## Parameters
+/// - `folder_id`: the id of the folder being moved
+/// - `original_ancestors`: list of ancestor folder ids from before the move
+///
+/// ## Returns
+/// - `Ok(())` if tags were successfully removed
+/// - `Err(UpdateFolderError)` if there was a database error
+fn handle_folder_move_for_tags(
+    folder_id: u32,
+    original_ancestors: Vec<u32>,
+) -> Result<(), UpdateFolderError> {
+    let con = repository::open_connection();
+
+    // For each old ancestor, get its tags and remove them from descendants
+    for ancestor_id in original_ancestors {
+        let ancestor_tags = match tag_repository::get_tags_for_folder(ancestor_id, TagTypes::Explicit, &con) {
+            Ok(tags) => tags,
+            Err(e) => {
+                log::error!(
+                    "Failed to retrieve tags for ancestor folder {}. Error is {e:?}\n{}",
+                    ancestor_id,
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(UpdateFolderError::TagError);
+            }
+        };
+
+        // Remove implicit tags from descendant files and folders
+        // The repository functions handle finding all descendants automatically
+        for tag in &ancestor_tags {
+            if let Err(e) = tag_repository::remove_implicit_tag_from_files(tag.tag_id, ancestor_id, &con) {
+                log::error!(
+                    "Failed to remove implicit tag from files. Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(UpdateFolderError::TagError);
+            }
+
+            if let Err(e) = tag_repository::remove_implicit_tags_from_folders(tag.tag_id, ancestor_id, &con) {
+                log::error!(
+                    "Failed to remove implicit tag from folders. Error is {e:?}\n{}",
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(UpdateFolderError::TagError);
+            }
+        }
+    }
+
+    con.close().unwrap();
+    Ok(())
 }
 
 /// returns the top-level files for the passed folder
