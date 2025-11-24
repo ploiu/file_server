@@ -566,7 +566,7 @@ mod add_implicit_tag_to_files_tests {
 mod remove_implicit_tags_tests {
     use crate::repository::open_connection;
     use crate::tags::repository::{
-        add_implicit_tag_to_files, add_implicit_tag_to_folders, get_all_tags_for_file,
+        add_implicit_tag_to_folders,
         get_all_tags_for_folder, remove_implicit_tags_from_folders,
     };
     use crate::test::*;

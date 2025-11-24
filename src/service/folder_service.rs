@@ -23,7 +23,6 @@ use crate::previews;
 use crate::repository::{folder_repository, open_connection};
 use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, file_dir};
-use crate::tags::TagTypes;
 use crate::tags::repository as tag_repository;
 use crate::tags::service as tag_service;
 use crate::{model, repository};
@@ -750,6 +749,7 @@ mod update_folder_tests {
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::file_service;
     use crate::service::folder_service::{get_folder, update_folder};
+    use crate::tags::service::{get_tags_on_file, update_file_tags};
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_folder_disk,
         create_tag_folder, init_db_folder,
@@ -870,7 +870,6 @@ mod update_folder_tests {
         create_folder_db_entry("parent", None);
         create_folder_disk("parent");
 
-        use crate::test::create_file_db_entry;
         create_file_db_entry("file.txt", Some(1));
 
         update_folder(&UpdateFolderRequest {
@@ -886,7 +885,6 @@ mod update_folder_tests {
         .unwrap();
 
         // Check file has implicit tag
-        use crate::tags::service::get_tags_on_file;
         let file_tags = get_tags_on_file(1).unwrap();
         let expected = TaggedItemApi {
             tag_id: Some(1),
@@ -1067,7 +1065,6 @@ mod update_folder_tests {
         create_folder_db_entry("child", Some(2));
         create_folder_disk("grandparent/parent/child");
 
-        use crate::test::create_file_db_entry;
         create_file_db_entry("file.txt", Some(3));
 
         // Add a tag to grandparent - should be implicated on parent and child
@@ -1097,7 +1094,6 @@ mod update_folder_tests {
         .unwrap();
 
         // Add an explicit tag to the file
-        use crate::tags::service::update_file_tags;
         update_file_tags(
             1,
             vec![TaggedItemApi {
@@ -1121,7 +1117,6 @@ mod update_folder_tests {
         );
 
         // Verify file has implicit and explicit tags before the move
-        use crate::tags::service::get_tags_on_file;
         let file_tags = get_tags_on_file(1).unwrap();
         // File should have multiple implicit tags from ancestors
         assert!(file_tags.len() >= 2, "File should have at least 2 tags");
@@ -1160,7 +1155,276 @@ mod update_folder_tests {
         );
         cleanup();
     }
-    
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_files_in_nested_structure() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        create_file_db_entry("file_in_parent.txt", Some(1));
+        create_file_db_entry("file_in_child.txt", Some(2));
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check both files have implicit tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        let file2_tags = get_tags_on_file(2).unwrap();
+
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0], expected);
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0], expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_implicit_tags_from_descendant_files() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_file_db_entry("file.txt", Some(1));
+
+        // Add tag and propagate
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify file has implicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+
+        // Remove tag from parent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify file no longer has implicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 0);
+        cleanup();
+    }
+
+    #[test]
+    fn moving_a_folder_removes_all_descendant_file_implicit_tags_from_original_ancestors() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent, child with files at each level
+        create_folder_db_entry("grandparent", None);
+        create_folder_db_entry("parent", Some(1));
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+
+        create_file_db_entry("file_in_grandparent.txt", Some(1));
+        create_file_db_entry("file_in_parent.txt", Some(2));
+        create_file_db_entry("file_in_child.txt", Some(3));
+
+        // Create another separate parent folder
+        create_folder_db_entry("new_parent", None);
+        create_folder_disk("new_parent");
+
+        // Add a tag to grandparent - should be implicated on all descendant files
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify all files have implicit tag from grandparent
+        let file1_tags = get_tags_on_file(1).unwrap();
+        let file2_tags = get_tags_on_file(2).unwrap();
+        let file3_tags = get_tags_on_file(3).unwrap();
+
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].title, "grandparent_tag");
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0].title, "grandparent_tag");
+        assert_eq!(file3_tags.len(), 1);
+        assert_eq!(file3_tags[0].title, "grandparent_tag");
+
+        // Now move parent folder to new_parent - should remove grandparent's implicit tag from parent's descendants
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: Some(4), // new_parent folder
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify files in parent and child no longer have implicit tag from grandparent
+        let file2_tags = get_tags_on_file(2).unwrap();
+        let file3_tags = get_tags_on_file(3).unwrap();
+        assert_eq!(file2_tags.len(), 0);
+        assert_eq!(file3_tags.len(), 0);
+
+        // File in grandparent should still have the tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].title, "grandparent_tag");
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_file_tags_from_unaffected_files() {
+        init_db_folder();
+        // Create folder structure with files
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+        create_folder_db_entry("sibling", Some(1));
+        create_folder_disk("grandparent/sibling");
+
+        create_file_db_entry("file_in_child.txt", Some(3));
+        create_file_db_entry("file_in_sibling.txt", Some(4));
+
+        // Add a tag to grandparent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify both files have implicit tag from grandparent
+        let file_child_tags = get_tags_on_file(1).unwrap();
+        let file_sibling_tags = get_tags_on_file(2).unwrap();
+
+        assert_eq!(file_child_tags.len(), 1);
+        assert_eq!(file_sibling_tags.len(), 1);
+
+        // Move parent folder to root
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify sibling file STILL has implicit tag from grandparent (unaffected by move)
+        let file_sibling_tags = get_tags_on_file(2).unwrap();
+        assert_eq!(
+            file_sibling_tags.len(),
+            1,
+            "Sibling file should still have tag from grandparent"
+        );
+        assert_eq!(file_sibling_tags[0].title, "grandparent_tag");
+        assert_eq!(file_sibling_tags[0].implicit_from, Some(1));
+
+        // Verify child file no longer has the tag (was moved out of grandparent)
+        let file_child_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(
+            file_child_tags.len(),
+            0,
+            "Child file should have no tags after move"
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_explicit_tags_from_descendant_files() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent, child
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+
+        create_file_db_entry("file.txt", Some(3));
+
+        // Add a tag to grandparent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Add an explicit tag to the file
+        update_file_tags(
+            1,
+            vec![TaggedItemApi {
+                tag_id: None,
+                title: "file_explicit_tag".to_string(),
+                implicit_from: None,
+            }],
+        )
+        .unwrap();
+
+        // Verify file has both implicit and explicit tags before the move
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 2, "File should have 2 tags before move");
+
+        // Now move parent folder to root - should only remove grandparent's implicit tag
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify file still has its explicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(
+            file_tags.len(),
+            1,
+            "File should have 1 tag after move: just the explicit tag"
+        );
+        assert_eq!(file_tags[0].title, "file_explicit_tag");
+        assert_eq!(file_tags[0].implicit_from, None);
+        cleanup();
+    }
 }
 
 #[cfg(test)]
