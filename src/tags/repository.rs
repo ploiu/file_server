@@ -1,5 +1,6 @@
 use std::{backtrace::Backtrace, collections::HashMap};
 
+use itertools::Itertools;
 use rusqlite::Connection;
 
 use crate::tags::TagTypes;
@@ -239,23 +240,6 @@ pub fn remove_explicit_tag_from_file(
     Ok(())
 }
 
-/// Removes a single implied tag from all files that the passed `implicit_from_id` implicates the tag on
-///
-/// ## Parameters:
-/// - `tag_id`: the tag to remove from those files
-/// - `implicit_from_id`: the folder that was implicating the tag on the files
-/// - `con`: a connection to the database. Must be closed by the caller
-pub fn remove_implicit_tag_from_files(
-    tag_id: u32,
-    implicit_from_id: u32,
-    con: &Connection,
-) -> Result<(), rusqlite::Error> {
-    let query = include_str!("../assets/queries/tags/remove_implicit_tag_from_files.sql");
-    let mut pst = con.prepare(&query)?;
-    pst.execute(rusqlite::params![tag_id, implicit_from_id])?;
-    Ok(())
-}
-
 /// Deletes an implicit tag from a file if it exists
 pub fn remove_implicit_tag_from_file(
     tag_id: u32,
@@ -432,6 +416,35 @@ pub fn remove_stale_implicit_tags_from_descendants(
         "../assets/queries/tags/remove_stale_implicit_tags_from_descendants.sql"
     ))?;
     pst.execute([implied_from_id]).and(Ok(()))
+}
+
+/// Batch removes all tags implicated on the passed files and folders via the passed `implicit_from_ids`
+///
+/// This should be used when there are many files and folders being updated at once, such as when a folder is moved, and allows us to make 1 call to the
+/// database engine instead of multiple
+///
+/// ## Parameters:
+/// - `file_ids`: the ids of the files to remove implicit tags from
+/// - `folder_ids`: the ids of the folders to remove implicit tags from
+/// - `implicit_from_ids`: the ids of the folders that implicate the tags to be removed
+/// - `con`: a connection to the database. Must be closed by the caller
+pub fn batch_remove_implicit_tags(
+    file_ids: &[u32],
+    folder_ids: &[u32],
+    implicit_from_ids: &[u32],
+    con: &Connection,
+) -> Result<(), rusqlite::Error> {
+    // rusqlite does not allow us to pass an array of values as a param, so we must create them manually
+    let sql_file_ids: String = file_ids.iter().map(|&it| it.to_string()).join(",");
+    let sql_folder_ids: String = folder_ids.iter().map(|&it| it.to_string()).join(",");
+    let sql_implicit_from_ids: String =
+        implicit_from_ids.iter().map(|&it| it.to_string()).join(",");
+
+    let formatted_sql = include_str!("../assets/queries/tags/batch_remove_implicit_tags.sql")
+        .replace(":fileIds", &sql_file_ids)
+        .replace(":folderIds", &sql_folder_ids)
+        .replace(":implicitFromIds", &sql_implicit_from_ids);
+    con.execute_batch(&formatted_sql)
 }
 
 // ================= misc =================

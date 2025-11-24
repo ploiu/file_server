@@ -567,7 +567,7 @@ mod remove_implicit_tags_tests {
     use crate::repository::open_connection;
     use crate::tags::repository::{
         add_implicit_tag_to_files, add_implicit_tag_to_folders, get_all_tags_for_file,
-        get_all_tags_for_folder, remove_implicit_tag_from_files, remove_implicit_tags_from_folders,
+        get_all_tags_for_folder, remove_implicit_tags_from_folders,
     };
     use crate::test::*;
 
@@ -586,25 +586,6 @@ mod remove_implicit_tags_tests {
         let tags3 = get_all_tags_for_folder(3, &con).unwrap();
         assert_eq!(tags2.len(), 0);
         assert_eq!(tags3.len(), 0);
-        con.close().unwrap();
-        cleanup();
-    }
-
-    #[test]
-    fn remove_implicit_tags_from_files_works() {
-        init_db_folder();
-        create_folder_db_entry("parent", None); // id 1
-        create_file_db_entry("file1.txt", Some(1));
-        create_file_db_entry("file2.txt", Some(1));
-        let tag_id = create_tag_db_entry("test_tag");
-        let con = open_connection();
-        add_implicit_tag_to_files(tag_id, &[1, 2], 1, &con).unwrap();
-        // Remove tags inherited from folder 1
-        remove_implicit_tag_from_files(tag_id, 1, &con).unwrap();
-        let tags1 = get_all_tags_for_file(1, &con).unwrap();
-        let tags2 = get_all_tags_for_file(2, &con).unwrap();
-        assert_eq!(tags1.len(), 0);
-        assert_eq!(tags2.len(), 0);
         con.close().unwrap();
         cleanup();
     }
