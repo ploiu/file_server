@@ -240,6 +240,7 @@ pub async fn save_file(
         file_id = created.id.unwrap();
         created.into()
     };
+    tag_service::update_file_tags(file_id, vec![]).map_err(|_| CreateFileError::FailWriteDb)?;
     // now publish the file to the rabbit queue so a preview can be generated for it later
     queue::publish_message("icon_gen", &file_id.to_string());
     Ok(resulting_file)
@@ -1457,5 +1458,99 @@ mod determine_file_type_tests {
         assert_eq!(determine_file_type("test.Pdf"), FileTypes::Document);
         assert_eq!(determine_file_type("test.ZIP"), FileTypes::Archive);
         assert_eq!(determine_file_type("test.Zip"), FileTypes::Archive);
+    }
+}
+
+#[cfg(test)]
+mod save_file_tests {
+    use crate::service::file_service::get_file_metadata;
+    use crate::tags::service as tag_service;
+    use crate::test::{
+        cleanup, create_file_db_entry, create_file_disk, create_folder_db_entry,
+        create_folder_disk, create_tag_folder, init_db_folder,
+    };
+
+    #[test]
+    fn save_file_should_implicate_all_ancestor_tags() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B -> C
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+        create_folder_disk("A/B/C");
+
+        // Add tags to the ancestor folders
+        create_tag_folder("tagA", 1); // tag id 1 on folder A
+        create_tag_folder("tagB", 2); // tag id 2 on folder B
+        create_tag_folder("tagC", 3); // tag id 3 on folder C
+
+        // Create a file in folder C
+        create_file_db_entry("test.txt", Some(3)); // file id 1
+        create_file_disk("A/B/C/test.txt", "test");
+
+        // Simulate what save_file does: call update_file_tags with empty vec
+        // This should trigger implication of all ancestor tags
+        tag_service::update_file_tags(1, vec![]).unwrap();
+
+        // Verify the file has all ancestor tags implied
+        let file = get_file_metadata(1).unwrap();
+        assert_eq!(file.tags.len(), 3);
+
+        // Verify each tag is present and is implied from the correct folder
+        let tag_a = file
+            .tags
+            .iter()
+            .find(|t| t.title == "tagA")
+            .expect("tagA should be present");
+        assert_eq!(
+            tag_a.implicit_from,
+            Some(1),
+            "tagA should be implied from folder A"
+        );
+
+        let tag_b = file
+            .tags
+            .iter()
+            .find(|t| t.title == "tagB")
+            .expect("tagB should be present");
+        assert_eq!(
+            tag_b.implicit_from,
+            Some(2),
+            "tagB should be implied from folder B"
+        );
+
+        let tag_c = file
+            .tags
+            .iter()
+            .find(|t| t.title == "tagC")
+            .expect("tagC should be present");
+        assert_eq!(
+            tag_c.implicit_from,
+            Some(3),
+            "tagC should be implied from folder C"
+        );
+
+        cleanup();
+    }
+
+    #[test]
+    fn save_file_should_implicate_no_tags_if_ancestor_is_root() {
+        init_db_folder();
+        // Create a file directly in root (folder_id = None or 0)
+        create_file_db_entry("test.txt", None); // file id 1
+        create_file_disk("test.txt", "test");
+
+        // Simulate what save_file does: call update_file_tags with empty vec
+        tag_service::update_file_tags(1, vec![]).unwrap();
+
+        // Verify the file has no tags (root has no tags to imply)
+        let file = get_file_metadata(1).unwrap();
+        assert_eq!(
+            file.tags.len(),
+            0,
+            "File in root should have no implied tags"
+        );
+
+        cleanup();
     }
 }
