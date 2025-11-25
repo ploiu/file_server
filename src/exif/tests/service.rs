@@ -92,7 +92,9 @@ async fn failing_to_parse_exif_stores_current_date() {
     con.close().unwrap();
 
     // The date should be close to current time (within a few seconds)
-    let diff = (updated_record.create_date.timestamp() - before_time.timestamp()).abs();
+    let diff = (updated_record.create_date.and_utc().timestamp()
+        - before_time.and_utc().timestamp())
+    .abs();
     assert!(
         diff < 5,
         "Date should be within 5 seconds of current time when EXIF parsing fails"

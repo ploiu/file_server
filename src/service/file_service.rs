@@ -643,7 +643,7 @@ mod save_file_record_tests {
         // Verify that the file type is Image
         assert_eq!(record.file_type, FileTypes::Image);
         // Verify that create_date is set (will be current date since no EXIF)
-        assert!(record.create_date.timestamp() > 0);
+        assert!(record.create_date.and_utc().timestamp() > 0);
 
         cleanup();
     }
@@ -664,7 +664,8 @@ mod save_file_record_tests {
         // Verify that the file type is Text
         assert_eq!(record.file_type, FileTypes::Text);
         // Verify that create_date is close to current time
-        let diff = (record.create_date.timestamp() - before_time.timestamp()).abs();
+        let diff =
+            (record.create_date.and_utc().timestamp() - before_time.and_utc().timestamp()).abs();
         assert!(diff < 5, "Date should be within 5 seconds of current time");
 
         cleanup();
