@@ -191,6 +191,7 @@ pub fn delete_tag(id: u32) -> Result<(), DeleteTagError> {
 /// - `Err(TagRelationError::FileNotFound)` if the file does not exist
 /// - `Err(TagRelationError::DbError)` if there was a database error
 pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), TagRelationError> {
+    log::debug!("tags for file being updated: {tags:?}");
     // make sure the file exists
     if Err(GetFileError::NotFound) == file_service::get_file_metadata(file_id) {
         log::error!(

@@ -20,6 +20,7 @@ use crate::model::error::folder_errors::{GetFolderError, LinkFolderError};
 use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
 use crate::model::request::file_requests::CreateFileRequest;
+use crate::model::response::TaggedItemApi;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
 use crate::repository::{file_repository, folder_repository, open_connection};
@@ -380,6 +381,7 @@ fn remove_all_stale_ancestor_tags(file_id: u32, con: &Connection) -> Result<(), 
 }
 
 pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
+    log::debug!("file being updated: {file:?}");
     let mut file = file;
     // first check if the file exists
     let con = repository::open_connection();
@@ -444,7 +446,13 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         file.name().unwrap()
     );
     // update the file's tags in the db
-    if tag_service::update_file_tags(file.id, file.tags.clone()).is_err() {
+    let explicit_tags: Vec<TaggedItemApi> = file
+        .tags
+        .iter()
+        .filter(|it| it.implicit_from.is_none())
+        .cloned()
+        .collect();
+    if tag_service::update_file_tags(file.id, explicit_tags).is_err() {
         con.close().unwrap();
         return Err(UpdateFileError::TagError);
     }
@@ -1248,6 +1256,61 @@ mod update_file_tests {
         assert_eq!(tags.len(), 1);
         assert_eq!(tags[0].title, "tagC");
         assert_eq!(tags[0].implicit_from, Some(3));
+
+        cleanup();
+    }
+
+    #[test]
+    fn update_file_only_updates_explicit_tags() {
+        init_db_folder();
+        // Create folder hierarchy
+        create_folder_db_entry("A", None); // id 1
+        create_folder_disk("A");
+
+        // Add tag to folder A
+        create_tag_folder("implicitTag", 1);
+
+        // Create file in A with explicit tag and implicit tag from A
+        create_file_db_entry("test.txt", Some(1)); // id 1
+        create_file_disk("A/test.txt", "test");
+        create_tag_file("explicitTag", 1); // id 2, explicit
+        imply_tag_on_file(1, 1, 1); // implicitTag from folder A
+
+        // Verify file has both explicit and implicit tags before update
+        let file_before = get_file_metadata(1).unwrap();
+        assert_eq!(file_before.tags.len(), 2);
+
+        // Update file with both explicit and implicit tags in the request
+        let updated = update_file(FileApi {
+            id: 1,
+            name: "test.txt".to_string(),
+            // simulate file moved, will make sure that the file doesn't keep the implied tag as its own
+            folder_id: None,
+            tags: vec![
+                TaggedItemApi {
+                    tag_id: Some(2),
+                    title: "explicitTag".to_string(),
+                    implicit_from: None,
+                },
+                TaggedItemApi {
+                    tag_id: Some(1),
+                    title: "implicitTag".to_string(),
+                    implicit_from: Some(1),
+                },
+            ],
+            size: Some(0),
+            date_created: Some(now()),
+            file_type: None,
+        })
+        .unwrap();
+
+        // After update, file should only have the original explicit tag
+        // The explicit tag should remain explicit
+        assert_eq!(updated.tags.len(), 1);
+
+        let explicit_tag = updated.tags.get(0).unwrap();
+        assert_eq!(&explicit_tag.title, "explicitTag");
+        assert_eq!(explicit_tag.implicit_from, None);
 
         cleanup();
     }
