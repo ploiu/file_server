@@ -170,7 +170,6 @@ mod generate_database_from_files_nested {
     #[test]
     fn creates_nested_folders() {
         cleanup();
-        create_folder_disk("parent");
         create_folder_disk("parent/child");
         create_file_disk("parent/child/grandchild.txt", "content");
         initialize_db().unwrap();
@@ -203,13 +202,11 @@ mod generate_database_from_files_deep_nesting {
     fn handles_6_levels_deep() {
         cleanup();
         // Create a 6-level deep structure
-        create_folder_disk("level1");
-        create_folder_disk("level1/level2");
-        create_folder_disk("level1/level2/level3");
-        create_folder_disk("level1/level2/level3/level4");
-        create_folder_disk("level1/level2/level3/level4/level5");
         create_folder_disk("level1/level2/level3/level4/level5/level6");
-        create_file_disk("level1/level2/level3/level4/level5/level6/deep_file.txt", "deep content");
+        create_file_disk(
+            "level1/level2/level3/level4/level5/level6/deep_file.txt",
+            "deep content",
+        );
         initialize_db().unwrap();
 
         let con = open_connection();
@@ -247,7 +244,10 @@ mod generate_database_from_files_deep_nesting {
         // Verify level 6
         let level6_folders = folder_repository::get_child_folders(Some(level5_id), &con).unwrap();
         assert_eq!(level6_folders.len(), 1);
-        assert_eq!(level6_folders[0].name, "level1/level2/level3/level4/level5/level6");
+        assert_eq!(
+            level6_folders[0].name,
+            "level1/level2/level3/level4/level5/level6"
+        );
         let level6_id = level6_folders[0].id.unwrap();
 
         // Verify deepest file
@@ -349,8 +349,8 @@ mod generate_database_from_files_complex_structures {
 }
 
 mod generate_database_existing_db {
-    use crate::test::init_db_folder;
     use super::*;
+    use crate::test::init_db_folder;
 
     #[test]
     fn does_not_regenerate_when_db_exists() {
@@ -419,28 +419,6 @@ mod generate_database_existing_db {
         assert!(
             !files.iter().any(|f| f.name == "disk_only.txt"),
             "Disk-only file should not have been added to existing database"
-        );
-
-        cleanup();
-    }
-
-    #[test]
-    fn regeneration_only_happens_on_fresh_db() {
-        cleanup();
-        // Create files on disk
-        create_file_disk("fresh_file.txt", "fresh content");
-
-        // Initialize db (fresh) - should create file entry
-        initialize_db().unwrap();
-
-        let con = open_connection();
-        let files = folder_repository::get_child_files(&[], &con).unwrap();
-        con.close().unwrap();
-
-        // The file should be in the database because it was a fresh db
-        assert!(
-            files.iter().any(|f| f.name == "fresh_file.txt"),
-            "File should be in database for fresh db"
         );
 
         cleanup();

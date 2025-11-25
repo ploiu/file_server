@@ -82,31 +82,28 @@ pub fn initialize_db() -> Result<()> {
 ///
 /// # Returns
 /// * `Result<()>` - Ok if successful, or a rusqlite error
-pub fn generate_database_from_files(
-    parent_folder: Option<u32>,
-    con: &Connection,
-) -> Result<()> {
+pub fn generate_database_from_files(parent_folder: Option<u32>, con: &Connection) -> Result<()> {
     // This function only processes the root level; recursion is handled internally
     if parent_folder.is_some() {
         return Ok(());
     }
-    
+
     let base_path = file_dir();
     let path = Path::new(&base_path);
     if !path.exists() || !path.is_dir() {
         return Ok(());
     }
-    
+
     // Check if directory is empty
     let entries: Vec<_> = match fs::read_dir(path) {
         Ok(iter) => iter.filter_map(|e| e.ok()).collect(),
         Err(_) => return Ok(()),
     };
-    
+
     if entries.is_empty() {
         return Ok(());
     }
-    
+
     generate_database_from_files_internal(&base_path, None, con)
 }
 
@@ -118,60 +115,56 @@ fn generate_database_from_files_internal(
     con: &Connection,
 ) -> Result<()> {
     let path = Path::new(current_path);
-    
+
     let entries: Vec<_> = match fs::read_dir(path) {
         Ok(iter) => iter.filter_map(|e| e.ok()).collect(),
         Err(_) => return Ok(()),
     };
-    
+
     // Separate folders and files
-    let mut folders: Vec<_> = entries.iter().filter(|e| {
-        e.file_type().map(|ft| ft.is_dir()).unwrap_or(false)
-    }).collect();
-    let mut files: Vec<_> = entries.iter().filter(|e| {
-        e.file_type().map(|ft| ft.is_file()).unwrap_or(false)
-    }).collect();
-    
+    let mut folders: Vec<_> = entries
+        .iter()
+        .filter(|e| e.file_type().map(|ft| ft.is_dir()).unwrap_or(false))
+        .collect();
+    let mut files: Vec<_> = entries
+        .iter()
+        .filter(|e| e.file_type().map(|ft| ft.is_file()).unwrap_or(false))
+        .collect();
+
     // Sort for consistent ordering
     folders.sort_by_key(|e| e.file_name());
     files.sort_by_key(|e| e.file_name());
-    
+
     // Process folders first (depth-first: process each folder fully before moving to next)
     for folder_entry in folders {
         let folder_name = folder_entry.file_name().to_string_lossy().to_string();
-        
+
         // Create folder in database
         let folder = Folder {
             id: None,
             name: folder_name,
             parent_id: parent_folder,
         };
-        
+
         let created_folder = folder_repository::create_folder(&folder, con)?;
         let folder_id = created_folder.id;
-        
+
         // Recursively process this folder's contents (depth-first)
         let child_path = folder_entry.path();
-        generate_database_from_files_internal(
-            child_path.to_str().unwrap_or(""),
-            folder_id,
-            con,
-        )?;
+        generate_database_from_files_internal(child_path.to_str().unwrap_or(""), folder_id, con)?;
     }
-    
+
     // Then process files at this level
     for file_entry in files {
         let file_name = file_entry.file_name().to_string_lossy().to_string();
         let file_path = file_entry.path();
-        
+
         // Get file size
-        let file_size = fs::metadata(&file_path)
-            .map(|m| m.len())
-            .unwrap_or(0);
-        
+        let file_size = fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+
         // Determine file type
         let file_type: FileTypes = determine_file_type(&file_name);
-        
+
         // Create file record
         let file_record = FileRecord {
             id: None,
@@ -181,14 +174,14 @@ fn generate_database_from_files_internal(
             size: file_size,
             file_type,
         };
-        
+
         let file_id = file_repository::create_file(&file_record, con)?;
-        
+
         // Link file to folder if not at root level
         if let Some(folder_id) = parent_folder {
             folder_repository::link_folder_to_file(file_id, folder_id, con)?;
         }
     }
-    
+
     Ok(())
 }
