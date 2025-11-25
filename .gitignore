@@ -1,17 +1,25 @@
 /target
 /.idea
-/files
 *.iml
-*.sqlite*
+FileServer.toml
+*.log
+
+# generated certs etc
+cert_options.conf
+*.crt
 *.pem
 *.x509
 *.key
-cert_options.conf
+
+# all database files
+*.sqlite*
+
+# files generated / used for tests
+*::*
+test_assets
+
+# directories generated during runtime
+file_previews
 .file_server_temp/**
 !.file_server_temp/.gitkeep
-FileServer.toml
-*.log
-# failed test folders and files stick around for debugging, and have `::` in them because of how threads are named in rust
-*::*
-file_previews
-test_assets
+/files
