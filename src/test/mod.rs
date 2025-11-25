@@ -135,7 +135,6 @@ mod tests {
         let sql = format!(
             "insert into TaggedItems(tagId, fileId, implicitFromId) values ({tag_id}, {file_id}, {implicit_from_id})"
         );
-        // scoped here so that the prepared statement gets dropped, which is needed to close the connection
         let mut pst = con.prepare(&sql).unwrap();
         pst.raw_execute().unwrap();
         // this is needed so that con isn't being shared anymore in this function's scope

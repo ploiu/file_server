@@ -176,7 +176,14 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         handle_folder_move_for_tags(folder.id, original_ancestors)?;
     }
 
-    tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone())
+    // Filter out implicit tags - only update explicit tags
+    let explicit_tags: Vec<TaggedItemApi> = folder
+        .tags
+        .iter()
+        .filter(|it| it.implicit_from.is_none())
+        .cloned()
+        .collect();
+    tag_service::update_folder_tags(updated_folder.id.unwrap(), explicit_tags)
         .map_err(|_| UpdateFolderError::TagError)?;
     Ok(FolderResponse {
         id: updated_folder.id.unwrap(),
@@ -579,10 +586,14 @@ fn handle_folder_move_for_tags(
         }
     };
 
-    // For each old ancestor, remove all implicit tags from that ancestor on the descendants of the folder being moved
+    // Include the moved folder itself in the list of folders to remove implicit tags from
+    let mut folders_to_update = descendant_folders.clone();
+    folders_to_update.push(folder_id);
+
+    // For each old ancestor, remove all implicit tags from that ancestor on the moved folder and its descendants
     if let Err(e) = tag_repository::batch_remove_implicit_tags(
         &descendant_files,
-        &descendant_folders,
+        &folders_to_update,
         &original_ancestors,
         &con,
     ) {
@@ -752,7 +763,7 @@ mod update_folder_tests {
     use crate::tags::service::{get_tags_on_file, update_file_tags};
     use crate::test::{
         cleanup, create_file_db_entry, create_folder_db_entry, create_folder_disk,
-        create_tag_folder, init_db_folder,
+        create_tag_folder, imply_tag_on_folder, init_db_folder,
     };
 
     #[test]
@@ -1423,6 +1434,74 @@ mod update_folder_tests {
         );
         assert_eq!(file_tags[0].title, "file_explicit_tag");
         assert_eq!(file_tags[0].implicit_from, None);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_only_saves_explicit_tags_as_explicit() {
+        init_db_folder();
+        // Create folder hierarchy: parent1 -> child, and parent2
+        create_folder_db_entry("parent1", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+        create_folder_db_entry("parent2", None); // id 3
+        create_folder_disk("parent1/child");
+        create_folder_disk("parent2");
+        create_tag_folder("implicitTag", 1);
+        create_tag_folder("explicitTag", 2);
+        imply_tag_on_folder(1, 2, 1);
+
+        // Verify child has both explicit and implicit tags
+        let child_before = get_folder(Some(2)).unwrap();
+        assert_eq!(
+            child_before.tags.len(),
+            2,
+            "Child should have 2 tags initially"
+        );
+        println!("Tags before update: {:?}", child_before.tags);
+
+        // Now move child to parent2, passing BOTH tags in the request
+        // The implicit tag should be marked as implicit in the request
+        // If update_folder doesn't filter, it will try to save the implicit tag as explicit
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "child".to_string(),
+            parent_id: Some(3), // Move to parent2
+            tags: vec![
+                // this tag should be kept
+                TaggedItemApi {
+                    tag_id: Some(2),
+                    title: "explicitTag".to_string(),
+                    implicit_from: None,
+                },
+                // this tag should be removed since it's implicit
+                TaggedItemApi {
+                    tag_id: Some(1),
+                    title: "implicitTag".to_string(),
+                    implicit_from: Some(1),
+                },
+            ],
+        })
+        .unwrap();
+
+        // Get the child folder again to check final state
+        let child_after = get_folder(Some(2)).unwrap();
+
+        // The child should ONLY have the explicit tag now
+        // The implicit tag from parent1 should have been removed because we moved away from parent1
+        // (The move logic removes implicit tags from old ancestors)
+        assert_eq!(
+            child_after.tags.len(),
+            1,
+            "Child should have only 1 tag after move"
+        );
+
+        // Verify it's the explicit tag
+        assert_eq!(child_after.tags[0].title, "explicitTag");
+        assert_eq!(
+            child_after.tags[0].implicit_from, None,
+            "Tag should be explicit"
+        );
+
         cleanup();
     }
 }

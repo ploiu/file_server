@@ -252,6 +252,8 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
 
 /// Updates the tags on a folder by replacing all existing tags with the provided list.
 ///
+/// The tags updated via this function must be explicit tags for that folder.
+///
 /// This function will:
 /// 1. Remove all existing tags from the folder
 /// 2. Add tags that already exist in the database (those with an `id`)
@@ -263,7 +265,8 @@ pub fn update_file_tags(file_id: u32, tags: Vec<TaggedItemApi>) -> Result<(), Ta
 /// # Parameters
 /// - `folder_id`: The ID of the folder to update tags for
 /// - `tags`: A vector of tags to set on the folder. Tags with an `id` will be linked directly,
-///   tags without an `id` will be created first (or retrieved if they already exist by name)
+///   tags without an `id` will be created first (or retrieved if they already exist by name).
+///   These tags must be explicit! no checking is done within the function
 ///
 /// # Returns
 /// - `Ok(())` if the tags were successfully updated
