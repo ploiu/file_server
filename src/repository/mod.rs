@@ -72,8 +72,12 @@ pub fn initialize_db() -> Result<()> {
 /// Generates database entries from the existing files directory structure.
 /// This walks the directory tree depth-first, creating folders before files at each level.
 ///
+/// This function is designed to be called with `parent_folder = None` to start the
+/// generation from the root files directory. The `parent_folder` parameter exists
+/// to satisfy the API contract but the actual recursive traversal is handled internally.
+///
 /// # Arguments
-/// * `parent_folder` - The parent folder id in the database, or None for root level
+/// * `parent_folder` - Should be None to start from root. Any other value is a no-op.
 /// * `con` - Database connection
 ///
 /// # Returns
@@ -82,14 +86,12 @@ pub fn generate_database_from_files(
     parent_folder: Option<u32>,
     con: &Connection,
 ) -> Result<()> {
-    let base_path = if parent_folder.is_none() {
-        file_dir()
-    } else {
-        // For recursive calls, we need to build the path from the parent folder
-        // This is handled by passing the path directly via internal helper
+    // This function only processes the root level; recursion is handled internally
+    if parent_folder.is_some() {
         return Ok(());
-    };
+    }
     
+    let base_path = file_dir();
     let path = Path::new(&base_path);
     if !path.exists() || !path.is_dir() {
         return Ok(());
@@ -105,7 +107,7 @@ pub fn generate_database_from_files(
         return Ok(());
     }
     
-    generate_database_from_files_internal(&base_path, parent_folder, con)
+    generate_database_from_files_internal(&base_path, None, con)
 }
 
 /// Internal helper that walks the directory tree and creates database entries.
