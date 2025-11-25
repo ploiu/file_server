@@ -99,6 +99,8 @@ pub async fn create_folder(
         Ok(f) => {
             let folder_path = format!("{}/{}", file_dir(), f.name);
             let fs_path = Path::new(folder_path.as_str());
+            tag_service::update_folder_tags(f.id.unwrap(), vec![])
+                .map_err(|_| CreateFolderError::DbFailure)?;
             match fs::create_dir(fs_path) {
                 Ok(_) => Ok(f.into()),
                 Err(_) => Err(CreateFolderError::FileSystemFailure),
@@ -1522,6 +1524,102 @@ mod download_folder_tests {
         create_folder_db_entry("middle", Some(2));
         create_folder_db_entry("bottom", Some(3));
         assert!(download_folder(2).is_ok());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod create_folder_tests {
+    use rocket::tokio;
+
+    use crate::model::request::folder_requests::CreateFolderRequest;
+    use crate::service::folder_service::{create_folder, get_folder};
+    use crate::test::{
+        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, init_db_folder,
+    };
+
+    #[tokio::test]
+    async fn create_folder_should_implicate_all_ancestor_tags() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B -> C
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+        create_folder_disk("A/B/C");
+
+        // Add tags to the ancestor folders
+        create_tag_folder("tagA", 1); // tag id 1 on folder A
+        create_tag_folder("tagB", 2); // tag id 2 on folder B
+        create_tag_folder("tagC", 3); // tag id 3 on folder C
+
+        // Create a new folder D inside C using the service function
+        let request = CreateFolderRequest {
+            name: "D".to_string(),
+            parent_id: Some(3), // parent is C
+        };
+
+        create_folder(&request).await.unwrap();
+
+        // The new folder D should have id 4
+        let folder = get_folder(Some(4)).unwrap();
+        assert_eq!(folder.tags.len(), 3, "Folder D should have 3 ancestor tags");
+
+        // Verify each tag is present and is implied from the correct folder
+        let tag_a = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagA")
+            .expect("tagA should be present");
+        assert_eq!(
+            tag_a.implicit_from,
+            Some(1),
+            "tagA should be implied from folder A"
+        );
+
+        let tag_b = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagB")
+            .expect("tagB should be present");
+        assert_eq!(
+            tag_b.implicit_from,
+            Some(2),
+            "tagB should be implied from folder B"
+        );
+
+        let tag_c = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagC")
+            .expect("tagC should be present");
+        assert_eq!(
+            tag_c.implicit_from,
+            Some(3),
+            "tagC should be implied from folder C"
+        );
+
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn create_folder_should_implicate_no_tags_if_ancestor_is_root() {
+        init_db_folder();
+        // Create a folder directly in root (parent_id = None or 0)
+        let request = CreateFolderRequest {
+            name: "test".to_string(),
+            parent_id: None, // parent is root
+        };
+
+        create_folder(&request).await.unwrap();
+
+        // The new folder should have id 1
+        let folder = get_folder(Some(1)).unwrap();
+        assert_eq!(
+            folder.tags.len(),
+            0,
+            "Folder in root should have no implied tags"
+        );
+
         cleanup();
     }
 }
