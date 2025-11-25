@@ -30,7 +30,8 @@ Currently runs flawlessly on a 3B. Windows support is not a priority.
 - src/assets/* - contains non-rust assets used via `include_str!`; mainly sql
   files
 - src/assets/migration/* - database migration files
-- src/assets/queries/* - general-purpose sqlite3 files, split out into categories based on what the queries touch
+- src/assets/queries/* - general-purpose sqlite3 files, split out into
+  categories based on what the queries touch
 - src/assets/init.sql - database initialization
 - src/model/* - dumping ground for all models. Needs to be split out.
 - src/previews/* - all file preview functionality. Currently takes the first
@@ -49,21 +50,29 @@ Currently runs flawlessly on a 3B. Windows support is not a priority.
   is compared with the latest upgrade version and upgrades are applied
   accordingly.
 
-not everything follows this pattern, however. Refer to the `Structure Migration` section for any new changes
+not everything follows this pattern, however. Refer to the `Structure Migration`
+section for any new changes
 
 ## Structure Migration
-in an attempt to modularize the codebase and better organize it, All new changes need to be organized like this:
+
+in an attempt to modularize the codebase and better organize it, All new changes
+need to be organized like this:
+
 - src/&lt;module_name>: the name of the general functionality
   - handler.rs (optional): endpoint functions for use with rocket
   - repository.rs: database layer interactions
   - service.rs: main logic layer of the feature
   - tests: tests for the feature
-    - handler.rs/repository.rs/service.rs: tests for the respective layer of this feature
+    - handler.rs/repository.rs/service.rs: tests for the respective layer of
+      this feature
     - &lt;name>.rs: tests for any other file in the feature module folder
 
-each function should get its own `mod` in the respective test file. If more than 10 tests exist for the same function, it should be pulled out into its own test file alongside the other test files for that module
+each function should get its own `mod` in the respective test file. If more than
+10 tests exist for the same function, it should be pulled out into its own test
+file alongside the other test files for that module
 
-###  Example
+### Example
+
 ```
 - src
   - tags
@@ -77,6 +86,7 @@ each function should get its own `mod` in the respective test file. If more than
     - repository.rs
     - service.rs
 ```
+
 # Queue
 
 hardware strength is limited, and generating previews takes about ~1 second on
@@ -150,7 +160,12 @@ format!("x: {x}");
 ```
 
 ## On the `use` statement
-it's heavily preferred that `use` be declared at the top of the module. Rarely should `use` be used in the top of a function. Under ***NO CIRCUMSTANCES*** should `use` be used in the middle of a function. 
+
+it's heavily preferred that `use` be declared at the top of the module. Rarely
+should `use` be used in the top of a function. Under _**NO CIRCUMSTANCES**_
+should `use` be used in the middle of a function.
 
 # Sql files
-each sql file needs to be associated with a repository-layer function with the same name
+
+each sql file needs to be associated with a repository-layer function with the
+same name

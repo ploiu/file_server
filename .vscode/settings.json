@@ -4,5 +4,5 @@
   "chat.notifyWindowOnConfirmation": false,
   "telemetry.feedback.enabled": false,
   "deno.enable": false,
-  "sql-formatter.uppercase": false,
+  "sql-formatter.uppercase": false
 }
