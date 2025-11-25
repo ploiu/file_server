@@ -1,2 +1,4 @@
-insert into Files_Tags(fileRecordId, tagId)
-values(?1, ?2)
+insert
+    or ignore into TaggedItems (fileId, tagId)
+values
+    (?1, ?2)

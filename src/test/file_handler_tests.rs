@@ -772,3 +772,141 @@ fn regenerate_previews_bad_auth() {
     assert_eq!(res.status(), Status::Unauthorized);
     cleanup();
 }
+
+#[test]
+fn upload_file_should_implicate_all_ancestor_tags() {
+    set_password();
+    remove_files();
+    // Create folder hierarchy: A -> B -> C
+    create_folder_db_entry("A", None); // id 1
+    create_folder_db_entry("B", Some(1)); // id 2
+    create_folder_db_entry("C", Some(2)); // id 3
+    create_folder_disk("A/B/C");
+
+    // Add tags to the ancestor folders
+    create_tag_folder("tagA", 1); // tag id 1 on folder A
+    create_tag_folder("tagB", 2); // tag id 2 on folder B
+    create_tag_folder("tagC", 3); // tag id 3 on folder C
+
+    let client = client();
+    let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+agk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
+\r\n\
+3\r\n\
+--BOUNDARY--";
+
+    let res = client
+        .post(uri!("/files"))
+        .header(Header::new("Authorization", AUTH))
+        .header(Header::new(
+            "Content-Type",
+            "multipart/form-data; boundary=BOUNDARY",
+        ))
+        .body(body)
+        .dispatch();
+
+    assert_eq!(res.status(), Status::Created);
+    let created_file: FileApi = res.into_json().unwrap();
+
+    // Fetch the file metadata to get the tags (they may not be in the create response)
+    let file_res = client
+        .get(format!("/files/metadata/{}", created_file.id))
+        .header(Header::new("Authorization", AUTH))
+        .dispatch();
+
+    let file: FileApi = file_res.into_json().unwrap();
+
+    // Verify the file has all ancestor tags implied
+    assert_eq!(file.tags.len(), 3, "File should have 3 ancestor tags");
+
+    // Verify each tag is present and is implied from the correct folder
+    let tag_a = file
+        .tags
+        .iter()
+        .find(|t| t.title == "tagA")
+        .expect("tagA should be present");
+    assert_eq!(
+        tag_a.implicit_from,
+        Some(1),
+        "tagA should be implied from folder A"
+    );
+
+    let tag_b = file
+        .tags
+        .iter()
+        .find(|t| t.title == "tagB")
+        .expect("tagB should be present");
+    assert_eq!(
+        tag_b.implicit_from,
+        Some(2),
+        "tagB should be implied from folder B"
+    );
+
+    let tag_c = file
+        .tags
+        .iter()
+        .find(|t| t.title == "tagC")
+        .expect("tagC should be present");
+    assert_eq!(
+        tag_c.implicit_from,
+        Some(3),
+        "tagC should be implied from folder C"
+    );
+
+    cleanup();
+}
+
+#[test]
+fn upload_file_should_implicate_no_tags_if_ancestor_is_root() {
+    set_password();
+    remove_files();
+
+    let client = client();
+    let body = "--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n\
+Content-Type: text/plain\r\n\
+\r\n\
+agk=\r\n\
+\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"extension\"\r\n\
+\r\n\
+txt\r\n\
+--BOUNDARY\r\n\
+Content-Disposition: form-data; name=\"folderId\"\r\n\
+\r\n\
+0\r\n\
+--BOUNDARY--";
+
+    let res = client
+        .post(uri!("/files"))
+        .header(Header::new("Authorization", AUTH))
+        .header(Header::new(
+            "Content-Type",
+            "multipart/form-data; boundary=BOUNDARY",
+        ))
+        .body(body)
+        .dispatch();
+
+    assert_eq!(res.status(), Status::Created);
+    let file: FileApi = res.into_json().unwrap();
+
+    // Verify the file has no tags (root has no tags to imply)
+    assert_eq!(
+        file.tags.len(),
+        0,
+        "File in root should have no implied tags"
+    );
+
+    cleanup();
+}

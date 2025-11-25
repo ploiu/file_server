@@ -4,15 +4,7 @@ use rocket::serde::{Deserialize, Serialize};
 
 use crate::model::file_types::FileTypes;
 use crate::model::repository::FileRecord;
-use crate::model::response::TagApi;
-
-#[derive(Deserialize, Serialize, Debug, PartialEq, Eq, Hash, Clone)]
-#[serde(crate = "rocket::serde")]
-pub struct FileMetadata {
-    pub size: u32,
-    pub date_created: u64,
-    pub file_type: FileTypes,
-}
+use crate::model::response::TaggedItemApi;
 
 #[derive(Deserialize, Serialize, Debug, Hash, Clone, Eq)]
 #[cfg_attr(not(test), derive(PartialEq))]
@@ -24,7 +16,7 @@ pub struct FileApi {
     pub folder_id: Option<u32>,
     /// this value may be unsafe, see [`FileApi::name`]
     pub name: String,
-    pub tags: Vec<TagApi>,
+    pub tags: Vec<TaggedItemApi>,
     // wrapped in option so api consumers don't have to send this field (these fields can't be written to after a file is uploaded)
     pub size: Option<u64>,
     #[serde(rename = "dateCreated", skip_serializing_if = "Option::is_none")]
@@ -35,29 +27,23 @@ pub struct FileApi {
 
 impl FileApi {
     /// returns a sanitized string based on [Rocket's file name sanitization](https://api.rocket.rs/master/rocket/fs/struct.FileName.html#sanitization)
-    /// but with the exception of parentheses being replaced with `leftParenthese` and `rightParenthese` respectively. It's hacky, but parentheses in file
-    /// names are super common and don't immediately mean it's malicious
     /// will return None if the entire file name is unsafe
     pub fn name(&self) -> Option<String> {
         //language=RegExp
-        let reserved_name_regex = Regex::new("^CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9]$").unwrap();
+        let reserved_name_regex = Regex::new("^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])$").unwrap();
         //language=RegExp
         let banned_chars = Regex::new("(^\\.\\.|^\\./)|[/\\\\<>|:&;#?*]").unwrap();
         if reserved_name_regex.is_match(&self.name.to_uppercase())
-            || self.name.starts_with("..")
+            || self.name.contains("..")
             || self.name.contains("./")
         {
             return None;
         }
-        let replaced = banned_chars.replace_all(&self.name, "");
-        let replaced = replaced
-            .to_string()
-            .replace('(', "leftParenthese")
-            .replace(')', "rightParenthese");
+        let replaced = banned_chars.replace_all(&self.name, "").to_string();
         Some(replaced)
     }
 
-    pub fn from_with_tags(file: FileRecord, tags: Vec<TagApi>) -> Self {
+    pub fn from_with_tags(file: FileRecord, tags: Vec<TaggedItemApi>) -> Self {
         let mut api: Self = file.into();
         api.tags = tags;
         api
@@ -72,7 +58,6 @@ impl FileApi {
             tags: Vec::new(),
             size: None,
             date_created: None,
-            // TODO file_types
             file_type: None,
         }
     }
@@ -122,15 +107,6 @@ mod update_file_request_tests {
     fn name_keeps_files_with_only_extension() {
         let req = FileApi::new(1, None, ".bashrc".to_string());
         assert_eq!(".bashrc".to_string(), req.name().unwrap());
-    }
-
-    #[test]
-    fn name_replaces_parentheses() {
-        let req = FileApi::new(1, None, "test (1).txt".to_string());
-        assert_eq!(
-            "test leftParenthese1rightParenthese.txt".to_string(),
-            req.name().unwrap()
-        );
     }
 
     #[test]

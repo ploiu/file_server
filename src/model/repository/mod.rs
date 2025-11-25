@@ -32,14 +32,6 @@ pub struct Folder {
     pub parent_id: Option<u32>,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct Tag {
-    /// the id of the tag
-    pub id: u32,
-    /// the display name of the tag
-    pub title: String,
-}
-
 impl From<&FileApi> for FileRecord {
     fn from(value: &FileApi) -> Self {
         let create_date = value

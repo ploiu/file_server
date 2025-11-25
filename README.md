@@ -74,7 +74,8 @@ turn off this feature, set `RabbitMq.enabled` to `false` in `FileServer.toml`
 
 ## notes
 
-generating file previews requires rabbitmq to be running _when this application starts_. Timing can vary depending on your device, but here's an example script
+generating file previews requires rabbitmq to be running _when this application
+starts_. Timing can vary depending on your device, but here's an example script
 that can guide you in booting up properly (works great in `/etc/rc.local`):
 
 ```shell
@@ -83,4 +84,5 @@ sudo rabbitmq-server &
 sleep 45
 sudo rabbitmqctl await_online_nodes 1 && $(./sudo file_server &) &
 ```
+
 you can also use `systemd` to ensure this launches after rabbit

@@ -1,8 +1,8 @@
 {
-  "commentTranslate.hover.enabled": true,
   "chat.agent.enabled": true,
   "chat.commandCenter.enabled": false,
   "chat.notifyWindowOnConfirmation": false,
   "telemetry.feedback.enabled": false,
-  "deno.enable": false
+  "deno.enable": false,
+  "sql-formatter.uppercase": false
 }

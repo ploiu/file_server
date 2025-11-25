@@ -8,13 +8,14 @@ pub use tests::*;
 #[cfg(test)]
 mod tests {
     use crate::model::api::FileApi;
-    use crate::model::repository::{FileRecord, Folder, Tag};
+    use crate::model::repository::{FileRecord, Folder};
     use crate::previews;
-    use crate::repository::{
-        file_repository, folder_repository, initialize_db, open_connection, tag_repository,
-    };
+    use crate::repository::{file_repository, folder_repository, initialize_db, open_connection};
     use crate::service::file_service::{determine_file_type, file_dir};
+    use crate::tags::Tag;
+    use crate::tags::repository as tag_repository;
     use crate::temp_dir;
+    use rocket::local::blocking::Client;
     use std::fs;
     use std::fs::{remove_dir_all, remove_file};
     use std::io::Write;
@@ -22,6 +23,22 @@ mod tests {
 
     /// username:password
     pub static AUTH: &str = "Basic dXNlcm5hbWU6cGFzc3dvcmQ=";
+
+    /// Creates a Rocket test client for handler tests
+    pub fn client() -> Client {
+        Client::tracked(crate::rocket()).unwrap()
+    }
+
+    /// Sets up authentication by creating a password in the test database
+    pub fn set_password() {
+        init_db_folder();
+        let client = client();
+        let uri = uri!("/api/password");
+        client
+            .post(uri)
+            .body(r#"{"username":"username","password":"password"}"#)
+            .dispatch();
+    }
 
     pub fn init_db_folder() {
         // since this is just for testing, we don't need to unwrap the logging
@@ -109,15 +126,40 @@ mod tests {
     pub fn create_tag_folder(name: &str, folder_id: u32) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
-        tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+        tag_repository::add_explicit_tag_to_folder(folder_id, id, &connection).unwrap();
         connection.close().unwrap();
+    }
+
+    pub fn imply_tag_on_file(tag_id: u32, file_id: u32, implicit_from_id: u32) {
+        let con = open_connection();
+        let sql = format!(
+            "insert into TaggedItems(tagId, fileId, implicitFromId) values ({tag_id}, {file_id}, {implicit_from_id})"
+        );
+        let mut pst = con.prepare(&sql).unwrap();
+        pst.raw_execute().unwrap();
+        // this is needed so that con isn't being shared anymore in this function's scope
+        drop(pst);
+        con.close().unwrap();
+    }
+
+    pub fn imply_tag_on_folder(tag_id: u32, folder_id: u32, implicit_from_id: u32) {
+        let con = open_connection();
+        let sql = format!(
+            "insert into TaggedItems(tagId, folderId, implicitFromId) values ({tag_id}, {folder_id}, {implicit_from_id})"
+        );
+        // scoped here so that the prepared statement gets dropped, which is needed to close the connection
+        let mut pst = con.prepare(&sql).unwrap();
+        pst.raw_execute().unwrap();
+        // this is needed so that con isn't being shared anymore in this function's scope
+        drop(pst);
+        con.close().unwrap();
     }
 
     pub fn create_tag_folders(name: &str, folder_ids: Vec<u32>) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
         for folder_id in folder_ids {
-            tag_repository::add_tag_to_folder(folder_id, id, &connection).unwrap();
+            tag_repository::add_explicit_tag_to_folder(folder_id, id, &connection).unwrap();
         }
         connection.close().unwrap();
     }
@@ -125,7 +167,7 @@ mod tests {
     pub fn create_tag_file(name: &str, file_id: u32) {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
-        tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+        tag_repository::add_explicit_tag_to_file(file_id, id, &connection).unwrap();
         connection.close().unwrap();
     }
 
@@ -133,7 +175,7 @@ mod tests {
         let connection = open_connection();
         let id = create_tag_db_entry(name);
         for file_id in file_ids {
-            tag_repository::add_tag_to_file(file_id, id, &connection).unwrap();
+            tag_repository::add_explicit_tag_to_file(file_id, id, &connection).unwrap();
         }
         connection.close().unwrap();
     }
@@ -224,8 +266,8 @@ mod tests {
             let file_id = file_repository::create_file(&record, &con).unwrap();
             for tag in &mut self.tags {
                 let Tag { id, title: _ } = tag_repository::create_tag(&tag.title, &con).unwrap();
-                tag_repository::add_tag_to_file(file_id, id, &con).unwrap();
-                tag.id = Some(id);
+                tag_repository::add_explicit_tag_to_file(file_id, id, &con).unwrap();
+                tag.tag_id = Some(id);
             }
             if let Some(folder_id) = self.folder_id {
                 folder_repository::link_folder_to_file(file_id, folder_id, &con).unwrap();

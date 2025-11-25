@@ -1,9 +1,9 @@
 use std::backtrace::Backtrace;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::{self, File};
-use std::hash::Hash;
 use std::path::Path;
 
+use itertools::Itertools;
 use regex::Regex;
 use rusqlite::Connection;
 
@@ -16,14 +16,15 @@ use crate::model::error::folder_errors::{
     UpdateFolderError,
 };
 
-use crate::model::repository::Tag;
 use crate::model::request::folder_requests::{CreateFolderRequest, UpdateFolderRequest};
-use crate::model::response::TagApi;
+use crate::model::response::TaggedItemApi;
 use crate::model::response::folder_responses::FolderResponse;
 use crate::previews;
-use crate::repository::{folder_repository, open_connection, tag_repository};
+use crate::repository::{folder_repository, open_connection};
+use crate::service::file_service;
 use crate::service::file_service::{check_root_dir, file_dir};
-use crate::service::{file_service, tag_service};
+use crate::tags::repository as tag_repository;
+use crate::tags::service as tag_service;
 use crate::{model, repository};
 
 pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
@@ -48,9 +49,9 @@ pub fn get_folder(id: Option<u32>) -> Result<FolderResponse, GetFolderError> {
     };
     let mut converted_folders: Vec<FolderResponse> = Vec::new();
     for child in child_folders {
-        let tags: Vec<TagApi> =
-            match tag_repository::get_tags_on_folder(child.id.unwrap_or(0), &con) {
-                Ok(t) => t.into_iter().map(|it| it.into()).collect(),
+        let tags: Vec<TaggedItemApi> =
+            match tag_repository::get_all_tags_for_folder(child.id.unwrap_or(0), &con) {
+                Ok(t) => t.into_iter().map_into().collect(),
                 Err(e) => {
                     log::error!(
                         "Failed to retrieve tags for folder. Exception is {e:?}\n{}",
@@ -98,6 +99,8 @@ pub async fn create_folder(
         Ok(f) => {
             let folder_path = format!("{}/{}", file_dir(), f.name);
             let fs_path = Path::new(folder_path.as_str());
+            tag_service::update_folder_tags(f.id.unwrap(), vec![])
+                .map_err(|_| CreateFolderError::DbFailure)?;
             match fs::create_dir(fs_path) {
                 Ok(_) => Ok(f.into()),
                 Err(_) => Err(CreateFolderError::FileSystemFailure),
@@ -111,6 +114,7 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
     if folder.id == 0 {
         return Err(UpdateFolderError::NotFound);
     }
+    // get the folder before it's updated so that we can track changes
     let original_folder = match get_folder_by_id(Some(folder.id)) {
         Ok(f) => f,
         Err(GetFolderError::NotFound) => return Err(UpdateFolderError::NotFound),
@@ -121,9 +125,33 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
         parent_id: folder.parent_id,
         name: folder.name.to_string(),
     };
+    // make sure we can't make a folder its own parent
     if db_folder.parent_id == db_folder.id {
         return Err(UpdateFolderError::NotAllowed);
     }
+
+    // Check if parent_id is changing - if so, we need to remove old implicit tags from descendants
+    let parent_id_changed = original_folder.parent_id != db_folder.parent_id;
+    let original_ancestors = if parent_id_changed {
+        let con = repository::open_connection();
+        let ancestors = match folder_repository::get_ancestor_folders_with_id(folder.id, &con) {
+            Ok(a) => a,
+            Err(e) => {
+                log::error!(
+                    "Failed to retrieve ancestor folders for folder {}. Error is {e:?}\n{}",
+                    folder.id,
+                    Backtrace::force_capture()
+                );
+                con.close().unwrap();
+                return Err(UpdateFolderError::DbFailure);
+            }
+        };
+        con.close().unwrap();
+        ancestors
+    } else {
+        Vec::new()
+    };
+
     let updated_folder = update_folder_internal(&db_folder)?;
     // if we can't rename the folder, then we have problems
     if let Err(e) = fs::rename(
@@ -144,12 +172,21 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
             .next_back()
             .unwrap_or(updated_folder.name.as_str()),
     );
-    match tag_service::update_folder_tags(updated_folder.id.unwrap(), folder.tags.clone()) {
-        Ok(()) => { /*no op*/ }
-        Err(_) => {
-            return Err(UpdateFolderError::TagError);
-        }
-    };
+
+    // If the parent changed, remove implicit tags from descendants that came from old ancestors
+    if parent_id_changed {
+        handle_folder_move_for_tags(folder.id, original_ancestors)?;
+    }
+
+    // Filter out implicit tags - only update explicit tags
+    let explicit_tags: Vec<TaggedItemApi> = folder
+        .tags
+        .iter()
+        .filter(|it| it.implicit_from.is_none())
+        .cloned()
+        .collect();
+    tag_service::update_folder_tags(updated_folder.id.unwrap(), explicit_tags)
+        .map_err(|_| UpdateFolderError::TagError)?;
     Ok(FolderResponse {
         id: updated_folder.id.unwrap(),
         folders: Vec::new(),
@@ -166,11 +203,9 @@ pub fn update_folder(folder: &UpdateFolderRequest) -> Result<FolderResponse, Upd
 
 pub fn folder_exists(id: Option<u32>) -> bool {
     let con: Connection = open_connection();
-    let db_id = if Some(0) == id || id.is_none() {
-        None
-    } else {
-        id
-    };
+    // no id in the database if it's 0. 0 || None -> None, else keep original value of id
+    // TODO change to is_none_or once it's no longer unstable (https://doc.rust-lang.org/stable/std/option/enum.Option.html#method.is_none_or)
+    let db_id = id.filter(|&it| it != 0);
     let res = folder_repository::get_by_id(db_id, &con);
     con.close().unwrap();
     res.is_ok()
@@ -196,116 +231,13 @@ pub fn delete_folder(id: u32) -> Result<(), DeleteFolderError> {
     Ok(())
 }
 
-pub fn get_folders_by_any_tag(
-    tags: &HashSet<String>,
-) -> Result<HashSet<FolderResponse>, GetFolderError> {
-    let con: Connection = open_connection();
-    let folders = match folder_repository::get_folders_by_any_tag(tags, &con) {
-        Ok(f) => f,
-        Err(e) => {
-            con.close().unwrap();
-            log::error!(
-                "Failed to pull folders by any tag. Exception is {e}\n{}",
-                Backtrace::force_capture()
-            );
-            return Err(GetFolderError::DbFailure);
-        }
-    };
-    con.close().unwrap();
-    let mut converted_folders: HashSet<FolderResponse> = HashSet::with_capacity(folders.len());
-    for folder in folders {
-        let tags = match tag_service::get_tags_on_folder(folder.id.unwrap()) {
-            Ok(t) => t,
-            Err(_) => return Err(GetFolderError::TagError),
-        };
-        converted_folders.insert(FolderResponse {
-            id: folder.id.unwrap(),
-            parent_id: folder.parent_id,
-            name: folder.name,
-            path: "no path".to_string(),
-            folders: Vec::new(),
-            files: Vec::new(),
-            tags,
-        });
-    }
-    Ok(converted_folders)
-}
-
-/// will reduce a list of folders down to the first one that has all the tags
-/// the folders passed must be all the folders retrieved in [folder_service::get_folders_by_any_tag]
-pub fn reduce_folders_by_tag(
-    folders: &HashSet<FolderResponse>,
-    tags: &HashSet<String>,
-) -> Result<HashSet<FolderResponse>, GetFolderError> {
-    // an index of the contents of condensed, to easily look up entries.
-    let mut condensed_list: HashMap<u32, FolderResponse> = HashMap::new();
-    // this will never change, because sometimes we need to pull folder info no longer in the condensed list if we're a child
-    let mut input_index: HashMap<u32, &FolderResponse> = HashMap::new();
-    for folder in folders {
-        // I don't like having to clone all the folders, but with just references the compiler complains about reference lifetimes
-        condensed_list.insert(folder.id, folder.clone());
-        input_index.insert(folder.id, folder);
-    }
-    let con: Connection = open_connection();
-    for (folder_id, folder) in input_index.iter() {
-        // 1. skip if we're not in condensed_list; we were removed in an earlier step
-        if !condensed_list.contains_key(folder_id) {
-            continue;
-        }
-        // 2. get all parent folder IDs, take their tags for ourself, and remove those parents from condensed_list
-        let mut our_tag_titles = folder
-            .tags
-            .iter()
-            .map(|t| t.title.clone())
-            .collect::<HashSet<String>>();
-        let parents = match folder_repository::get_parent_folders_by_tag(*folder_id, &tags, &con) {
-            Ok(p) => p,
-            Err(e) => {
-                con.close().unwrap();
-                log::error!(
-                    "Failed to pull parent folders. Exception is {e}\n{}",
-                    Backtrace::force_capture()
-                );
-                return Err(GetFolderError::DbFailure);
-            }
-        };
-        for (parent_id, parent_tags) in parents {
-            // if the parent has all of our tags, we need to remove ourself (and our children)
-            if contains_all(&parent_tags, tags) {
-                condensed_list.remove(folder_id);
-                // this will tell `give_children_tags` that we already have all the tags (which we do because our parent does), so all the children get removed
-                our_tag_titles = parent_tags;
-                break;
-            }
-            parent_tags.into_iter().for_each(|t| {
-                our_tag_titles.insert(t);
-            });
-            condensed_list.remove(&parent_id);
-        }
-        // 3. + 4. get all children folder IDs, give them our tags, and remove ourself from condensed_list if we have children in condensed_list
-        if let Err(e) =
-            give_children_tags(&mut condensed_list, &con, *folder_id, &our_tag_titles, tags)
-        {
-            con.close().unwrap();
-            return Err(e);
-        };
-        // 5. remove ourself from condensed_list if we do not have all tags
-        if !contains_all(&our_tag_titles, tags) {
-            condensed_list.remove(folder_id);
-        }
-    }
-    con.close().unwrap();
-    let copied: HashSet<FolderResponse> = condensed_list.into_values().collect();
-    Ok(copied)
-}
-
 #[deprecated(note = "prefer to use the streaming version in preview_service")]
 pub async fn get_file_previews_for_folder(
     id: u32,
 ) -> Result<HashMap<u32, Vec<u8>>, GetBulkPreviewError> {
     let con: Connection = open_connection();
     let ids: Vec<u32> = if id == 0 { vec![] } else { vec![id] };
-    let file_ids: Vec<u32> = match folder_repository::get_child_files(ids, &con) {
+    let file_ids: Vec<u32> = match folder_repository::get_child_files(&ids, &con) {
         Ok(res) => res,
         Err(e) if e != rusqlite::Error::QueryReturnedNoRows => {
             con.close().unwrap();
@@ -380,73 +312,6 @@ pub fn download_folder(id: u32) -> Result<File, DownloadFolderError> {
         );
     }
     File::open(tarchive_dir.clone()).map_err(|_| DownloadFolderError::NotFound)
-}
-
-// private functions
-/// used as part of [reduce_folders_by_tag];
-/// handles giving all children our tags, and removing ourself if we have any children with tags we don't have
-fn give_children_tags(
-    condensed_list: &mut HashMap<u32, FolderResponse>,
-    con: &Connection,
-    folder_id: u32,
-    our_tag_titles: &HashSet<String>,
-    tags: &HashSet<String>,
-) -> Result<(), GetFolderError> {
-    let all_child_folders_ids = match folder_repository::get_all_child_folder_ids(&[folder_id], con)
-    {
-        Ok(ids) => ids
-            .into_iter()
-            .filter(|id| condensed_list.contains_key(id))
-            .collect::<Vec<u32>>(),
-        Err(e) => {
-            log::error!(
-                "Failed to retrieve all child folder IDs for {folder_id}. Exception is {e}\n{}",
-                Backtrace::force_capture()
-            );
-            return Err(GetFolderError::DbFailure);
-        }
-    };
-    // if we have all of the tags, remove all our children because they're not the highest
-    if contains_all(our_tag_titles, tags) {
-        for id in all_child_folders_ids.iter() {
-            condensed_list.remove(id);
-        }
-        return Ok(());
-    }
-    for id in all_child_folders_ids.iter() {
-        let matching_folder = condensed_list.get_mut(id).unwrap();
-        let matching_folder_tags = matching_folder.tags.clone();
-        let combined_tag_titles = matching_folder_tags
-            .iter()
-            .map(|t| t.title.clone())
-            .chain(our_tag_titles.clone().into_iter());
-        let combined_tags = matching_folder_tags
-            .iter()
-            .map(|t| &t.title)
-            .chain(our_tag_titles.iter())
-            .map(|title| TagApi {
-                id: None,
-                title: title.clone(),
-            })
-            .collect::<Vec<TagApi>>();
-        *matching_folder = FolderResponse {
-            id: matching_folder.id,
-            parent_id: matching_folder.parent_id,
-            path: matching_folder.path.clone(),
-            name: matching_folder.name.clone(),
-            folders: vec![],
-            files: vec![],
-            tags: combined_tags,
-        };
-        // 4. remove all children who only have the same tags as us, because they're not the earliest with all tags (or they will never have all tags)
-        if HashSet::from_iter(combined_tag_titles) == *our_tag_titles {
-            condensed_list.remove(id);
-        }
-    }
-    if !all_child_folders_ids.is_empty() {
-        condensed_list.remove(&folder_id);
-    }
-    Ok(())
 }
 
 fn get_folder_by_id(id: Option<u32>) -> Result<Folder, GetFolderError> {
@@ -649,7 +514,7 @@ fn does_file_exist(
     con: &Connection,
 ) -> Result<bool, rusqlite::Error> {
     let unwrapped_id: Vec<u32> = folder_id.map(|it| vec![it]).unwrap_or_default();
-    let matching_file = folder_repository::get_child_files(unwrapped_id, con)?
+    let matching_file = folder_repository::get_child_files(&unwrapped_id, con)?
         .iter()
         .find(|file| file.name == name.to_lowercase())
         .cloned();
@@ -674,6 +539,78 @@ fn is_attempt_move_to_sub_child(
     }
 }
 
+/// Handles the removal of implicit tags from descendants when a folder is moved.
+///
+/// When a folder's parent changes, this function removes implicit tags from all
+/// descendant files and folders that originated from the old ancestor chain.
+///
+/// ## Parameters
+/// - `folder_id`: the id of the folder being moved
+/// - `original_ancestors`: list of ancestor folder ids from before the move
+///
+/// ## Returns
+/// - `Ok(())` if tags were successfully removed
+/// - `Err(UpdateFolderError)` if there was a database error
+fn handle_folder_move_for_tags(
+    folder_id: u32,
+    original_ancestors: Vec<u32>,
+) -> Result<(), UpdateFolderError> {
+    let con = repository::open_connection();
+
+    // Get all descendant folders of the moved folder, so that we can remove stale tags
+    let descendant_folders = match folder_repository::get_all_child_folder_ids(&[folder_id], &con) {
+        Ok(folders) => folders,
+        Err(e) => {
+            log::error!(
+                "Failed to retrieve descendant folders for folder {}. Error is {e:?}\n{}",
+                folder_id,
+                Backtrace::force_capture()
+            );
+            con.close().unwrap();
+            return Err(UpdateFolderError::DbFailure);
+        }
+    };
+
+    // Get all descendant files from the moved folder and its descendants
+    let mut all_folder_ids = descendant_folders.clone();
+    all_folder_ids.push(folder_id);
+    let descendant_files: Vec<u32> = match folder_repository::get_child_files(&all_folder_ids, &con)
+    {
+        Ok(files) => files.into_iter().map(|f| f.id.unwrap()).collect(),
+        Err(e) => {
+            con.close().unwrap();
+            log::error!(
+                "Failed to retrieve descendant files for folder {}. Error is {e:?}\n{}",
+                folder_id,
+                Backtrace::force_capture()
+            );
+            return Err(UpdateFolderError::DbFailure);
+        }
+    };
+
+    // Include the moved folder itself in the list of folders to remove implicit tags from
+    let mut folders_to_update = descendant_folders.clone();
+    folders_to_update.push(folder_id);
+
+    // For each old ancestor, remove all implicit tags from that ancestor on the moved folder and its descendants
+    if let Err(e) = tag_repository::batch_remove_implicit_tags(
+        &descendant_files,
+        &folders_to_update,
+        &original_ancestors,
+        &con,
+    ) {
+        con.close().unwrap();
+        log::error!(
+            "Failed to remove implicit tags after moving folder {folder_id}. Error is {e:?}\n{}",
+            Backtrace::force_capture()
+        );
+        return Err(UpdateFolderError::TagError);
+    }
+
+    con.close().unwrap();
+    Ok(())
+}
+
 /// returns the top-level files for the passed folder
 fn get_files_for_folder(
     id: Option<u32>,
@@ -681,7 +618,7 @@ fn get_files_for_folder(
 ) -> Result<Vec<FileApi>, GetChildFilesError> {
     // now we can retrieve all the file records in this folder
     let unwrapped_id = id.map(|it| vec![it]).unwrap_or_default();
-    let child_files = match folder_repository::get_child_files(unwrapped_id, con) {
+    let child_files = match folder_repository::get_child_files(&unwrapped_id, con) {
         Ok(files) => files,
         Err(e) => {
             log::error!(
@@ -695,7 +632,7 @@ fn get_files_for_folder(
         .iter()
         .map(|f| f.id.expect("files pulled from database didn't have ID!"))
         .collect();
-    let file_tags = match tag_repository::get_tags_on_files(file_ids, con) {
+    let file_tags = match tag_repository::get_all_tags_for_files(file_ids, con) {
         Ok(res) => res,
         Err(e) => {
             log::error!(
@@ -707,12 +644,12 @@ fn get_files_for_folder(
     };
     let mut result: Vec<FileApi> = Vec::new();
     for file in child_files {
-        let tags: Vec<Tag> = if file_tags.contains_key(&file.id.unwrap()) {
+        let tags = if file_tags.contains_key(&file.id.unwrap()) {
             file_tags.get(&file.id.unwrap()).unwrap().clone()
         } else {
             Vec::new()
         };
-        let tags: Vec<TagApi> = tags.iter().map(|it| it.clone().into()).collect();
+        let tags: Vec<TaggedItemApi> = tags.iter().cloned().map_into().collect();
         result.push(FileApi::from_with_tags(file, tags));
     }
     Ok(result)
@@ -733,7 +670,7 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     })?;
     // now that we have the folder, we can delete all the files for that folder
     let files =
-        folder_repository::get_child_files([id], con).map_err(|_| DeleteFolderError::DbFailure)?;
+        folder_repository::get_child_files(&[id], con).map_err(|_| DeleteFolderError::DbFailure)?;
     for file in files.iter() {
         match file_service::delete_file_by_id_with_connection(file.id.unwrap(), con) {
             Err(DeleteFileError::NotFound) => {}
@@ -758,16 +695,10 @@ fn delete_folder_recursively(id: u32, con: &Connection) -> Result<Folder, Delete
     Ok(folder)
 }
 
-/// checks if the first hash set contains all the items in the second hash set
-fn contains_all<T: Eq + Hash + Clone>(first: &HashSet<T>, second: &HashSet<T>) -> bool {
-    let intersection: HashSet<T> = first.intersection(second).cloned().collect();
-    &intersection == second
-}
-
 #[cfg(test)]
 mod get_folder_tests {
     use crate::model::error::folder_errors::GetFolderError;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
     use crate::service::folder_service::get_folder;
     use crate::test::{cleanup, create_folder_db_entry, create_tag_folder, init_db_folder};
@@ -812,9 +743,10 @@ mod get_folder_tests {
             name: "test".to_string(),
             folders: vec![],
             files: vec![],
-            tags: vec![TagApi {
-                id: Some(1),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
@@ -826,11 +758,14 @@ mod get_folder_tests {
 mod update_folder_tests {
     use crate::model::error::folder_errors::UpdateFolderError;
     use crate::model::request::folder_requests::UpdateFolderRequest;
-    use crate::model::response::TagApi;
+    use crate::model::response::TaggedItemApi;
     use crate::model::response::folder_responses::FolderResponse;
+    use crate::service::file_service;
     use crate::service::folder_service::{get_folder, update_folder};
+    use crate::tags::service::{get_tags_on_file, update_file_tags};
     use crate::test::{
-        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, init_db_folder,
+        cleanup, create_file_db_entry, create_folder_db_entry, create_folder_disk,
+        create_tag_folder, imply_tag_on_folder, init_db_folder,
     };
 
     #[test]
@@ -842,9 +777,10 @@ mod update_folder_tests {
             id: 1,
             name: "test".to_string(),
             parent_id: None,
-            tags: vec![TagApi {
-                id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         })
         .unwrap();
@@ -855,9 +791,10 @@ mod update_folder_tests {
             name: "test".to_string(),
             folders: vec![],
             files: vec![],
-            tags: vec![TagApi {
-                id: Some(1),
+            tags: vec![TaggedItemApi {
+                tag_id: Some(1),
                 title: "tag1".to_string(),
+                implicit_from: None,
             }],
         };
         assert_eq!(expected, get_folder(Some(1)).unwrap());
@@ -907,344 +844,666 @@ mod update_folder_tests {
         assert_eq!(expected, get_folder(Some(1)).unwrap());
         cleanup();
     }
-}
-
-#[cfg(test)]
-mod reduce_folders_by_tag_tests {
-    use std::collections::HashSet;
-
-    use crate::model::response::TagApi;
-    use crate::model::response::folder_responses::FolderResponse;
-    use crate::service::folder_service::reduce_folders_by_tag;
-    use crate::test::{
-        cleanup, create_file_db_entry, create_folder_db_entry, create_tag_folder,
-        create_tag_folders, init_db_folder,
-    };
 
     #[test]
-    fn reduce_folders_by_tag_works() {
+    fn update_folder_implies_tags_to_descendant_folders() {
         init_db_folder();
-        create_folder_db_entry("A", None); // 1
-        create_folder_db_entry("AB", Some(1)); // 2
-        create_folder_db_entry("ABB", Some(1)); // 3
-        create_folder_db_entry("AC", Some(2)); // 4
-        create_folder_db_entry("Dummy5", None); // 5
-        create_folder_db_entry("E", None); // 6
-        create_folder_db_entry("EB", Some(6)); // 7
-        create_folder_db_entry("EC", Some(7)); // 8
-        create_folder_db_entry("Dummy9", None); // 9
-        create_folder_db_entry("Dummy10", None); // 10
-        create_folder_db_entry("Dummy11", None); // 11
-        create_folder_db_entry("Dummy12", None); // 12
-        create_folder_db_entry("Dummy13", None); // 13
-        create_folder_db_entry("XA", None); // 14
-        create_folder_db_entry("X", Some(14)); // 15
-        create_folder_db_entry("Y", None); // 16
-        create_folder_db_entry("Z", Some(16)); // 17
-        create_tag_folders("tag1", vec![6, 16, 17, 2, 15, 14, 1]);
-        create_tag_folders("tag3", vec![4, 15, 8, 3]);
-        create_tag_folders("tag2", vec![2, 15, 3, 7]);
-        let folders = HashSet::from([
-            FolderResponse {
-                id: 6,
-                parent_id: None,
-                path: "".to_string(),
-                name: "E".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 16,
-                parent_id: None,
-                path: "".to_string(),
-                name: "Y".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 4,
-                parent_id: Some(2),
-                path: "".to_string(),
-                name: "AC".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag3".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 17,
-                parent_id: Some(16),
-                path: "".to_string(),
-                name: "Z".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 2,
-                parent_id: Some(1),
-                path: "".to_string(),
-                name: "AB".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag1".to_string(),
-                    },
-                ],
-            },
-            FolderResponse {
-                id: 15,
-                parent_id: Some(14),
-                path: "".to_string(),
-                name: "X".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag3".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag1".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                ],
-            },
-            FolderResponse {
-                id: 8,
-                parent_id: Some(7),
-                path: "".to_string(),
-                name: "EC".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag3".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 3,
-                parent_id: Some(1),
-                path: "".to_string(),
-                name: "ABB".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag3".to_string(),
-                    },
-                ],
-            },
-            FolderResponse {
-                id: 7,
-                parent_id: Some(6),
-                path: "".to_string(),
-                name: "EB".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag2".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 1,
-                parent_id: None,
-                path: "".to_string(),
-                name: "A".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 14,
-                parent_id: None,
-                path: "".to_string(),
-                name: "XA".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-        ]);
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
 
-        let expected = HashSet::from([
-            FolderResponse {
-                id: 4,
-                parent_id: Some(2),
-                path: "".to_string(),
-                name: "AC".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag3".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 8,
-                parent_id: Some(7),
-                path: "".to_string(),
-                name: "EC".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag3".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 15,
-                parent_id: Some(14),
-                path: "".to_string(),
-                name: "X".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag1".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag3".to_string(),
-                    },
-                ],
-            },
-            FolderResponse {
-                id: 3,
-                parent_id: Some(1),
-                path: "".to_string(),
-                name: "ABB".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag3".to_string(),
-                    },
-                ],
-            },
-        ])
-        .into_iter()
-        .map(|f| f.id)
-        .collect::<HashSet<u32>>();
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
 
-        let actual = reduce_folders_by_tag(
-            &folders,
-            &HashSet::from(["tag1".to_string(), "tag2".to_string(), "tag3".to_string()]),
-        )
-        .unwrap()
-        .into_iter()
-        .map(|f| f.id)
-        .collect::<HashSet<u32>>();
-        assert_eq!(expected, actual);
+        // Check child folder has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+        assert_eq!(child.tags.len(), 1);
+        assert_eq!(child.tags[0], expected);
         cleanup();
     }
 
     #[test]
-    fn reduce_folders_by_tag_keeps_first_folder_with_all_tags() {
+    fn update_folder_implies_tags_to_descendant_files() {
         init_db_folder();
-        create_folder_db_entry("top", None); // 1
-        create_folder_db_entry("middle", Some(1)); // 2
-        create_folder_db_entry("bottom", Some(2)); // 3
-        create_file_db_entry("top file", Some(1));
-        create_file_db_entry("bottom file", Some(3));
-        create_tag_folders("tag1", vec![1, 3]); // tag1 on top folder and bottom folder
-        create_tag_folder("tag2", 3); // tag2 only on bottom folder
-        let input_folders = HashSet::from([
-            FolderResponse {
-                id: 2,
-                parent_id: Some(1),
-                name: "middle".to_string(),
-                path: "".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag2".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 3,
-                parent_id: Some(2),
-                name: "bottom".to_string(),
-                path: "".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![TagApi {
-                    id: None,
-                    title: "tag1".to_string(),
-                }],
-            },
-            FolderResponse {
-                id: 1,
-                parent_id: None,
-                name: "top".to_string(),
-                path: "".to_string(),
-                folders: vec![],
-                files: vec![],
-                tags: vec![
-                    TagApi {
-                        id: None,
-                        title: "tag1".to_string(),
-                    },
-                    TagApi {
-                        id: None,
-                        title: "tag2".to_string(),
-                    },
-                ],
-            },
-        ]);
-        let expected: HashSet<u32> = HashSet::<u32>::from([1u32]);
-        let actual: HashSet<u32> =
-            reduce_folders_by_tag(&input_folders, &HashSet::from(["tag1".to_string()]))
-                .unwrap()
-                .into_iter()
-                .map(|it| it.id)
-                .collect();
-        assert_eq!(expected, actual);
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+
+        create_file_db_entry("file.txt", Some(1));
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check file has implicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+        assert_eq!(file_tags.len(), 1);
+        assert_eq!(file_tags[0], expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_implicit_tags_from_descendants() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        // Add tag and propagate
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify child has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 1);
+
+        // Remove tag from parent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify child no longer has implicit tag
+        let child = get_folder(Some(2)).unwrap();
+        assert_eq!(child.tags.len(), 0);
+        cleanup();
+    }
+
+    #[test]
+    fn moving_a_folder_to_root_removes_all_descendant_implicit_tags_from_original_ancestors() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent, child
+        create_folder_db_entry("grandparent", None);
+        create_folder_db_entry("parent", Some(1));
+        create_folder_db_entry("child", Some(2));
+        create_file_db_entry("child_file", Some(3));
+        create_folder_disk("grandparent/parent/child");
+
+        // Create another separate parent folder
+        create_folder_db_entry("new_parent", None);
+        create_folder_disk("new_parent");
+
+        // Add a tag to grandparent - should be implicated on parent and child
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify child has implicit tag from grandparent
+        let child_folder = get_folder(Some(3)).unwrap();
+        assert_eq!(child_folder.tags.len(), 1);
+        assert_eq!(child_folder.tags[0].title, "grandparent_tag");
+        assert_eq!(child_folder.tags[0].implicit_from, Some(1));
+        let child_file = file_service::get_file_metadata(1).unwrap();
+        assert_eq!(child_file.tags.len(), 1);
+        assert_eq!(child_file.tags[0].title, "grandparent_tag");
+        assert_eq!(child_file.tags[0].implicit_from, Some(1));
+
+        // Now move parent folder to new_parent - should remove grandparent's implicit tag from descendants
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: Some(4), // new_parent folder
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify child no longer has implicit tag from grandparent
+        let child = get_folder(Some(3)).unwrap();
+        assert_eq!(child.tags.len(), 0);
+        let child_file = file_service::get_file_metadata(1).unwrap();
+        assert_eq!(child_file.tags.len(), 0);
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_tags_from_unaffected_folders() {
+        init_db_folder();
+        // Create folder structure:
+        // grandparent (with tag)
+        //   ├── parent
+        //   │     └── child
+        //   └── sibling (should keep grandparent tag even after parent moves)
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+        create_folder_db_entry("sibling", Some(1));
+        create_folder_disk("grandparent/sibling");
+
+        // Add a tag to grandparent - should be implicated on parent, child, and sibling
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify sibling and child both have implicit tag from grandparent
+        let sibling = get_folder(Some(4)).unwrap();
+        assert_eq!(sibling.tags.len(), 1);
+        assert_eq!(sibling.tags[0].title, "grandparent_tag");
+        assert_eq!(sibling.tags[0].implicit_from, Some(1));
+
+        let child = get_folder(Some(3)).unwrap();
+        assert_eq!(child.tags.len(), 1);
+
+        // Move parent folder to root (simulates moving away from grandparent)
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify sibling STILL has implicit tag from grandparent (unaffected by move)
+        let sibling = get_folder(Some(4)).unwrap();
+        assert_eq!(
+            sibling.tags.len(),
+            1,
+            "Sibling should still have tag from grandparent"
+        );
+        assert_eq!(sibling.tags[0].title, "grandparent_tag");
+        assert_eq!(sibling.tags[0].implicit_from, Some(1));
+
+        // Verify child no longer has the tag (was moved out of grandparent)
+        let child = get_folder(Some(3)).unwrap();
+        assert_eq!(child.tags.len(), 0, "Child should have no tags after move");
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_explicit_tags_from_descendants() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent (child of grandparent), child (child of parent)
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+
+        create_file_db_entry("file.txt", Some(3));
+
+        // Add a tag to grandparent - should be implicated on parent and child
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Add an explicit tag to child folder
+        update_folder(&UpdateFolderRequest {
+            id: 3,
+            name: "child".to_string(),
+            parent_id: Some(2),
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "explicit_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Add an explicit tag to the file
+        update_file_tags(
+            1,
+            vec![TaggedItemApi {
+                tag_id: None,
+                title: "file_explicit_tag".to_string(),
+                implicit_from: None,
+            }],
+        )
+        .unwrap();
+
+        // Verify child has both implicit and explicit tags before the move
+        let child = get_folder(Some(3)).unwrap();
+        // Child should have:
+        // 1. grandparent_tag (implicit from grandparent id=1)
+        // 2. explicit_tag (explicit on child id=3)
+        // Note: When we set explicit tags on a folder, it propagates to descendants but not to the folder itself from parents
+        assert_eq!(
+            child.tags.len(),
+            2,
+            "Child should have 2 tags: implicit from grandparent and explicit"
+        );
+
+        // Verify file has implicit and explicit tags before the move
+        let file_tags = get_tags_on_file(1).unwrap();
+        // File should have multiple implicit tags from ancestors
+        assert!(file_tags.len() >= 2, "File should have at least 2 tags");
+
+        // Now move parent folder to root - should only remove grandparent's implicit tag
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify child still has explicit tag but not implicit from grandparent
+        let child = get_folder(Some(3)).unwrap();
+        assert_eq!(
+            child.tags.len(),
+            1,
+            "Child should have 1 tag after move: just the explicit tag"
+        );
+        assert_eq!(child.tags[0].title, "explicit_tag");
+        assert_eq!(child.tags[0].implicit_from, None);
+
+        // Verify file still has its explicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        let has_file_explicit = file_tags
+            .iter()
+            .any(|t| t.title == "file_explicit_tag" && t.implicit_from.is_none());
+        assert!(has_file_explicit, "File should have its explicit tag");
+
+        // Verify file no longer has grandparent implicit tag
+        let has_grandparent_tag = file_tags.iter().any(|t| t.title == "grandparent_tag");
+        assert!(
+            !has_grandparent_tag,
+            "File should not have grandparent tag after move"
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_implies_tags_to_descendant_files_in_nested_structure() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_folder_db_entry("child", Some(1));
+        create_folder_disk("parent/child");
+
+        create_file_db_entry("file_in_parent.txt", Some(1));
+        create_file_db_entry("file_in_child.txt", Some(2));
+
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Check both files have implicit tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        let file2_tags = get_tags_on_file(2).unwrap();
+
+        let expected = TaggedItemApi {
+            tag_id: Some(1),
+            title: "tag1".to_string(),
+            implicit_from: Some(1),
+        };
+
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0], expected);
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0], expected);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_removes_implicit_tags_from_descendant_files() {
+        init_db_folder();
+        create_folder_db_entry("parent", None);
+        create_folder_disk("parent");
+        create_file_db_entry("file.txt", Some(1));
+
+        // Add tag and propagate
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "tag1".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify file has implicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 1);
+
+        // Remove tag from parent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "parent".to_string(),
+            parent_id: None,
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify file no longer has implicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 0);
+        cleanup();
+    }
+
+    #[test]
+    fn moving_a_folder_removes_all_descendant_file_implicit_tags_from_original_ancestors() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent, child with files at each level
+        create_folder_db_entry("grandparent", None);
+        create_folder_db_entry("parent", Some(1));
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+
+        create_file_db_entry("file_in_grandparent.txt", Some(1));
+        create_file_db_entry("file_in_parent.txt", Some(2));
+        create_file_db_entry("file_in_child.txt", Some(3));
+
+        // Create another separate parent folder
+        create_folder_db_entry("new_parent", None);
+        create_folder_disk("new_parent");
+
+        // Add a tag to grandparent - should be implicated on all descendant files
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify all files have implicit tag from grandparent
+        let file1_tags = get_tags_on_file(1).unwrap();
+        let file2_tags = get_tags_on_file(2).unwrap();
+        let file3_tags = get_tags_on_file(3).unwrap();
+
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].title, "grandparent_tag");
+        assert_eq!(file2_tags.len(), 1);
+        assert_eq!(file2_tags[0].title, "grandparent_tag");
+        assert_eq!(file3_tags.len(), 1);
+        assert_eq!(file3_tags[0].title, "grandparent_tag");
+
+        // Now move parent folder to new_parent - should remove grandparent's implicit tag from parent's descendants
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: Some(4), // new_parent folder
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify files in parent and child no longer have implicit tag from grandparent
+        let file2_tags = get_tags_on_file(2).unwrap();
+        let file3_tags = get_tags_on_file(3).unwrap();
+        assert_eq!(file2_tags.len(), 0);
+        assert_eq!(file3_tags.len(), 0);
+
+        // File in grandparent should still have the tag
+        let file1_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file1_tags.len(), 1);
+        assert_eq!(file1_tags[0].title, "grandparent_tag");
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_file_tags_from_unaffected_files() {
+        init_db_folder();
+        // Create folder structure with files
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+        create_folder_db_entry("sibling", Some(1));
+        create_folder_disk("grandparent/sibling");
+
+        create_file_db_entry("file_in_child.txt", Some(3));
+        create_file_db_entry("file_in_sibling.txt", Some(4));
+
+        // Add a tag to grandparent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Verify both files have implicit tag from grandparent
+        let file_child_tags = get_tags_on_file(1).unwrap();
+        let file_sibling_tags = get_tags_on_file(2).unwrap();
+
+        assert_eq!(file_child_tags.len(), 1);
+        assert_eq!(file_sibling_tags.len(), 1);
+
+        // Move parent folder to root
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify sibling file STILL has implicit tag from grandparent (unaffected by move)
+        let file_sibling_tags = get_tags_on_file(2).unwrap();
+        assert_eq!(
+            file_sibling_tags.len(),
+            1,
+            "Sibling file should still have tag from grandparent"
+        );
+        assert_eq!(file_sibling_tags[0].title, "grandparent_tag");
+        assert_eq!(file_sibling_tags[0].implicit_from, Some(1));
+
+        // Verify child file no longer has the tag (was moved out of grandparent)
+        let file_child_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(
+            file_child_tags.len(),
+            0,
+            "Child file should have no tags after move"
+        );
+        cleanup();
+    }
+
+    #[test]
+    fn moving_folder_does_not_remove_explicit_tags_from_descendant_files() {
+        init_db_folder();
+        // Create folder structure: grandparent, parent, child
+        create_folder_db_entry("grandparent", None);
+        create_folder_disk("grandparent");
+        create_folder_db_entry("parent", Some(1));
+        create_folder_disk("grandparent/parent");
+        create_folder_db_entry("child", Some(2));
+        create_folder_disk("grandparent/parent/child");
+
+        create_file_db_entry("file.txt", Some(3));
+
+        // Add a tag to grandparent
+        update_folder(&UpdateFolderRequest {
+            id: 1,
+            name: "grandparent".to_string(),
+            parent_id: None,
+            tags: vec![TaggedItemApi {
+                tag_id: None,
+                title: "grandparent_tag".to_string(),
+                implicit_from: None,
+            }],
+        })
+        .unwrap();
+
+        // Add an explicit tag to the file
+        update_file_tags(
+            1,
+            vec![TaggedItemApi {
+                tag_id: None,
+                title: "file_explicit_tag".to_string(),
+                implicit_from: None,
+            }],
+        )
+        .unwrap();
+
+        // Verify file has both implicit and explicit tags before the move
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(file_tags.len(), 2, "File should have 2 tags before move");
+
+        // Now move parent folder to root - should only remove grandparent's implicit tag
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "parent".to_string(),
+            parent_id: None, // moving to root
+            tags: vec![],
+        })
+        .unwrap();
+
+        // Verify file still has its explicit tag
+        let file_tags = get_tags_on_file(1).unwrap();
+        assert_eq!(
+            file_tags.len(),
+            1,
+            "File should have 1 tag after move: just the explicit tag"
+        );
+        assert_eq!(file_tags[0].title, "file_explicit_tag");
+        assert_eq!(file_tags[0].implicit_from, None);
+        cleanup();
+    }
+
+    #[test]
+    fn update_folder_only_saves_explicit_tags_as_explicit() {
+        init_db_folder();
+        // Create folder hierarchy: parent1 -> child, and parent2
+        create_folder_db_entry("parent1", None); // id 1
+        create_folder_db_entry("child", Some(1)); // id 2
+        create_folder_db_entry("parent2", None); // id 3
+        create_folder_disk("parent1/child");
+        create_folder_disk("parent2");
+        create_tag_folder("implicitTag", 1);
+        create_tag_folder("explicitTag", 2);
+        imply_tag_on_folder(1, 2, 1);
+
+        // Verify child has both explicit and implicit tags
+        let child_before = get_folder(Some(2)).unwrap();
+        assert_eq!(
+            child_before.tags.len(),
+            2,
+            "Child should have 2 tags initially"
+        );
+        println!("Tags before update: {:?}", child_before.tags);
+
+        // Now move child to parent2, passing BOTH tags in the request
+        // The implicit tag should be marked as implicit in the request
+        // If update_folder doesn't filter, it will try to save the implicit tag as explicit
+        update_folder(&UpdateFolderRequest {
+            id: 2,
+            name: "child".to_string(),
+            parent_id: Some(3), // Move to parent2
+            tags: vec![
+                // this tag should be kept
+                TaggedItemApi {
+                    tag_id: Some(2),
+                    title: "explicitTag".to_string(),
+                    implicit_from: None,
+                },
+                // this tag should be removed since it's implicit
+                TaggedItemApi {
+                    tag_id: Some(1),
+                    title: "implicitTag".to_string(),
+                    implicit_from: Some(1),
+                },
+            ],
+        })
+        .unwrap();
+
+        // Get the child folder again to check final state
+        let child_after = get_folder(Some(2)).unwrap();
+
+        // The child should ONLY have the explicit tag now
+        // The implicit tag from parent1 should have been removed because we moved away from parent1
+        // (The move logic removes implicit tags from old ancestors)
+        assert_eq!(
+            child_after.tags.len(),
+            1,
+            "Child should have only 1 tag after move"
+        );
+
+        // Verify it's the explicit tag
+        assert_eq!(child_after.tags[0].title, "explicitTag");
+        assert_eq!(
+            child_after.tags[0].implicit_from, None,
+            "Tag should be explicit"
+        );
+
         cleanup();
     }
 }
@@ -1265,6 +1524,102 @@ mod download_folder_tests {
         create_folder_db_entry("middle", Some(2));
         create_folder_db_entry("bottom", Some(3));
         assert!(download_folder(2).is_ok());
+        cleanup();
+    }
+}
+
+#[cfg(test)]
+mod create_folder_tests {
+    use rocket::tokio;
+
+    use crate::model::request::folder_requests::CreateFolderRequest;
+    use crate::service::folder_service::{create_folder, get_folder};
+    use crate::test::{
+        cleanup, create_folder_db_entry, create_folder_disk, create_tag_folder, init_db_folder,
+    };
+
+    #[tokio::test]
+    async fn create_folder_should_implicate_all_ancestor_tags() {
+        init_db_folder();
+        // Create folder hierarchy: A -> B -> C
+        create_folder_db_entry("A", None); // id 1
+        create_folder_db_entry("B", Some(1)); // id 2
+        create_folder_db_entry("C", Some(2)); // id 3
+        create_folder_disk("A/B/C");
+
+        // Add tags to the ancestor folders
+        create_tag_folder("tagA", 1); // tag id 1 on folder A
+        create_tag_folder("tagB", 2); // tag id 2 on folder B
+        create_tag_folder("tagC", 3); // tag id 3 on folder C
+
+        // Create a new folder D inside C using the service function
+        let request = CreateFolderRequest {
+            name: "D".to_string(),
+            parent_id: Some(3), // parent is C
+        };
+
+        create_folder(&request).await.unwrap();
+
+        // The new folder D should have id 4
+        let folder = get_folder(Some(4)).unwrap();
+        assert_eq!(folder.tags.len(), 3, "Folder D should have 3 ancestor tags");
+
+        // Verify each tag is present and is implied from the correct folder
+        let tag_a = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagA")
+            .expect("tagA should be present");
+        assert_eq!(
+            tag_a.implicit_from,
+            Some(1),
+            "tagA should be implied from folder A"
+        );
+
+        let tag_b = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagB")
+            .expect("tagB should be present");
+        assert_eq!(
+            tag_b.implicit_from,
+            Some(2),
+            "tagB should be implied from folder B"
+        );
+
+        let tag_c = folder
+            .tags
+            .iter()
+            .find(|t| t.title == "tagC")
+            .expect("tagC should be present");
+        assert_eq!(
+            tag_c.implicit_from,
+            Some(3),
+            "tagC should be implied from folder C"
+        );
+
+        cleanup();
+    }
+
+    #[tokio::test]
+    async fn create_folder_should_implicate_no_tags_if_ancestor_is_root() {
+        init_db_folder();
+        // Create a folder directly in root (parent_id = None or 0)
+        let request = CreateFolderRequest {
+            name: "test".to_string(),
+            parent_id: None, // parent is root
+        };
+
+        create_folder(&request).await.unwrap();
+
+        // The new folder should have id 1
+        let folder = get_folder(Some(1)).unwrap();
+        assert_eq!(
+            folder.tags.len(),
+            0,
+            "Folder in root should have no implied tags"
+        );
+
         cleanup();
     }
 }

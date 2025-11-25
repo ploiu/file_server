@@ -9,6 +9,7 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     sqlite3 \
     rsync \
+    less \
     && rm -rf /var/lib/apt/lists/* \
     # for cross compilation with raspberry pi 
     && rustup target add aarch64-unknown-linux-gnu \

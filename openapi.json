@@ -7,7 +7,7 @@
     },
     "title": "Ploiu File Server",
     "description": "a self-hostable file server written in rust",
-    "version": "3.0.3"
+    "version": "4.0.0"
   },
   "paths": {
     "/api/version": {
@@ -1100,7 +1100,7 @@
           "tags": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/tagApi"
+              "$ref": "#/components/schemas/taggedItemApi"
             }
           },
           "size": {
@@ -1130,13 +1130,6 @@
             "type": "number",
             "nullable": true,
             "minimum": 0
-          },
-          "tags": {
-            "nullable": false,
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/tagApi"
-            }
           }
         }
       },
@@ -1218,12 +1211,13 @@
           "tags": {
             "type": "array",
             "items": {
-              "$ref": "#/components/schemas/tagApi"
+              "$ref": "#/components/schemas/taggedItemApi"
             }
           }
         }
       },
       "tagApi": {
+        "description": "an individual tag",
         "properties": {
           "id": {
             "nullable": true,
@@ -1233,6 +1227,26 @@
           "title": {
             "type": "string",
             "nullable": false
+          }
+        }
+      },
+      "taggedItemApi": {
+        "description": "a tag as it exists on a file or a folder",
+        "properties": {
+          "id": {
+            "nullable": true,
+            "type": "number",
+            "minimum": 0,
+            "description": "the id of the tag itself"
+          },
+          "title": {
+            "type": "string",
+            "nullable": false
+          },
+          "implicitFrom": {
+            "type": "number",
+            "nullable": true,
+            "description": "the folder that owns this tag and is implicating this tag. If null, the file / folder explicitly has this tag on itself. tags with an implicitFrom cannot be manually removed from the file / folder"
           }
         }
       },

@@ -17,8 +17,7 @@ folders indexed by a database and accessible via an api layer.
 # Hardware / OS
 
 designed primarily with linux in mind. Specifically a headless raspberry pi.
-Currently runs flawlessly on a 3B. Windows _might_ work for some stuff, but
-supporting it is not a priority
+Currently runs flawlessly on a 3B. Windows support is not a priority.
 
 # General structure
 
@@ -31,10 +30,10 @@ supporting it is not a priority
 - src/assets/* - contains non-rust assets used via `include_str!`; mainly sql
   files
 - src/assets/migration/* - database migration files
-- src/assets/queries/* - general-purpose sqlite3 files
+- src/assets/queries/* - general-purpose sqlite3 files, split out into
+  categories based on what the queries touch
 - src/assets/init.sql - database initialization
-- src/model/* - dumping ground for all models. Needs to be split out. No
-  newly-created models should be put here (see the section `Organization` below)
+- src/model/* - dumping ground for all models. Needs to be split out.
 - src/previews/* - all file preview functionality. Currently takes the first
   step outlined in the `Organization` section below
 - src/queue/* - all queueing functionality. Might need to be refactored later
@@ -51,6 +50,43 @@ supporting it is not a priority
   is compared with the latest upgrade version and upgrades are applied
   accordingly.
 
+not everything follows this pattern, however. Refer to the `Structure Migration`
+section for any new changes
+
+## Structure Migration
+
+in an attempt to modularize the codebase and better organize it, All new changes
+need to be organized like this:
+
+- src/&lt;module_name>: the name of the general functionality
+  - handler.rs (optional): endpoint functions for use with rocket
+  - repository.rs: database layer interactions
+  - service.rs: main logic layer of the feature
+  - tests: tests for the feature
+    - handler.rs/repository.rs/service.rs: tests for the respective layer of
+      this feature
+    - &lt;name>.rs: tests for any other file in the feature module folder
+
+each function should get its own `mod` in the respective test file. If more than
+10 tests exist for the same function, it should be pulled out into its own test
+file alongside the other test files for that module
+
+### Example
+
+```
+- src
+  - tags
+  - handler.rs
+  - mod.rs
+  - repository.rs
+  - service.rs
+  - tests
+    - handler.rs
+    - mod.rs
+    - repository.rs
+    - service.rs
+```
+
 # Queue
 
 hardware strength is limited, and generating previews takes about ~1 second on
@@ -58,17 +94,6 @@ the target machine. Preview generation is delayed until no endpoints have been
 hit for a user-defined amount of time (defaults to 30 seconds).
 `file_preview_consumer` is called in src/main.rs to set this up. All queue
 functionality is disabled during tests
-
-# Organization
-
-the project was originally organized after general java+spring organization -
-controller/handler layer, repository layer, service layer, etc. However that has
-proven to not _really_ work with how I organize stuff. Going forward, I'd like
-to use cargo workspaces to split out everything into its own crate (e.g. the
-file handler, service layer, repository layer, and models all go in a specific
-crate, same for folders, etc). Until then though, everything is in the same
-crate and will be slowly migrated to models and _then_ crates to make the
-migration easier
 
 # Testing
 
@@ -133,3 +158,14 @@ instead do this:
 let x = 1;
 format!("x: {x}");
 ```
+
+## On the `use` statement
+
+it's heavily preferred that `use` be declared at the top of the module. Rarely
+should `use` be used in the top of a function. Under _**NO CIRCUMSTANCES**_
+should `use` be used in the middle of a function.
+
+# Sql files
+
+each sql file needs to be associated with a repository-layer function with the
+same name
