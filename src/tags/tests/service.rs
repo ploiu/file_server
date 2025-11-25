@@ -554,7 +554,7 @@ mod get_tags_on_folder_tests {
     }
 }
 
-mod pass_tags_to_children_tests {
+mod pass_tags_to_descendants_tests {
 
     use crate::repository::open_connection;
     use crate::tags::repository as tag_repository;
@@ -576,7 +576,7 @@ mod pass_tags_to_children_tests {
         create_tag_folder("test_tag", 1);
 
         // Pass tags to children
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Check child has implicit tag
         let child_tags = get_tags_on_folder(2).unwrap();
@@ -610,7 +610,7 @@ mod pass_tags_to_children_tests {
         create_tag_folder("test_tag", 1);
 
         // Pass tags to children
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Check file in parent has implicit tag
         let file1_tags = get_tags_on_file(1).unwrap();
@@ -643,7 +643,7 @@ mod pass_tags_to_children_tests {
         con.close().unwrap();
 
         // Pass tags to children
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Check child still has explicit tag (not implicit)
         let child_tags = get_tags_on_folder(2).unwrap();
@@ -669,7 +669,7 @@ mod pass_tags_to_children_tests {
         con.close().unwrap();
 
         // Pass tags to children
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Check file still has explicit tag (not implicit)
         let file_tags = get_tags_on_file(1).unwrap();
@@ -690,7 +690,7 @@ mod pass_tags_to_children_tests {
 
         // Add tag to parent and propagate
         create_tag_folder("test_tag", 1);
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Verify child has implicit tag
         let child_tags = get_tags_on_folder(2).unwrap();
@@ -702,7 +702,7 @@ mod pass_tags_to_children_tests {
         con.close().unwrap();
 
         // Propagate the change
-        pass_tags_to_children(1).unwrap();
+        pass_tags_to_descendants(1).unwrap();
 
         // Check child no longer has the tag
         let child_tags = get_tags_on_folder(2).unwrap();
@@ -726,7 +726,7 @@ mod pass_tags_to_children_tests {
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
         con.close().unwrap();
         // current state: grandparent+test_tag/parent+test_tag/child
-        pass_tags_to_children(2).unwrap();
+        pass_tags_to_descendants(2).unwrap();
 
         // Child should inherit from parent (closer ancestor)
         let child_tags = get_tags_on_folder(3).unwrap();
@@ -759,13 +759,13 @@ mod pass_tags_to_children_tests {
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
         con.close().unwrap();
-        pass_tags_to_children(3).unwrap();
+        pass_tags_to_descendants(3).unwrap();
 
         // Then add same tag to middle
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
         con.close().unwrap();
-        pass_tags_to_children(2).unwrap();
+        pass_tags_to_descendants(2).unwrap();
 
         // Bottom should still have it as explicit
         let bottom_tags = get_tags_on_folder(3).unwrap();
@@ -791,7 +791,7 @@ mod pass_tags_to_children_tests {
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
         con.close().unwrap();
-        pass_tags_to_children(3).unwrap();
+        pass_tags_to_descendants(3).unwrap();
 
         // File should inherit from bottom
         let file_tags = get_tags_on_file(1).unwrap();
@@ -802,7 +802,7 @@ mod pass_tags_to_children_tests {
         let con = open_connection();
         tag_repository::add_explicit_tag_to_folder(2, tag_id, &con).unwrap();
         con.close().unwrap();
-        pass_tags_to_children(2).unwrap();
+        pass_tags_to_descendants(2).unwrap();
 
         // File should still inherit from bottom (id 3), not middle (id 2)
         let file_tags = get_tags_on_file(1).unwrap();
@@ -828,9 +828,9 @@ mod pass_tags_to_children_tests {
         tag_repository::add_explicit_tag_to_folder(3, tag_id, &con).unwrap();
         con.close().unwrap();
 
-        pass_tags_to_children(1).unwrap();
-        pass_tags_to_children(2).unwrap();
-        pass_tags_to_children(3).unwrap();
+        pass_tags_to_descendants(1).unwrap();
+        pass_tags_to_descendants(2).unwrap();
+        pass_tags_to_descendants(3).unwrap();
 
         // Bottom should have explicit tag
         let bottom_tags = get_tags_on_folder(3).unwrap();

@@ -154,7 +154,7 @@ pub fn add_implicit_tags_to_files(
             if past_first {
                 sql.push(',');
             }
-            write!(&mut sql, "({tag_id}, {file_id}, {implicit_from_id})\n")
+            writeln!(&mut sql, "({tag_id}, {file_id}, {implicit_from_id})")
                 .expect("writing to a string should never fail! You should never see this");
             past_first = true;
         }
@@ -193,18 +193,20 @@ pub fn get_all_tags_for_file(
 /// ## Parameters
 /// - `file_id`: the id of the file to get tags for
 /// - `tag_type`: the type of tags to retrieve. If [`TagTypes::Explicit`] is passed, only tags explicitly passed on the file are returned.
-///    If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
+///   If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
 /// - `con`: a database connection to the database. Must be closed by the caller
 ///
 /// See Also: [`get_all_tags_for_file`] to get all tags regardless of type
-pub fn get_tags_for_file(
+pub fn _get_tags_for_file(
     file_id: u32,
     tag_type: TagTypes,
     con: &Connection,
 ) -> Result<Vec<models::TaggedItem>, rusqlite::Error> {
     let query = match tag_type {
         TagTypes::Explicit => include_str!("../assets/queries/tags/get_explicit_tags_for_file.sql"),
-        TagTypes::Implicit => include_str!("../assets/queries/tags/get_implicit_tags_for_file.sql"),
+        TagTypes::_Implicit => {
+            include_str!("../assets/queries/tags/get_implicit_tags_for_file.sql")
+        }
     };
     let mut pst = con.prepare(query)?;
     let rows = pst.query_map(rusqlite::params![file_id], tagged_item_mapper)?;
@@ -333,7 +335,7 @@ pub fn get_all_tags_for_folder(
 /// ## Parameters
 /// - `folder_id`: the id of the folder to get tags for
 /// - `tag_type`: the type of tags to retrieve. If [`TagTypes::Explicit`] is passed, only tags explicitly passed on the folder are returned.
-///    If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
+///   If [`TagTypes::Implicit`] is passed, only implicated tags from parent folders are returned.
 /// - `con`: a database connection to the database. Must be closed by the caller
 ///
 /// See Also: [`get_all_tags_for_folder`] to get all tags regardless of type
@@ -346,7 +348,7 @@ pub fn get_tags_for_folder(
         TagTypes::Explicit => {
             include_str!("../assets/queries/tags/get_explicit_tags_for_folder.sql")
         }
-        TagTypes::Implicit => {
+        TagTypes::_Implicit => {
             include_str!("../assets/queries/tags/get_implicit_tags_for_folder.sql")
         }
     };

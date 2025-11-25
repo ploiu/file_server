@@ -4,7 +4,7 @@ use std::ffi::OsStr;
 use std::fs::File;
 use std::fs::{self};
 use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use std::string::ToString;
 
 use once_cell::sync::Lazy;
@@ -1309,7 +1309,7 @@ mod update_file_tests {
         // The explicit tag should remain explicit
         assert_eq!(updated.tags.len(), 1);
 
-        let explicit_tag = updated.tags.get(0).unwrap();
+        let explicit_tag = updated.tags.first().unwrap();
         assert_eq!(&explicit_tag.title, "explicitTag");
         assert_eq!(explicit_tag.implicit_from, None);
 

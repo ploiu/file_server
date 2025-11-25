@@ -353,7 +353,7 @@ pub fn update_folder_tags(
     con.close().unwrap();
 
     // Propagate tag changes to all descendants
-    pass_tags_to_children(folder_id)?;
+    pass_tags_to_descendants(folder_id)?;
 
     Ok(())
 }
@@ -424,7 +424,7 @@ pub fn get_tags_on_folder(folder_id: u32) -> Result<Vec<TaggedItemApi>, TagRelat
 /// ## Returns
 /// - `Ok(())` if tags were successfully propagated
 /// - `Err(TagRelationError)` if there was a database error or the folder doesn't exist
-pub fn pass_tags_to_children(folder_id: u32) -> Result<(), TagRelationError> {
+pub fn pass_tags_to_descendants(folder_id: u32) -> Result<(), TagRelationError> {
     // Verify folder exists
     if !folder_service::folder_exists(Some(folder_id)) {
         log::error!(

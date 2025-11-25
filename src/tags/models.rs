@@ -4,7 +4,7 @@ pub enum TagTypes {
     /// The tag was individually set on the file or folder
     Explicit,
     /// the tag was individually set on an ancestor folder
-    Implicit,
+    _Implicit,
 }
 
 /// represents a tag in the Tags table of the database. When referencing a tag _on_ a file / folder, use [`TaggedItem`] instead
