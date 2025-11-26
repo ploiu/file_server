@@ -1,4 +1,4 @@
-use std::fs;
+use std::fs::{self, DirEntry};
 use std::path::Path;
 
 #[cfg(not(test))]
@@ -105,10 +105,8 @@ pub fn generate_database_from_files(parent_folder: Option<u32>, con: &Connection
         return Ok(());
     }
 
-    // Magenta text for starting job
     log::info!("\x1b[35mGenerating database from file system\x1b[0m");
     let result = generate_database_from_files_internal(&base_path, None, con);
-    // Green text for finished job
     log::info!("\x1b[32mFinished generating database from file system\x1b[0m");
     result
 }
@@ -141,7 +139,6 @@ fn generate_database_from_files_internal(
     for folder_entry in folders {
         let folder_name = folder_entry.file_name().to_string_lossy().to_string();
 
-        // Grey text for starting folder
         log::info!("\x1b[90mStarting folder {folder_name}\x1b[0m");
 
         // Create folder in database
@@ -156,9 +153,12 @@ fn generate_database_from_files_internal(
 
         // Recursively process this folder's contents (depth-first)
         let child_path = folder_entry.path();
-        generate_database_from_files_internal(child_path.to_str().unwrap_or(""), folder_id, con)?;
+        generate_database_from_files_internal(
+            child_path.to_str().unwrap_or_default(),
+            folder_id,
+            con,
+        )?;
 
-        // Cyan text for finished folder
         log::info!("\x1b[36mFinished folder {folder_name}\x1b[0m");
     }
 
@@ -168,7 +168,9 @@ fn generate_database_from_files_internal(
         let file_path = file_entry.path();
 
         // Get file size
-        let file_size = fs::metadata(&file_path).map(|m| m.len()).unwrap_or_default();
+        let file_size = fs::metadata(&file_path)
+            .map(|m| m.len())
+            .unwrap_or_default();
 
         // Determine file type
         let file_type: FileTypes = determine_file_type(&file_name);
