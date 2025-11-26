@@ -1,4 +1,4 @@
-use std::fs::{self, DirEntry};
+use std::fs::{self};
 use std::path::Path;
 
 #[cfg(not(test))]
