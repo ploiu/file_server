@@ -39,7 +39,7 @@ impl From<&FileApi> for FileRecord {
             .unwrap_or(chrono::offset::Local::now().naive_local());
         Self {
             id: if value.id == 0 { None } else { Some(value.id) },
-            name: value.name.clone(),
+            name: value.name().unwrap_or_default().clone(),
             parent_id: if value.folder_id == Some(0) {
                 None
             } else {

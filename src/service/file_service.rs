@@ -399,11 +399,13 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
         con.close().unwrap();
         return Err(UpdateFileError::FolderNotFound);
     };
+    let file_name = file.name().ok_or(UpdateFileError::FileSystemError)?;
     // now check if a file with the passed name is already under that folder
     let name_regex = Regex::new(format!("^{}$", file.name().unwrap()).as_str()).unwrap();
     for f in new_parent_folder.files.iter() {
+        let name = f.name().ok_or(UpdateFileError::FileSystemError)?;
         // make sure to ignore name collision if the file with the same name is the exact same file
-        if f.id != file.id && name_regex.is_match(f.name.as_str()) {
+        if f.id != file.id && name_regex.is_match(name.as_str()) {
             return Err(UpdateFileError::FileAlreadyExists);
         }
     }
@@ -428,7 +430,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
 
     // Update the file in the database with new parent
     // ensure file type gets updated if the name is changed
-    file.file_type = Some(determine_file_type(&file.name));
+    file.file_type = Some(determine_file_type(&file_name));
     let converted_record = FileRecord::from(&file);
     if let Err(e) = file_repository::update_file(&converted_record, &con) {
         con.close().unwrap();
@@ -477,7 +479,7 @@ pub fn update_file(file: FileApi) -> Result<FileApi, UpdateFileError> {
     Ok(FileApi {
         id: file.id,
         folder_id: new_parent_id,
-        name: file.name().unwrap(),
+        name: file_name.clone(),
         tags,
         size: Some(repo_file.size),
         date_created: Some(repo_file.create_date),

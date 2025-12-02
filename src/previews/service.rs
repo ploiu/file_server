@@ -104,15 +104,14 @@ pub async fn generate_preview(message_data: String) -> bool {
     }
 
     let mut command = Command::new("ffmpeg");
-    if Some(FileTypes::Image) == file_data.file_type
-        && !file_data.name.to_lowercase().ends_with(".gif")
-    {
+    let is_gif = file_data
+        .name()
+        .is_some_and(|it| it.to_lowercase().ends_with("gif"));
+    if Some(FileTypes::Image) == file_data.file_type && !is_gif {
         command
             .args(["-i", &path, "-vf", "scale=150:-1"])
             .arg(&preview_file_path);
-    } else if Some(FileTypes::Video) == file_data.file_type
-        || file_data.name.to_lowercase().ends_with(".gif")
-    {
+    } else if Some(FileTypes::Video) == file_data.file_type || is_gif {
         command
             .args(["-i", &path, "-vf", "scale=150:-1", "-frames:v", "1"])
             .arg(&preview_file_path);
